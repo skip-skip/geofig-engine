@@ -1,6 +1,5 @@
 import sys
 from pathlib import Path
 
-# Add src/geofig-engine to sys.path for imports
-src_path = Path(__file__).parent.parent / "src" / "geofig-engine"
+src_path = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(src_path))
