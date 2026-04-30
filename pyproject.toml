@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geofig-engine"
+version = "0.1.0"
+description = "A declarative visualization system"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["geofig_engine"]
+
+[tool.setuptools.package-data]
+geofig_engine = ["py.typed"]
