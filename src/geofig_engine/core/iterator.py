@@ -89,15 +89,15 @@ def expand(
             )
         ]
 
-    # Resolve selectors to column names
-    iterator_columns = get_iterator_columns(dataset, selectors)
+    # Resolve selectors to column names and sort by selector key to keep ordering deterministic
+    iterator_columns = dict(sorted(get_iterator_columns(dataset, selectors).items()))
 
     # Generate all unique combinations of context values
     contexts = generate_contexts(dataset, iterator_columns)
 
     # Create result for each context
     results = []
-    iterator_key = tuple(sorted(iterator_columns.keys()))
+    iterator_key = tuple(iterator_columns.keys())
 
     for context in contexts:
         subset_df = filter_by_context(
@@ -221,7 +221,12 @@ def filter_by_context(
     result_df = df
     context_items = sorted(context.values.items())
 
-    for (name, value), columns in zip(context_items, sorted(columns_lists)):
+    if len(context_items) != len(columns_lists):
+        raise ValueError(
+            "columns_lists must have the same number of entries as context values"
+        )
+
+    for (name, value), columns in zip(context_items, columns_lists):
         # Filter: any of these columns should equal the value
         mask = result_df[columns].eq(value).any(axis=1)
         result_df = result_df.loc[mask]

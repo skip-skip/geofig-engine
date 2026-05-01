@@ -164,6 +164,13 @@ class TestExpand:
         contexts2 = [r.context.values for r in results2]
         assert contexts1 == contexts2
 
+    def test_expand_selector_order_independent(self, sample_dataset):
+        """Selector insertion order does not affect expansion results."""
+        results1 = expand(sample_dataset, {"group": "group", "analyte": "analyte"})
+        results2 = expand(sample_dataset, {"analyte": "analyte", "group": "group"})
+
+        assert [r.context.values for r in results1] == [r.context.values for r in results2]
+
     def test_expand_invalid_column_raises_key_error(self, sample_dataset):
         """Invalid column name raises KeyError."""
         with pytest.raises(KeyError):
