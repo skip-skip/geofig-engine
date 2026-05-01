@@ -15,7 +15,7 @@ from geofig_engine.engine import FigureEngine
 from geofig_engine.renderers import MatplotlibRenderer
 from geofig_engine.templates import BivariateTemplate
 
-output_dir = Path(__file__).resolve().parent / "excel_output"
+output_dir = Path(__file__).resolve().parent / "outputs" / "excel_output"
 output_dir.mkdir(exist_ok=True)
 
 input_path = Path(__file__).resolve().parent / "excel_input" / "example_table.xlsx"

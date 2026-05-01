@@ -13,7 +13,7 @@ from geofig_engine.engine import FigureEngine
 from geofig_engine.renderers import MatplotlibRenderer
 from geofig_engine.templates import BivariateTemplate
 
-output_dir = Path(__file__).resolve().parent / "metadata_output"
+output_dir = Path(__file__).resolve().parent / "outputs" / "metadata_output"
 output_dir.mkdir(exist_ok=True)
 
 # A simple dataset with time series values for two sensors and two periods.

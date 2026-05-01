@@ -11,7 +11,7 @@ from geofig_engine.engine import FigureEngine
 from geofig_engine.renderers import MatplotlibRenderer
 from geofig_engine.templates import BivariateTemplate
 
-out = Path(__file__).resolve().parent / "batch_output"
+out = Path(__file__).resolve().parent / "outputs" / "batch_output"
 out.mkdir(exist_ok=True)
 
 data = pd.DataFrame(

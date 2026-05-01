@@ -15,7 +15,7 @@ from geofig_engine.templates import BivariateTemplate
 
 
 def main() -> None:
-    output_dir = Path(__file__).resolve().parent / "output"
+    output_dir = Path(__file__).resolve().parent / "outputs" / "simple_output"
     output_dir.mkdir(exist_ok=True)
 
     data = pd.DataFrame(
