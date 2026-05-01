@@ -44,15 +44,14 @@ class MatplotlibRenderer(BaseRenderer):
                 scatter_kwargs["c"] = color_data
             else:
                 color_series = pd.Series(color_data)
-                if color_series.dtype == object:
-                    unique_values = color_series.dropna().unique()
-                    if not all(is_color_like(value) for value in unique_values):
-                        palette = list(plt.rcParams["axes.prop_cycle"].by_key()["color"])
-                        mapping = {
-                            value: palette[i % len(palette)]
-                            for i, value in enumerate(unique_values)
-                        }
-                        color_series = color_series.map(mapping)
+                unique_values = color_series.dropna().unique()
+                if not all(is_color_like(value) for value in unique_values):
+                    palette = list(plt.rcParams["axes.prop_cycle"].by_key()["color"])
+                    mapping = {
+                        value: palette[i % len(palette)]
+                        for i, value in enumerate(unique_values)
+                    }
+                    color_series = color_series.map(mapping)
                 scatter_kwargs["c"] = color_series
                 color_data = color_series
 

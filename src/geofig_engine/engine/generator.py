@@ -84,11 +84,15 @@ class FigureEngine:
                 merged_mappings,
                 merged_context,
             )
+            resolved_settings = self._resolve_settings(
+                final_settings, 
+                merged_context
+            )
 
             spec = template.build_spec(
                 data=subset_dataset.dataframe,
                 mappings=resolved_mappings,
-                settings=final_settings,
+                settings=resolved_settings,
                 context=merged_context,
                 iterator_key=result.iterator_key,
             )
@@ -143,5 +147,24 @@ class FigureEngine:
                 strict=self.config.strict,
                 context=context,
             )
+
+        return resolved
+    
+    def _resolve_settings(
+        self, 
+        settings: dict[str, Any],
+        context: dict[str, Any]
+    )-> dict[str, Any]:
+        resolved = {}
+
+        for key, value in settings.items():
+            if isinstance(value, str):
+                try:
+                    resolved[key] = value.format(**context)
+                except KeyError:
+                    # Leave unchanged if missing context key
+                    resolved[key] = value
+            else:
+                resolved[key] = value
 
         return resolved

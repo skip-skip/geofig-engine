@@ -65,7 +65,7 @@ mappings = {
 
 iterator_selectors = {
     "y": ColumnSelector(DimensionSelector({"type": "analyte"})),
-    "color": ColumnSelector(color_columns),
+    "color": ColumnSelector(DimensionSelector({"role": "color"})),
 }
 
 specs = engine.build_specs(
@@ -75,7 +75,8 @@ specs = engine.build_specs(
     iterator_selectors=iterator_selectors,
     settings={
         "xlabel": "sulfate_mg_L",
-        "title": "Analyte vs sulfate_mg_L",
+        "ylabel": "{y}",
+        "title": "{y} vs sulfate_mg_L",
         "figsize": (8, 5),
     },
 )
