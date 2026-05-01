@@ -5,10 +5,16 @@ Centralized location for all type aliases, constants, and enumerations
 used throughout the FigEngine codebase.
 """
 
-from typing import Any, Dict, Sequence, Union
+from __future__ import annotations
 
-from geofig_engine.core.dimension import Dimension
-from geofig_engine.core.dimension_selector import DimensionSelector
+from typing import TYPE_CHECKING, Any, Dict, Sequence, Union
+
+if TYPE_CHECKING:
+    from geofig_engine.core.dimension import Dimension
+    from geofig_engine.core.dimension_selector import DimensionSelector
+else:
+    Dimension = object
+    DimensionSelector = object
 
 # Type aliases
 DimensionsMap = Dict[str, Dimension]

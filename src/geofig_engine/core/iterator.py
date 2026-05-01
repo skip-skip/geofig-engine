@@ -223,7 +223,7 @@ def filter_by_context(
 
     for (name, value), columns in zip(context_items, sorted(columns_lists)):
         # Filter: any of these columns should equal the value
-        mask = df[columns].eq(value).any(axis=1)
-        result_df = result_df[mask]
+        mask = result_df[columns].eq(value).any(axis=1)
+        result_df = result_df.loc[mask]
 
     return result_df

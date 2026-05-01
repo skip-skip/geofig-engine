@@ -1,17 +1,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, Iterable, Sequence
+from typing import TYPE_CHECKING, Iterable, Sequence
 
 import pandas as pd
 from pandas.api.types import is_bool_dtype
+
+from geofig_engine.utils.typing import DimensionsMap
+from geofig_engine.utils.validation import (
+    validate_dataframe,
+    validate_dict,
+    validate_sequence,
+    validate_string,
+)
 
 if TYPE_CHECKING:
     from .dimension import Dimension
 else:
     Dimension = object
-
-DimensionsMap = Dict[str, Dimension]
 
 
 @dataclass
@@ -25,30 +31,32 @@ class Dataset:
         self.validate_schema()
 
     def _normalize_dataframe(self, dataframe: pd.DataFrame) -> pd.DataFrame:
-        if not isinstance(dataframe, pd.DataFrame):
-            raise TypeError("dataframe must be a pandas DataFrame")
-        return dataframe.copy(deep=True)
+        validated = validate_dataframe(dataframe, "dataframe")
+        return validated.copy(deep=True)
 
     def validate_schema(self) -> None:
         if self.dataframe.columns.has_duplicates:
             raise ValueError("Dataset dataframe column names must be unique")
 
-        if not isinstance(self.key_column, str):
-            raise TypeError("key_column must be a string")
+        validate_string(self.key_column, "key_column", allow_empty=False)
 
         if self.key_column not in self.dataframe.columns:
             raise ValueError(f"key_column '{self.key_column}' not found in dataframe columns")
 
-        if not isinstance(self.dimensions, dict):
-            raise TypeError("dimensions must be a dict[str, Dimension]")
+        validated_dimensions = validate_dict(
+            self.dimensions,
+            "dimensions",
+            key_type=str,
+            allow_empty=True,
+        )
 
-        missing_dimensions = set(self.dimensions) - set(self.dataframe.columns)
+        missing_dimensions = set(validated_dimensions) - set(self.dataframe.columns)
         if missing_dimensions:
             raise ValueError(
                 f"Dimensions refer to missing dataframe columns: {sorted(missing_dimensions)}"
             )
 
-        for name, dimension in self.dimensions.items():
+        for name, dimension in validated_dimensions.items():
             if hasattr(dimension, "name") and getattr(dimension, "name") != name:
                 raise ValueError(
                     f"Dimension object for '{name}' has mismatched name '{dimension.name}'"
@@ -60,8 +68,7 @@ class Dataset:
         return self.dataframe.loc[:, name].copy()
 
     def select_columns(self, names: Sequence[str]) -> pd.DataFrame:
-        if isinstance(names, str) or not isinstance(names, Sequence):
-            raise TypeError("names must be a sequence of column names")
+        validate_sequence(names, "names", str, allow_empty=False)
 
         selected = list(names)
         missing_columns = set(selected) - set(self.dataframe.columns)

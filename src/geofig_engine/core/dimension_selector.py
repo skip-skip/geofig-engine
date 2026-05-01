@@ -5,9 +5,8 @@ from typing import Any, Dict, Sequence
 
 from .dataset import Dataset
 from .dimension import Dimension
-
-
-Selector = str | Sequence[str] | Dict[str, Any]
+from geofig_engine.utils.typing import Selector
+from geofig_engine.utils.validation import validate_dict, validate_sequence
 
 
 @dataclass(frozen=True)
@@ -16,13 +15,13 @@ class DimensionSelector:
 
     def __post_init__(self) -> None:
         if isinstance(self.selector, dict):
-            self._validate_attribute_selector(self.selector)
+            validate_dict(self.selector, "selector", key_type=str, allow_empty=False)
         elif isinstance(self.selector, str):
             return
         elif isinstance(self.selector, Sequence):
             if isinstance(self.selector, str):
                 return
-            self._validate_name_sequence(self.selector)
+            validate_sequence(self.selector, "selector", str, allow_empty=False)
         else:
             raise TypeError(
                 "selector must be a string, sequence of strings, or dict[str, Any]"

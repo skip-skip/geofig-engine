@@ -136,9 +136,13 @@ def validate_sequence(
         raise ValueError(f"{param_name} cannot be empty")
 
     if item_type is not None:
+        item_name = item_type.__name__
+        if item_type is str:
+            item_name = "strings"
+
         for item in value:
             if not isinstance(item, item_type):
-                raise TypeError(f"all items in {param_name} must be {item_type.__name__}")
+                raise TypeError(f"all items in {param_name} must be {item_name}")
 
     return value
 
@@ -224,8 +228,12 @@ def validate_tuple(
         raise ValueError(f"{param_name} cannot be empty")
 
     if item_type is not None:
+        item_name = item_type.__name__
+        if item_type is str:
+            item_name = "strings"
+
         for item in value:
             if not isinstance(item, item_type):
-                raise TypeError(f"all items in {param_name} must be {item_type.__name__}")
+                raise TypeError(f"all items in {param_name} must be {item_name}")
 
     return value

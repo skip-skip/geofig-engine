@@ -10,11 +10,8 @@ from typing import Any, Union
 
 from geofig_engine.core.dimension_selector import DimensionSelector
 from geofig_engine.core.dataset import Dataset
-
-
-SourceType = Union[DimensionSelector, str, list[str], Any]
-
-ALLOWED_TARGETS = {"x", "y", "color", "marker", "size", "alpha", "linestyle"}
+from geofig_engine.utils.typing import ALLOWED_TARGETS, SourceType
+from geofig_engine.utils.validation import validate_sequence, validate_string
 
 
 @dataclass(frozen=True)
@@ -44,30 +41,24 @@ def validate_attribute_mapping(mapping: AttributeMapping) -> None:
     Validate an AttributeMapping.
 
     Raises:
-        ValueError: If target is not in ALLOWED_TARGETS
-        TypeError: If source is of invalid type
-        ValueError: If source is a DimensionSelector with invalid structure
+        ValueError: If target is not in ALLOWED_TARGETS.
+        TypeError: If source is of invalid type.
     """
+    validate_string(mapping.target, "target", allow_empty=False)
+
     if mapping.target not in ALLOWED_TARGETS:
         raise ValueError(
-            f"Invalid target '{mapping.target}'. "
-            f"Must be one of {ALLOWED_TARGETS}"
+            f"Invalid target '{mapping.target}'. Must be one of {ALLOWED_TARGETS}"
         )
 
-    if not isinstance(mapping.source, (DimensionSelector, str, list)):
-        # Allow Any for constants, but it must not be a dict (unless DimensionSelector)
-        if isinstance(mapping.source, dict) and not isinstance(
-            mapping.source, DimensionSelector
-        ):
-            raise TypeError(
-                "source dict must be a DimensionSelector, not a plain dict"
-            )
-
     if isinstance(mapping.source, list):
-        if not mapping.source:
-            raise ValueError("source list cannot be empty")
-        if not all(isinstance(col, str) for col in mapping.source):
-            raise TypeError("all elements in source list must be strings")
+        validate_sequence(mapping.source, "source", str, allow_empty=False)
+    elif isinstance(mapping.source, dict) and not isinstance(
+        mapping.source, DimensionSelector
+    ):
+        raise TypeError(
+            "source dict must be a DimensionSelector, not a plain dict"
+        )
 
 
 def resolve_source(

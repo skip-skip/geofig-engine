@@ -10,6 +10,15 @@ from typing import Any, Union
 
 import pandas as pd
 
+from geofig_engine.utils.validation import (
+    validate_columns_exist,
+    validate_dataframe,
+    validate_dict,
+    validate_sequence,
+    validate_string,
+    validate_tuple,
+)
+
 
 @dataclass(frozen=True)
 class FigureSpec:
@@ -57,46 +66,20 @@ def validate_figure_spec(spec: FigureSpec) -> None:
         ValueError: If template_name is empty, or iterator_key contains
                     non-strings, or mappings contain invalid values.
     """
-    # Validate data
-    if not isinstance(spec.data, pd.DataFrame):
-        raise TypeError("data must be a pandas DataFrame")
-
-    # Validate mappings
-    if not isinstance(spec.mappings, dict):
-        raise TypeError("mappings must be a dict")
+    validate_dataframe(spec.data, "data")
+    validate_dict(spec.mappings, "mappings")
 
     for key, value in spec.mappings.items():
         if isinstance(value, list):
-            if not value:
-                raise ValueError(f"mapping '{key}' cannot be empty")
-            if not all(isinstance(col, str) for col in value):
-                raise TypeError(f"all elements in mapping '{key}' must be strings")
-            # Check that columns exist in data
-            missing = set(value) - set(spec.data.columns)
-            if missing:
-                raise ValueError(f"columns {missing} not found in data")
+            validate_sequence(value, f"mapping '{key}'", str, allow_empty=False)
+            validate_columns_exist(spec.data, value, f"mapping '{key}'")
         elif isinstance(value, dict):
             raise TypeError(f"mapping '{key}' must be a DimensionSelector, not a plain dict")
 
-    # Validate settings
-    if not isinstance(spec.settings, dict):
-        raise TypeError("settings must be a dict")
-
-    # Validate context
-    if not isinstance(spec.context, dict):
-        raise TypeError("context must be a dict")
-
-    # Validate template_name
-    if not isinstance(spec.template_name, str):
-        raise TypeError("template_name must be a string")
-    if not spec.template_name:
-        raise ValueError("template_name cannot be empty")
-
-    # Validate iterator_key
-    if not isinstance(spec.iterator_key, tuple):
-        raise TypeError("iterator_key must be a tuple")
-    if not all(isinstance(col, str) for col in spec.iterator_key):
-        raise TypeError("all elements in iterator_key must be strings")
+    validate_dict(spec.settings, "settings")
+    validate_dict(spec.context, "context")
+    validate_string(spec.template_name, "template_name", allow_empty=False)
+    validate_tuple(spec.iterator_key, "iterator_key", str, allow_empty=True)
 
 
 def build_spec(
