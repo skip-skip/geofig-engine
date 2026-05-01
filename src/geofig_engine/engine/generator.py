@@ -49,8 +49,25 @@ class FigureEngine:
         validate_dict(context or {}, "context", key_type=str, allow_empty=True)
         validate_dict(iterator_selectors or {}, "iterator_selectors", key_type=str, allow_empty=True)
 
-        final_settings = {**self.config.default_settings, **(settings or {})}
+        template_defaults = template.default_settings or {}
+        template_default_mappings = {
+            key: value
+            for key, value in template_defaults.items()
+            if key in template.supported_mappings
+        }
+        template_default_settings = {
+            key: value
+            for key, value in template_defaults.items()
+            if key not in template.supported_mappings
+        }
+
+        final_settings = {
+            **template_default_settings,
+            **self.config.default_settings,
+            **(settings or {}),
+        }
         final_context = {**self.config.default_context, **(context or {})}
+        merged_mappings = {**template_default_mappings, **mappings}
 
         results = expand(dataset, iterator_selectors or {})
         specs: list[FigureSpec] = []
@@ -61,8 +78,12 @@ class FigureEngine:
                 key_column=dataset.key_column,
                 dimensions=dataset.dimensions,
             )
-            resolved_mappings = self._resolve_mappings(subset_dataset, mappings)
             merged_context = {**final_context, **result.context.values}
+            resolved_mappings = self._resolve_mappings(
+                subset_dataset,
+                merged_mappings,
+                merged_context,
+            )
 
             spec = template.build_spec(
                 data=subset_dataset.dataframe,
@@ -111,10 +132,16 @@ class FigureEngine:
         self,
         dataset: Dataset,
         mappings: dict[str, SourceType],
+        context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         resolved: dict[str, Any] = {}
 
         for name, source in mappings.items():
-            resolved[name] = resolve_source(source, dataset, strict=self.config.strict)
+            resolved[name] = resolve_source(
+                source,
+                dataset,
+                strict=self.config.strict,
+                context=context,
+            )
 
         return resolved

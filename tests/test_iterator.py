@@ -6,6 +6,7 @@ import pytest
 import pandas as pd
 
 from geofig_engine.core.iterator import (
+    ColumnSelector,
     IteratorContext,
     IteratorResult,
     expand,
@@ -182,6 +183,15 @@ class TestExpand:
         with pytest.raises(ValueError):
             expand(sample_dataset, {"invalid": selector})
 
+    def test_expand_column_selector_iterates_column_names(self, sample_dataset):
+        """ColumnSelector iterates over column names rather than values."""
+        selector = ColumnSelector(["analyte"])
+        results = expand(sample_dataset, {"y": selector})
+
+        assert len(results) == 1
+        assert results[0].context.get("y") == "analyte"
+        assert results[0].subset_df.equals(sample_dataset.dataframe)
+
 
 class TestGetIteratorColumns:
     """Test get_iterator_columns() function."""
@@ -204,6 +214,12 @@ class TestGetIteratorColumns:
         selector = DimensionSelector({"analyte": True})
         result = get_iterator_columns(sample_dataset, {"sel": selector})
         assert result == {"sel": ["analyte"]}
+
+    def test_resolve_column_selector(self, sample_dataset):
+        """ColumnSelector resolves explicit columns."""
+        selector = ColumnSelector(["analyte", "group"])
+        result = get_iterator_columns(sample_dataset, {"cols": selector})
+        assert result == {"cols": ["analyte", "group"]}
 
     def test_resolve_multiple_selectors(self, sample_dataset):
         """Multiple selectors resolve correctly."""

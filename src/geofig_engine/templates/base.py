@@ -59,7 +59,12 @@ class FigureTemplate:
         """Build a validated FigureSpec using template defaults and mappings."""
         self.validate_mappings(mappings)
 
-        final_settings = {**self.default_settings, **(settings or {})}
+        template_settings = {
+            key: value
+            for key, value in self.default_settings.items()
+            if key not in self.supported_mappings
+        }
+        final_settings = {**template_settings, **(settings or {})}
         final_context = context or {}
 
         return build_spec(

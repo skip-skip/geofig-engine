@@ -62,7 +62,10 @@ def validate_attribute_mapping(mapping: AttributeMapping) -> None:
 
 
 def resolve_source(
-    source: SourceType, dataset: Dataset, strict: bool = False
+    source: SourceType,
+    dataset: Dataset,
+    strict: bool = False,
+    context: dict[str, Any] | None = None,
 ) -> Union[list[str], Any]:
     """
     Resolve a source specification to concrete column names or constant value.
@@ -72,6 +75,7 @@ def resolve_source(
         dataset: Dataset for resolving DimensionSelector
         strict: If True, treat string as column name only (raise if not found).
                 If False (default), treat string as constant if column doesn't exist.
+        context: Optional context for string formatting placeholders.
 
     Returns:
         - DimensionSelector → list of column names
@@ -87,6 +91,12 @@ def resolve_source(
         return source.resolve(dataset)
 
     if isinstance(source, str):
+        if context:
+            try:
+                source = source.format(**context)
+            except KeyError:
+                pass
+
         # Check if it's a column name first
         if source in dataset.dataframe.columns:
             return [source]
@@ -96,10 +106,17 @@ def resolve_source(
         return source
 
     if isinstance(source, list):
-        missing = set(source) - set(dataset.dataframe.columns)
-        if missing:
-            raise KeyError(f"Columns not found in dataset: {missing}")
-        return source
+        resolved: list[str] = []
+        for item in source:
+            if context and isinstance(item, str):
+                try:
+                    item = item.format(**context)
+                except KeyError:
+                    pass
+            if item not in dataset.dataframe.columns:
+                raise KeyError(f"Columns not found in dataset: {item}")
+            resolved.append(item)
+        return resolved
 
     # Constant value
     return source

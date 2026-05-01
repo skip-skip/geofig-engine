@@ -28,6 +28,7 @@ from .attribute_mapping import (
 
 # Multi-figure iteration
 from .iterator import (
+    ColumnSelector,
     IteratorContext,
     IteratorResult,
     expand,
@@ -53,6 +54,7 @@ __all__ = [
     "validate_attribute_mapping",
     "resolve_source",
     # Iterator
+    "ColumnSelector",
     "IteratorContext",
     "IteratorResult",
     "expand",

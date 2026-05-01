@@ -56,7 +56,6 @@ class TestBivariateTemplate:
 
         assert isinstance(spec, FigureSpec)
         assert spec.template_name == "bivariate"
-        assert spec.settings["alpha"] == 0.8
         assert spec.settings["figsize"] == (10, 6)
         assert spec.settings["title"] == "Plot"
 

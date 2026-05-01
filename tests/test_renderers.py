@@ -55,3 +55,47 @@ def test_matplotlib_renderer_renders_figure():
     assert ax.get_xlabel() == "X"
     assert ax.get_ylabel() == "Y"
     assert tuple(fig.get_size_inches()) == (4.0, 3.0)
+
+
+def test_matplotlib_renderer_ignores_alpha_in_settings_without_mapping():
+    renderer = MatplotlibRenderer()
+    data = pd.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    spec = FigureSpec(
+        data=data,
+        mappings={"x": ["x"], "y": ["y"], "color": "red"},
+        settings={"alpha": 0.5, "figsize": (4, 3)},
+        context={},
+        template_name="test",
+    )
+
+    fig = renderer.render(spec)
+
+    assert fig is not None
+    assert fig.axes
+    scatter = fig.axes[0].collections[0]
+    assert scatter.get_alpha() is None
+
+
+def test_matplotlib_renderer_supports_categorical_marker_series():
+    renderer = MatplotlibRenderer()
+    data = pd.DataFrame(
+        {
+            "x": [1, 2, 3, 4],
+            "y": [4, 5, 6, 7],
+            "cluster": ["A", "B", "A", "B"],
+            "group": ["red", "red", "blue", "blue"],
+        }
+    )
+    spec = FigureSpec(
+        data=data,
+        mappings={"x": ["x"], "y": ["y"], "marker": ["cluster"], "color": ["group"]},
+        settings={"title": "Marker Series", "figsize": (4, 3)},
+        context={},
+        template_name="test",
+    )
+
+    fig = renderer.render(spec)
+
+    assert fig is not None
+    assert fig.axes
+    assert len(fig.axes[0].collections) >= 2

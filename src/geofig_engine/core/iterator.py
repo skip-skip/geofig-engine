@@ -6,7 +6,7 @@ Generates multiple (subset_df, context) pairs by expanding over dimension values
 
 from dataclasses import dataclass
 from itertools import product
-from typing import Any, Union
+from typing import Any, Sequence, Union
 
 import pandas as pd
 
@@ -45,12 +45,49 @@ class IteratorResult:
     Attributes:
         subset_df: Filtered view of the dataset for this iteration.
         context: Context values (dimension values) for this iteration.
-        iterator_key: Tuple of column names used for iteration.
+        iterator_key: Tuple of iterator keys used for iteration.
     """
 
     subset_df: pd.DataFrame
     context: IteratorContext
     iterator_key: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ColumnSelector:
+    """Select columns to iterate over by name or metadata."""
+
+    selector: Union[DimensionSelector, str, Sequence[str]]
+
+    def __post_init__(self) -> None:
+        if isinstance(self.selector, DimensionSelector):
+            return
+        if isinstance(self.selector, str):
+            return
+        if isinstance(self.selector, Sequence):
+            if isinstance(self.selector, str):
+                return
+            for item in self.selector:
+                if not isinstance(item, str):
+                    raise TypeError("selector sequence items must be strings")
+            return
+        raise TypeError(
+            "selector must be a DimensionSelector, string, or sequence of strings"
+        )
+
+    def resolve(self, dataset: Dataset) -> list[str]:
+        if isinstance(self.selector, DimensionSelector):
+            return self.selector.resolve(dataset)
+
+        if isinstance(self.selector, str):
+            if self.selector not in dataset.dataframe.columns:
+                raise KeyError(f"Column '{self.selector}' not found in dataset")
+            return [self.selector]
+
+        missing = [name for name in self.selector if name not in dataset.dataframe.columns]
+        if missing:
+            raise KeyError(f"Columns not found in dataset: {sorted(missing)}")
+        return list(self.selector)
 
 
 def expand(
@@ -91,9 +128,14 @@ def expand(
 
     # Resolve selectors to column names and sort by selector key to keep ordering deterministic
     iterator_columns = dict(sorted(get_iterator_columns(dataset, selectors).items()))
+    column_selector_keys = {
+        name
+        for name, selector in selectors.items()
+        if isinstance(selector, ColumnSelector)
+    }
 
-    # Generate all unique combinations of context values
-    contexts = generate_contexts(dataset, iterator_columns)
+    # Generate all combinations of context values or column names
+    contexts = generate_contexts(dataset, iterator_columns, column_selector_keys)
 
     # Create result for each context
     results = []
@@ -103,7 +145,8 @@ def expand(
         subset_df = filter_by_context(
             dataset.dataframe,
             context,
-            list(iterator_columns.values()),
+            iterator_columns,
+            column_selector_keys,
         )
         results.append(
             IteratorResult(
@@ -118,7 +161,7 @@ def expand(
 
 def get_iterator_columns(
     dataset: Dataset,
-    selectors: dict[str, Union[DimensionSelector, str, list[str]]],
+    selectors: dict[str, Union[DimensionSelector, str, list[str], "ColumnSelector"]],
 ) -> dict[str, list[str]]:
     """
     Resolve selectors to actual column names for iteration.
@@ -137,24 +180,24 @@ def get_iterator_columns(
     result = {}
 
     for name, selector in selectors.items():
-        if isinstance(selector, DimensionSelector):
-            # Resolve DimensionSelector to column names
+        if isinstance(selector, ColumnSelector):
+            columns = selector.resolve(dataset)
+            result[name] = columns
+        elif isinstance(selector, DimensionSelector):
             columns = selector.resolve(dataset)
             result[name] = columns
         elif isinstance(selector, str):
-            # Single column name
             if selector not in dataset.dataframe.columns:
                 raise KeyError(f"Column '{selector}' not found in dataset")
             result[name] = [selector]
         elif isinstance(selector, list):
-            # List of column names
             missing = set(selector) - set(dataset.dataframe.columns)
             if missing:
                 raise KeyError(f"Columns not found in dataset: {missing}")
             result[name] = selector
         else:
             raise TypeError(
-                f"Selector must be DimensionSelector, str, or list[str], "
+                f"Selector must be DimensionSelector, ColumnSelector, str, or list[str], "
                 f"got {type(selector)}"
             )
 
@@ -162,32 +205,37 @@ def get_iterator_columns(
 
 
 def generate_contexts(
-    dataset: Dataset, iterator_columns: dict[str, list[str]]
+    dataset: Dataset,
+    iterator_columns: dict[str, list[str]],
+    column_selector_keys: set[str] | None = None,
 ) -> list[IteratorContext]:
     """
-    Generate all unique combinations of dimension values.
+    Generate all unique combinations of values or column names.
 
-    For each selector, gets unique values in its columns, then generates
-    Cartesian product across all selectors.
+    For value iterators, extract unique values from the selected columns.
+    For column iterators, use the selected column names directly.
 
     Args:
         dataset: Dataset to extract values from.
         iterator_columns: Dict mapping name → column names for that selector.
+        column_selector_keys: Names of selectors that should iterate over column names.
 
     Returns:
         List of IteratorContext in sorted (deterministic) order.
     """
-    # Get unique values for each selector
+    column_selector_keys = column_selector_keys or set()
     value_combinations: dict[str, list[Any]] = {}
 
     for name, columns in iterator_columns.items():
-        # Get all unique values across the columns
+        if name in column_selector_keys:
+            value_combinations[name] = list(columns)
+            continue
+
         values = set()
         for col in columns:
             values.update(dataset.dataframe[col].unique())
         value_combinations[name] = sorted(values)
 
-    # Generate Cartesian product
     names = sorted(value_combinations.keys())
     value_lists = [value_combinations[name] for name in names]
 
@@ -202,32 +250,50 @@ def generate_contexts(
 def filter_by_context(
     df: pd.DataFrame,
     context: IteratorContext,
-    columns_lists: list[list[str]],
+    iterator_columns: dict[str, list[str]] | list[list[str]],
+    column_selector_keys: set[str] | None = None,
 ) -> pd.DataFrame:
     """
     Filter dataframe to rows matching context values.
 
-    For each context value, filters rows where ANY of the columns
-    (in that selector's list) matches the value.
+    For each value iterator, filters rows where ANY of the columns
+    (in that selector's list) matches the context value.
+    Column iterators do not filter rows because they select columns, not values.
 
     Args:
         df: Source dataframe to filter.
         context: Context values to match (dict of name → value).
-        columns_lists: Lists of columns for each context key.
+        iterator_columns: Dict mapping selector names → column lists, or legacy
+            list of column lists for backward compatibility.
+        column_selector_keys: Selector names to skip filtering for.
 
     Returns:
         Filtered view of dataframe.
     """
     result_df = df
+    column_selector_keys = column_selector_keys or set()
     context_items = sorted(context.values.items())
 
-    if len(context_items) != len(columns_lists):
+    if isinstance(iterator_columns, dict):
+        for name, value in context_items:
+            if name in column_selector_keys:
+                continue
+
+            columns = iterator_columns.get(name)
+            if columns is None:
+                raise ValueError(f"Unknown iterator column for selector '{name}'")
+
+            mask = result_df[columns].eq(value).any(axis=1)
+            result_df = result_df.loc[mask]
+
+        return result_df
+
+    if len(context_items) != len(iterator_columns):
         raise ValueError(
             "columns_lists must have the same number of entries as context values"
         )
 
-    for (name, value), columns in zip(context_items, columns_lists):
-        # Filter: any of these columns should equal the value
+    for (_, value), columns in zip(context_items, iterator_columns):
         mask = result_df[columns].eq(value).any(axis=1)
         result_df = result_df.loc[mask]
 
