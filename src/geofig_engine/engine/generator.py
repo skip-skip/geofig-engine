@@ -8,11 +8,11 @@ template, and mapping inputs, and optionally dispatches them to a renderer.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Sequence
 
 from geofig_engine.core.attribute_mapping import SourceType, resolve_source
 from geofig_engine.core.dataset import Dataset
-from geofig_engine.core.iterator import IteratorResult, expand
+from geofig_engine.core.iterator import DimensionIterator, IteratorResult, expand
 from geofig_engine.core.spec import FigureSpec
 from geofig_engine.renderers.base import BaseRenderer
 from geofig_engine.templates.base import FigureTemplate
@@ -41,13 +41,15 @@ class FigureEngine:
         mappings: dict[str, SourceType],
         settings: dict[str, Any] | None = None,
         context: dict[str, Any] | None = None,
-        iterator_selectors: dict[str, SourceType] | None = None,
+        iterators: Sequence[DimensionIterator] | DimensionIterator | None = None,
     ) -> list[FigureSpec]:
         """Build one or more fully resolved FigureSpec objects."""
         validate_dict(mappings, "mappings", key_type=str, allow_empty=True)
         validate_dict(settings or {}, "settings", key_type=str, allow_empty=True)
         validate_dict(context or {}, "context", key_type=str, allow_empty=True)
-        validate_dict(iterator_selectors or {}, "iterator_selectors", key_type=str, allow_empty=True)
+
+        if isinstance(iterators, DimensionIterator):
+            iterators = [iterators]
 
         template_defaults = template.default_settings or {}
         template_default_mappings = {
@@ -68,8 +70,10 @@ class FigureEngine:
         }
         final_context = {**self.config.default_context, **(context or {})}
         merged_mappings = {**template_default_mappings, **mappings}
-
-        results = expand(dataset, iterator_selectors or {})
+        alligned_mappings = self._align_required_mappings(
+            merged_mappings, template.required_mappings
+        )
+        results = expand(dataset, iterators or [])
         specs: list[FigureSpec] = []
 
         for result in results:
@@ -81,7 +85,7 @@ class FigureEngine:
             merged_context = {**final_context, **result.context.values}
             resolved_mappings = self._resolve_mappings(
                 subset_dataset,
-                merged_mappings,
+                alligned_mappings,
                 merged_context,
             )
             resolved_settings = self._resolve_settings(
@@ -108,21 +112,40 @@ class FigureEngine:
         renderer: BaseRenderer,
         settings: dict[str, Any] | None = None,
         context: dict[str, Any] | None = None,
-        iterator_selectors: dict[str, SourceType] | None = None,
+        iterators: Sequence[DimensionIterator] | DimensionIterator | None = None,
     ) -> list[Any]:
         """Build specs and render them with the provided renderer."""
         if renderer is None:
             raise ValueError("renderer must be provided")
-
+        if isinstance(iterators, DimensionIterator):
+            iterators = [iterators]
         specs = self.build_specs(
             dataset=dataset,
             template=template,
             mappings=mappings,
             settings=settings,
             context=context,
-            iterator_selectors=iterator_selectors,
+            iterators=iterators,
         )
         return renderer.render_all(specs)
+
+    def render_and_save(
+        self,
+        dataset: Dataset,
+        template: FigureTemplate,
+        mappings: dict[str, SourceType],
+        renderer: BaseRenderer,
+        outdir: str,
+        settings: dict[str, Any] | None = None,
+        context: dict[str, Any] | None = None,
+        iterators: Sequence[DimensionIterator] | DimensionIterator | None = None,
+        filename: str | None = None,
+    ) -> list[Any]:
+        """Render and save all figures to the specified output directory. 
+        Filename can be a template string with context keys, or defaults to 'figure_{i}.png'."""
+        figures = self.render(self, dataset, template, mappings, renderer, settings, context, iterators)
+        for i, fig in enumerate(figures):
+            fig.savefig(outdir + "/" + self._resolve_filename(filename or f"figure_{i}.png", context))
 
     def render_specs(self, specs: list[FigureSpec], renderer: BaseRenderer) -> list[Any]:
         """Render an existing list of FigureSpec objects."""
@@ -132,6 +155,70 @@ class FigureEngine:
 
         return renderer.render_all(specs)
 
+    def _align_required_mappings(
+        self,
+        mappings: dict[str, Any],
+        required_keys: tuple[str, ...],
+    ) -> dict[str, Any]:
+        """
+        Align required mappings by broadcasting single values.
+
+        Rules:
+        - Only keys in `required_keys` are aligned.
+        - Strings and single-item lists are broadcast to match the target length.
+        - If multiple required mappings have list values, they must all have the same length.
+        - If mismatched lengths are found → raise ValueError.
+
+        Returns:
+            A new mappings dict with aligned required mappings.
+
+        Raises:
+            ValueError: If required mappings have incompatible lengths.
+        """
+        # Determine lengths of list-based required mappings
+        lengths = {}
+        for key in required_keys:
+            value = mappings.get(key)
+            if isinstance(value, list):
+                lengths[key] = len(value)
+            elif isinstance(value, str):
+                lengths[key] = 1
+            else:
+                # treat other scalars as length 1
+                lengths[key] = 1
+        # Determine target length
+        unique_lengths = set(lengths.values())
+        if len(unique_lengths) == 1:
+            target_len = unique_lengths.pop()
+        else:
+            # allow broadcasting only if mismatch is between 1 and N
+            non_one_lengths = {l for l in unique_lengths if l != 1}
+            if len(non_one_lengths) > 1:
+                raise ValueError(
+                    f"Dimension mismatch in required mappings: {lengths}"
+                )
+            target_len = max(non_one_lengths) if non_one_lengths else 1
+        # Build aligned mapping
+        aligned = {}
+        for key, value in mappings.items():
+            if key in required_keys:
+                if isinstance(value, list):
+                    if len(value) == target_len:
+                        aligned[key] = value
+                    elif len(value) == 1:
+                        aligned[key] = value * target_len
+                    else:
+                        raise ValueError(
+                            f"Cannot align mapping '{key}' of length {len(value)} "
+                            f"to target length {target_len}"
+                        )
+                else:
+                    # scalar or string → broadcast
+                    aligned[key] = [value] * target_len
+            else:
+                # leave non-required mappings untouched
+                aligned[key] = value
+        return aligned
     def _resolve_mappings(
         self,
         dataset: Dataset,
@@ -167,4 +254,15 @@ class FigureEngine:
             else:
                 resolved[key] = value
 
+        return resolved
+    
+    def _resolve_filename(
+        self,
+        name: str,
+        context: dict[str, Any]
+    ) -> str:
+        try:
+            resolved = name.format(**context)
+        except KeyError:
+            resolved = name
         return resolved

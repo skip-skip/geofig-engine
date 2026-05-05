@@ -77,6 +77,13 @@ class Dataset:
 
         return self.dataframe.loc[:, selected].copy()
 
+    def get_dimensions(self, attribute: str, value: str)-> list[str]:
+        dimensions = []
+        for name, dimension in self.dimensions.items():
+            if dimension.has_attribute(attribute) and dimension.attributes.get(attribute) == value:
+                dimensions.append(name)
+        return dimensions
+
     def filter_rows(self, mask: Iterable[bool]) -> Dataset:
         if isinstance(mask, pd.Series):
             if not mask.index.equals(self.dataframe.index):

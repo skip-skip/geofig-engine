@@ -11,8 +11,17 @@ from typing import Any, Sequence, Union
 import pandas as pd
 
 from geofig_engine.core.dataset import Dataset
-from geofig_engine.core.dimension_selector import DimensionSelector
+from geofig_engine.core.dimension_selector import DimensionSelector, ColumnSelector
+from enum import Enum
 
+@dataclass(frozen=True)
+class DimensionIterator:
+    class Mode(Enum):
+        VALUE = 'value'
+        DIMENSION = 'dimension'
+    attribute: str
+    dimensions: Sequence[str] | dict[str, Any]
+    mode: Mode = Mode.DIMENSION
 
 @dataclass(frozen=True)
 class IteratorContext:
@@ -52,60 +61,19 @@ class IteratorResult:
     context: IteratorContext
     iterator_key: tuple[str, ...]
 
-
-@dataclass(frozen=True)
-class ColumnSelector:
-    """Select columns to iterate over by name or metadata."""
-
-    selector: Union[DimensionSelector, str, Sequence[str]]
-
-    def __post_init__(self) -> None:
-        if isinstance(self.selector, DimensionSelector):
-            return
-        if isinstance(self.selector, str):
-            return
-        if isinstance(self.selector, Sequence):
-            if isinstance(self.selector, str):
-                return
-            for item in self.selector:
-                if not isinstance(item, str):
-                    raise TypeError("selector sequence items must be strings")
-            return
-        raise TypeError(
-            "selector must be a DimensionSelector, string, or sequence of strings"
-        )
-
-    def resolve(self, dataset: Dataset) -> list[str]:
-        if isinstance(self.selector, DimensionSelector):
-            return self.selector.resolve(dataset)
-
-        if isinstance(self.selector, str):
-            if self.selector not in dataset.dataframe.columns:
-                raise KeyError(f"Column '{self.selector}' not found in dataset")
-            return [self.selector]
-
-        missing = [name for name in self.selector if name not in dataset.dataframe.columns]
-        if missing:
-            raise KeyError(f"Columns not found in dataset: {sorted(missing)}")
-        return list(self.selector)
-
-
 def expand(
     dataset: Dataset,
-    selectors: dict[str, Union[DimensionSelector, str, list[str]]],
+    iterators: Sequence[DimensionIterator] | None = None,
 ) -> list[IteratorResult]:
     """
-    Expand selectors into multiple (subset, context) pairs.
+    Expand Iterators into selectors into multiple (subset, context) pairs.
 
     Generates all combinations of dimension values as specified by selectors.
     For each combination, creates a filtered view of the dataset.
 
     Args:
         dataset: Source dataset to iterate over.
-        selectors: Dict mapping names to dimension specifications:
-            - DimensionSelector: iterate over matching dimensions' values
-            - str: single column name
-            - list[str]: multiple column names (Cartesian product)
+        iterators: Sequence of DimensionIterator objects specifying iteration dimensions.
 
     Returns:
         List of IteratorResult in deterministic order.
@@ -117,7 +85,7 @@ def expand(
         KeyError: If column doesn't exist in dataset.
     """
     # Handle no iteration case
-    if not selectors:
+    if not iterators:
         return [
             IteratorResult(
                 subset_df=dataset.dataframe,
@@ -125,7 +93,11 @@ def expand(
                 iterator_key=(),
             )
         ]
-
+    selectors = {
+        iterator.attribute: ColumnSelector(iterator.dimensions) 
+        if iterator.mode == DimensionIterator.Mode.DIMENSION else DimensionSelector(iterator.dimensions)
+        for iterator in iterators
+    }
     # Resolve selectors to column names and sort by selector key to keep ordering deterministic
     iterator_columns = dict(sorted(get_iterator_columns(dataset, selectors).items()))
     column_selector_keys = {
@@ -161,7 +133,7 @@ def expand(
 
 def get_iterator_columns(
     dataset: Dataset,
-    selectors: dict[str, Union[DimensionSelector, str, list[str], "ColumnSelector"]],
+    selectors: dict[str, Union[DimensionSelector, str, list[str]]],
 ) -> dict[str, list[str]]:
     """
     Resolve selectors to actual column names for iteration.
@@ -180,10 +152,7 @@ def get_iterator_columns(
     result = {}
 
     for name, selector in selectors.items():
-        if isinstance(selector, ColumnSelector):
-            columns = selector.resolve(dataset)
-            result[name] = columns
-        elif isinstance(selector, DimensionSelector):
+        if isinstance(selector, DimensionSelector):
             columns = selector.resolve(dataset)
             result[name] = columns
         elif isinstance(selector, str):

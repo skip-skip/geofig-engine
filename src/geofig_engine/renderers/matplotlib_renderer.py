@@ -30,7 +30,8 @@ class MatplotlibRenderer(BaseRenderer):
 
         if x_data is None or y_data is None:
             raise ValueError("FigureSpec must define both 'x' and 'y' mappings")
-
+        print(x_data)
+        print(y_data)
         color_data = extract_data_for_mapping(spec, "color")
         marker_data = extract_data_for_mapping(spec, "marker")
         size_data = extract_data_for_mapping(spec, "size")

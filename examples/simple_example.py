@@ -12,6 +12,7 @@ from geofig_engine.core.dataset import Dataset
 from geofig_engine.engine import EngineConfig, FigureEngine
 from geofig_engine.renderers import MatplotlibRenderer
 from geofig_engine.templates import BivariateTemplate
+from geofig_engine.core.iterator import DimensionIterator
 
 
 def main() -> None:
@@ -42,13 +43,12 @@ def main() -> None:
         "size": "size",
     }
 
-    iterator_selectors = {"group": "group"}
-
+    iterator = DimensionIterator(attribute="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE)
     specs = engine.build_specs(
         dataset=dataset,
         template=template,
         mappings=mappings,
-        iterator_selectors=iterator_selectors,
+        iterators=iterator,
     )
 
     print(f"Created {len(specs)} figure specs")

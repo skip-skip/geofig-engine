@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Sequence, Union
 
 from .dataset import Dataset
 from .dimension import Dimension
@@ -12,7 +12,6 @@ from geofig_engine.utils.validation import validate_dict, validate_sequence
 @dataclass(frozen=True)
 class DimensionSelector:
     selector: Selector
-
     def __post_init__(self) -> None:
         if isinstance(self.selector, dict):
             validate_dict(self.selector, "selector", key_type=str, allow_empty=False)
@@ -82,3 +81,8 @@ class DimensionSelector:
         for item in names:
             if not isinstance(item, str):
                 raise TypeError("selector sequence items must be strings")
+
+@dataclass(frozen=True)
+class ColumnSelector(DimensionSelector):
+    """Select columns to iterate over by name or metadata."""
+    pass

@@ -10,7 +10,7 @@ import pandas as pd
 from geofig_engine.core.dataset import Dataset
 from geofig_engine.core.dimension import Dimension
 from geofig_engine.core.dimension_selector import DimensionSelector
-from geofig_engine.core.iterator import ColumnSelector
+from geofig_engine.core.iterator import DimensionIterator, IteratorMode
 from geofig_engine.engine import FigureEngine
 from geofig_engine.renderers import MatplotlibRenderer
 from geofig_engine.templates import BivariateTemplate
@@ -40,6 +40,7 @@ dimensions = {
     "sulfate_mg_L": Dimension("sulfate_mg_L", {"role": "x"}),
     "cluster": Dimension("cluster", {"role": "marker"}),
 }
+
 for analyte in analytes:
     dimensions[analyte] = Dimension(analyte, {"type": "analyte"})
 for color_col in color_columns:
@@ -63,16 +64,23 @@ mappings = {
     "marker": "cluster",
 }
 
-iterator_selectors = {
-    "y": ColumnSelector(DimensionSelector({"type": "analyte"})),
-    "color": ColumnSelector(DimensionSelector({"role": "color"})),
-}
-
+iters = [
+    DimensionIterator(
+        attribute="y",
+        dimensions = {"type": "analyte"},
+        mode=IteratorMode.DIMENSION,
+    ),
+    DimensionIterator(
+        attribute="color",
+        dimensions = {"role": "color"},
+        mode=IteratorMode.DIMENSION,
+    )
+]
 specs = engine.build_specs(
     dataset=dataset,
     template=template,
     mappings=mappings,
-    iterator_selectors=iterator_selectors,
+    iterators=iters,
     settings={
         "xlabel": "sulfate_mg_L",
         "ylabel": "{y}",

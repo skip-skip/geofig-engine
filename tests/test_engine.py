@@ -6,8 +6,8 @@ import pandas as pd
 
 from geofig_engine.core.dataset import Dataset
 from geofig_engine.core.dimension import Dimension
-from geofig_engine.core.dimension_selector import DimensionSelector
-from geofig_engine.core.iterator import ColumnSelector
+from geofig_engine.core.dimension_selector import DimensionSelector, ColumnSelector
+from geofig_engine.core.iterator import DimensionIterator
 from geofig_engine.engine import EngineConfig, FigureEngine
 from geofig_engine.renderers.base import BaseRenderer
 from geofig_engine.templates import BivariateTemplate
@@ -53,12 +53,13 @@ def test_build_specs_with_iterator_returns_multiple_specs():
     engine = FigureEngine()
     dataset = make_dataset()
     template = BivariateTemplate()
-
+    iterator = DimensionIterator(attribute="group", dimensions=["group"], 
+                                 mode=DimensionIterator.Mode.VALUE)
     specs = engine.build_specs(
         dataset=dataset,
         template=template,
         mappings={"x": ["x"], "y": ["y"]},
-        iterator_selectors={"group": ["group"]},
+        iterators=iterator,
     )
 
     assert len(specs) == 2
@@ -84,18 +85,24 @@ def test_build_specs_with_column_selector_and_placeholders():
     }
     dataset = Dataset(dataframe=data, key_column="id", dimensions=dimensions)
     template = BivariateTemplate()
+    iterators = [
+        DimensionIterator(
+            attribute="y",
+            dimensions={"type": "analyte"},
+            mode=DimensionIterator.Mode.DIMENSION,),
+        DimensionIterator(
+            attribute="color",
+            dimensions=["group"],
+            mode=DimensionIterator.Mode.DIMENSION,)
+    ]
 
     specs = engine.build_specs(
         dataset=dataset,
         template=template,
         mappings={"x": "x", "y": "{y}", "color": "{color}"},
-        iterator_selectors={
-            "y": ColumnSelector(DimensionSelector({"type": "analyte"})),
-            "color": ColumnSelector(["group"]),
-        },
+        iterators=iterators,
         settings={"xlabel": "x"},
     )
-
     assert len(specs) == 2
     assert {spec.context["y"] for spec in specs} == {"y1", "y2"}
     assert all(spec.context["color"] == "group" for spec in specs)
