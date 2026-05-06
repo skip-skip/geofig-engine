@@ -140,9 +140,9 @@ Examples:
 
 ---
 
-### 5. FigureTemplate
+### 5. FigureTemplate and FigureLayers
 
-Defines a figure type with defaults.
+FigureTemplate is a figure type with defaults.
 
 FigureTemplate:
     name: str
@@ -165,6 +165,15 @@ BivariateTemplate:
 - requires x, y
 - optional color, marker
 - default alpha=0.8
+
+FigureLayers serialize visual stacks to be drawn by the renderer.
+
+Layers must
+- be dataclasses with no defined class functions
+- declare all required and optional channels for the visual stack
+
+Layers declare channels, Template mappings link values (or Iterators) to channels.
+The dumb renderer draws Layers using mapped values.
 
 ---
 

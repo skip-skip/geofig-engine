@@ -40,7 +40,7 @@ def test_build_specs_creates_single_spec():
         template=template,
         mappings={"x": ["x"], "y": ["y"]},
     )
-
+    print(specs)
     assert len(specs) == 1
     spec = specs[0]
     assert spec.template_name == "bivariate"

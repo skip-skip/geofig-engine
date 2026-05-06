@@ -5,8 +5,9 @@ Tests for FigEngine renderers.
 import pandas as pd
 
 from geofig_engine.core.spec import FigureSpec
+from geofig_engine.layers.scatter import ScatterLayer
 from geofig_engine.renderers import BaseRenderer, MatplotlibRenderer
-
+from geofig_engine.layers.base import FigureLayer
 
 class DummyRenderer(BaseRenderer):
     def render(self, spec: FigureSpec) -> str:
@@ -44,6 +45,7 @@ def test_matplotlib_renderer_renders_figure():
         settings={"title": "Test Plot", "figsize": (4, 3), "xlabel": "X", "ylabel": "Y"},
         context={},
         template_name="test",
+        layers=[FigureLayer()],
     )
 
     fig = renderer.render(spec)
@@ -66,6 +68,7 @@ def test_matplotlib_renderer_ignores_alpha_in_settings_without_mapping():
         settings={"alpha": 0.5, "figsize": (4, 3)},
         context={},
         template_name="test",
+        layers=[ScatterLayer(alpha=None)],
     )
 
     fig = renderer.render(spec)
@@ -92,6 +95,7 @@ def test_matplotlib_renderer_supports_categorical_marker_series():
         settings={"title": "Marker Series", "figsize": (4, 3)},
         context={},
         template_name="test",
+        layers=[ScatterLayer()],
     )
 
     fig = renderer.render(spec)

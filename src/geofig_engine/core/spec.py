@@ -5,11 +5,12 @@ Concrete, fully resolved plotting instruction that serves as the contract
 between the FigEngine system and rendering backends.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Union
 
 import pandas as pd
 
+from geofig_engine.layers.base import FigureLayer
 from geofig_engine.utils.validation import (
     validate_columns_exist,
     validate_dataframe,
@@ -46,6 +47,7 @@ class FigureSpec:
     context: dict[str, Any]
     template_name: str
     iterator_key: tuple[str, ...] = ()
+    layers: list[FigureLayer] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Validate spec on creation."""
@@ -89,6 +91,7 @@ def build_spec(
     context: dict[str, Any],
     template_name: str,
     iterator_key: tuple[str, ...] = (),
+    layers: list[FigureLayer] | None = None,
 ) -> FigureSpec:
     """
     Factory function to create and validate a FigureSpec.
@@ -115,6 +118,7 @@ def build_spec(
         context=context,
         template_name=template_name,
         iterator_key=iterator_key,
+        layers=layers or [],
     )
 
 

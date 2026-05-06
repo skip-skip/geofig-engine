@@ -33,3 +33,5 @@ class BaseRenderer(ABC):
     def supports(self, spec: FigureSpec) -> bool:
         """Return whether this renderer supports the given spec."""
         return True
+
+    

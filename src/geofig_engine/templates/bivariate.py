@@ -5,6 +5,7 @@ Defines the contract for two-dimensional plots with optional
 color and marker encodings.
 """
 
+from geofig_engine.layers.scatter import ScatterLayer
 from geofig_engine.templates.base import FigureTemplate
 
 
@@ -14,5 +15,11 @@ class BivariateTemplate(FigureTemplate):
             name="bivariate",
             required_mappings=("x", "y"),
             optional_mappings=("color", "marker", "size", "alpha", "linestyle"),
-            default_settings={"alpha": 0.8, "figsize": (10, 6)},
+            default_settings={
+                "figsize": (10, 6),
+                "xscale": "linear",
+                "yscale": "linear",
+            },
+            projection=FigureTemplate.ProjectionType.CARTESIAN,
+            layers = [ScatterLayer()]
         )

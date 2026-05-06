@@ -47,7 +47,7 @@ class TestBivariateTemplate:
 
     def test_default_settings_are_applied(self, data):
         template = BivariateTemplate()
-        spec = template.build_spec(
+        spec = template.build_template_spec(
             data=data,
             mappings={"x": ["x"], "y": ["y"]},
             settings={"title": "Plot"},
@@ -63,7 +63,7 @@ class TestBivariateTemplate:
         template = BivariateTemplate()
 
         with pytest.raises(ValueError, match="requires mapping 'x'"):
-            template.build_spec(
+            template.build_template_spec(
                 data=data,
                 mappings={"y": ["y"]},
                 settings={},
@@ -74,7 +74,7 @@ class TestBivariateTemplate:
         template = BivariateTemplate()
 
         with pytest.raises(ValueError, match="Unsupported mapping 'z'"):
-            template.build_spec(
+            template.build_template_spec(
                 data=data,
                 mappings={"x": ["x"], "y": ["y"], "z": ["group"]},
                 settings={},
@@ -83,7 +83,7 @@ class TestBivariateTemplate:
 
     def test_build_spec_accepts_optional_color(self, data):
         template = BivariateTemplate()
-        spec = template.build_spec(
+        spec = template.build_template_spec(
             data=data,
             mappings={"x": ["x"], "y": ["y"], "color": ["group"]},
             settings={},

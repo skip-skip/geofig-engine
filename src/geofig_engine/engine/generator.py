@@ -93,7 +93,7 @@ class FigureEngine:
                 merged_context
             )
 
-            spec = template.build_spec(
+            spec = template.build_template_spec(
                 data=subset_dataset.dataframe,
                 mappings=resolved_mappings,
                 settings=resolved_settings,
