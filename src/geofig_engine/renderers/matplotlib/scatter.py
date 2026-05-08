@@ -9,7 +9,7 @@ from geofig_engine.core.spec import FigureSpec, extract_data_for_mapping
 from geofig_engine.layers.scatter import ScatterLayer
 from geofig_engine.renderers.matplotlib.util import extract_channel_data, resolve_color_series
 
-def render_scatter(ax: Axes, spec: FigureSpec, layer: ScatterLayer) -> None:
+def render_scatter(ax: Axes, spec: FigureSpec, layer: ScatterLayer, order: int) -> None:
         """
         Render ScatterLayer using FigureSpec mappings.
         Behavior matches legacy renderer as closely as possible.
@@ -24,6 +24,7 @@ def render_scatter(ax: Axes, spec: FigureSpec, layer: ScatterLayer) -> None:
         # -------------------------
         # optional encodings
         # -------------------------
+        y2_data = extract_channel_data(spec, layer, 'y2')
         color_data = extract_channel_data(spec, layer, 'color')
         marker_data = extract_channel_data(spec, layer, 'marker')
         size_data = extract_channel_data(spec, layer, 'size')
@@ -51,15 +52,18 @@ def render_scatter(ax: Axes, spec: FigureSpec, layer: ScatterLayer) -> None:
         # -------------------------
         # helper
         # -------------------------
-        def plot(x, y, kwargs):
-            ax.scatter(x, y, **kwargs)
+        secondary_ax = None if y2_data is None else ax.twinx()
+        def plot(target_ax, x, y, kwargs):
+            target_ax.scatter(x, y, zorder = order, **kwargs)
         # -------------------------
         # MARKER LOGIC (unique value mapping)
         # -------------------------
         if marker_data is None or isinstance(marker_data, str):
             if isinstance(marker_data, str):
                 scatter_kwargs["marker"] = marker_data
-            plot(x_data, y_data, scatter_kwargs)
+            plot(ax, x_data, y_data, scatter_kwargs)
+            if y2_data is not None:
+                plot(secondary_ax, x_data, y2_data, scatter_kwargs)
         else:
             marker_series = (
                 marker_data
@@ -85,10 +89,18 @@ def render_scatter(ax: Axes, spec: FigureSpec, layer: ScatterLayer) -> None:
                 if color_data is not None and not isinstance(color_data, str):
                     group_kwargs["c"] = color_data.loc[mask]
                 plot(
+                    ax,
                     x_data.loc[mask],
                     y_data.loc[mask],
                     group_kwargs,
                 )
+                if y2_data is not None:
+                    plot(
+                        secondary_ax,
+                        x_data.loc[mask],
+                        y2_data.loc[mask],
+                        group_kwargs,
+                    )
 
         # -------------------------
         # LAYOUT FEATURES (settings preserved)
@@ -120,3 +132,7 @@ def render_scatter(ax: Axes, spec: FigureSpec, layer: ScatterLayer) -> None:
         yscale = spec.settings.get("yscale")
         if yscale:
             ax.set_yscale(yscale)
+
+        y2scale = spec.settings.get("y2scale")
+        if y2scale and secondary_ax is not None:
+            secondary_ax.set_yscale(y2scale)

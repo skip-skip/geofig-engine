@@ -40,13 +40,11 @@ class FigureEngine:
         template: FigureTemplate,
         mappings: dict[str, SourceType],
         settings: dict[str, Any] | None = None,
-        context: dict[str, Any] | None = None,
         iterators: Sequence[DimensionIterator] | DimensionIterator | None = None,
     ) -> list[FigureSpec]:
         """Build one or more fully resolved FigureSpec objects."""
         validate_dict(mappings, "mappings", key_type=str, allow_empty=True)
         validate_dict(settings or {}, "settings", key_type=str, allow_empty=True)
-        validate_dict(context or {}, "context", key_type=str, allow_empty=True)
 
         if isinstance(iterators, DimensionIterator):
             iterators = [iterators]
@@ -68,14 +66,13 @@ class FigureEngine:
             **self.config.default_settings,
             **(settings or {}),
         }
-        final_context = {**self.config.default_context, **(context or {})}
+        final_context = {**self.config.default_context}
         merged_mappings = {**template_default_mappings, **mappings}
         alligned_mappings = self._align_required_mappings(
             merged_mappings, template.required_mappings
         )
         results = expand(dataset, iterators or [])
         specs: list[FigureSpec] = []
-
         for result in results:
             subset_dataset = Dataset(
                 dataframe=result.subset_df,
@@ -101,7 +98,6 @@ class FigureEngine:
                 iterator_key=result.iterator_key,
             )
             specs.append(spec)
-
         return specs
 
     def render(
@@ -111,7 +107,6 @@ class FigureEngine:
         mappings: dict[str, SourceType],
         renderer: BaseRenderer,
         settings: dict[str, Any] | None = None,
-        context: dict[str, Any] | None = None,
         iterators: Sequence[DimensionIterator] | DimensionIterator | None = None,
     ) -> list[Any]:
         """Build specs and render them with the provided renderer."""
@@ -124,7 +119,6 @@ class FigureEngine:
             template=template,
             mappings=mappings,
             settings=settings,
-            context=context,
             iterators=iterators,
         )
         return renderer.render_all(specs)
@@ -137,15 +131,16 @@ class FigureEngine:
         renderer: BaseRenderer,
         outdir: str,
         settings: dict[str, Any] | None = None,
-        context: dict[str, Any] | None = None,
         iterators: Sequence[DimensionIterator] | DimensionIterator | None = None,
         filename: str | None = None,
     ) -> list[Any]:
         """Render and save all figures to the specified output directory. 
         Filename can be a template string with context keys, or defaults to 'figure_{i}.png'."""
-        figures = self.render(self, dataset, template, mappings, renderer, settings, context, iterators)
+        figures = self.render(dataset, template, mappings, renderer, settings, iterators)
         for i, fig in enumerate(figures):
-            fig.savefig(outdir + "/" + self._resolve_filename(filename or f"figure_{i}.png", context))
+            filename_raw = filename or f"figure_{i}.png"
+            filename_resolved = filename_raw#self._resolve_filename(filename_raw or {}, {})
+            fig.savefig(f"{outdir}/{filename_resolved}")
 
     def render_specs(self, specs: list[FigureSpec], renderer: BaseRenderer) -> list[Any]:
         """Render an existing list of FigureSpec objects."""

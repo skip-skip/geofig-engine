@@ -3,8 +3,8 @@ TODO:
 - Build engine/renderer/datacore wrapper
 - Implement scaling (log vs normal) to bivariate template
 - Linear color ramp bivariate
-- Implement linear modeling (ex meteoric lines, compliance lines, etc.)
-- Implement timeseries (data aggregation handled by user)
+X Implement linear modeling (ex meteoric lines, compliance lines, etc.)
+X Implement timeseries (data aggregation handled by user)
 - Implement secondary y-axis and data ingestion
 - Legend generator (treat legend as figure)
 

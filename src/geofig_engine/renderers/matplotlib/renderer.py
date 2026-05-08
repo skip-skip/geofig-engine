@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from matplotlib.dates import DateFormatter
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.colors import is_color_like
@@ -16,8 +17,12 @@ from matplotlib.axes import Axes
 
 from geofig_engine.core.spec import FigureSpec, extract_data_for_mapping
 from geofig_engine.layers.base import FigureLayer
+from geofig_engine.layers.function_line import FunctionLineLayer
+from geofig_engine.layers.line import LineLayer
 from geofig_engine.renderers.base import BaseRenderer
 from geofig_engine.layers.scatter import ScatterLayer
+from geofig_engine.renderers.matplotlib.function_line import render_function_line
+from geofig_engine.renderers.matplotlib.line import render_line
 from geofig_engine.renderers.matplotlib.scatter import render_scatter
 from geofig_engine.renderers.matplotlib.util import IMPLEMENTED
 
@@ -37,8 +42,8 @@ class MatplotlibRenderer(BaseRenderer):
         if not spec.layers:
             raise ValueError("FigureSpec must define at least one layer")
 
-        for layer in spec.layers:
-            self._render_layer(ax, spec, layer)
+        for i, layer in enumerate(spec.layers):
+            self._render_layer(ax, spec, layer, i+3) # reserve space for background elements
 
         # ------------------------------------
         # 2. GLOBAL SETTINGS
@@ -64,7 +69,12 @@ class MatplotlibRenderer(BaseRenderer):
         yscale = spec.settings.get("yscale")
         if yscale:
             ax.set_yscale(yscale)
-
+        grid = spec.settings.get("grid")
+        if grid:
+            ax.grid(grid, zorder=0)
+        time_format = spec.settings.get("time_format")
+        if time_format:
+            ax.xaxis.set_major_formatter(DateFormatter(time_format))
         return fig
     
     def supports(self, spec: FigureSpec) -> bool:
@@ -72,9 +82,15 @@ class MatplotlibRenderer(BaseRenderer):
             return True
         return False
 
-    def _render_layer(self, ax, spec, layer):
+    def _render_layer(self, ax, spec, layer, order):
         if isinstance(layer, ScatterLayer):
-            render_scatter(ax, spec, layer)
+            render_scatter(ax, spec, layer, order)
+            return
+        if isinstance(layer, LineLayer):
+            render_line(ax, spec, layer, order)
+            return
+        if isinstance(layer, FunctionLineLayer):
+            render_function_line(ax, spec, layer, order)
             return
         if isinstance(layer, FigureLayer):
             return

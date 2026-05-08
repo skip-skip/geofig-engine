@@ -68,12 +68,12 @@ iters = [
     DimensionIterator(
         attribute="y",
         dimensions = {"type": "analyte"},
-        mode=IteratorMode.DIMENSION,
+        mode=DimensionIterator.Mode.DIMENSION,
     ),
     DimensionIterator(
         attribute="color",
         dimensions = {"role": "color"},
-        mode=IteratorMode.DIMENSION,
+        mode=DimensionIterator.Mode.DIMENSION,
     )
 ]
 specs = engine.build_specs(

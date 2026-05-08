@@ -48,7 +48,7 @@ class FigureSpec:
     template_name: str
     iterator_key: tuple[str, ...] = ()
     layers: list[FigureLayer] = field(default_factory=list)
-
+    
     def __post_init__(self) -> None:
         """Validate spec on creation."""
         validate_figure_spec(self)
