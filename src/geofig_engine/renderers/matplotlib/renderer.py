@@ -75,6 +75,10 @@ class MatplotlibRenderer(BaseRenderer):
         time_format = spec.settings.get("time_format")
         if time_format:
             ax.xaxis.set_major_formatter(DateFormatter(time_format))
+        figname = spec.settings.get("figname")
+        if figname:
+            fig.figname = figname
+        plt.close(fig)
         return fig
     
     def supports(self, spec: FigureSpec) -> bool:

@@ -23,6 +23,7 @@ class TimeseriesTemplate(FigureTemplate):
                 "y2scale": "linear",
                 "time_format": "%Y-%m-%d",
                 "grid": True,
+                "figname": None,
             },
             projection=FigureTemplate.ProjectionType.CARTESIAN,
             layers = [LineLayer(), ScatterLayer()]

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Iterable, Sequence
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Iterable, Sequence
 
 import pandas as pd
 from pandas.api.types import is_bool_dtype
+from openpyxl import load_workbook
 
 from geofig_engine.utils.typing import DimensionsMap
 from geofig_engine.utils.validation import (
@@ -14,11 +16,7 @@ from geofig_engine.utils.validation import (
     validate_string,
 )
 
-if TYPE_CHECKING:
-    from .dimension import Dimension
-else:
-    Dimension = object
-
+from .dimension import Dimension
 
 @dataclass
 class Dataset:
@@ -34,6 +32,120 @@ class Dataset:
         validated = validate_dataframe(dataframe, "dataframe")
         return validated.copy(deep=True)
 
+    def load_dataset(
+        filepath: str | Path,
+        key_column: str,
+        dimension_rows: int = 1,
+        sheet_name: str | int = 0,
+    ) -> Dataset:
+        """
+        Load Dataset from xlsx or csv.
+
+        File structure:
+        --------------------------------------------------
+        dimension row(s)
+        column header row
+        data rows
+        --------------------------------------------------
+
+        Behavior:
+        - merged Excel cells are expanded correctly
+        - intentionally empty cells remain empty
+        - csv files preserve blanks as-is
+        """
+        filepath = Path(filepath)
+        if not filepath.exists():
+            raise FileNotFoundError(filepath)
+        suffix = filepath.suffix.lower()
+        # --------------------------------------------------
+        # XLSX
+        # --------------------------------------------------
+        if suffix == ".xlsx":
+            workbook = load_workbook(
+                filepath,
+                data_only=True,
+            )
+            if isinstance(sheet_name, int):
+                worksheet = workbook.worksheets[sheet_name]
+            else:
+                worksheet = workbook[sheet_name]
+            # ----------------------------------------------
+            # extract worksheet values
+            # ----------------------------------------------
+            raw_data = [
+                [cell for cell in row]
+                for row in worksheet.iter_rows(values_only=True)
+            ]
+            raw = pd.DataFrame(raw_data)
+            # ----------------------------------------------
+            # expand merged cells ONLY
+            # ----------------------------------------------
+            if (dimension_rows > 0):
+                for merged_range in worksheet.merged_cells.ranges:
+                    min_col = merged_range.min_col - 1
+                    max_col = merged_range.max_col - 1
+                    min_row = merged_range.min_row - 1
+                    max_row = merged_range.max_row - 1
+                    # only process dimension rows
+                    if min_row >= dimension_rows:
+                        continue
+                    value = raw.iat[min_row, min_col]
+                    for row_idx in range(min_row, max_row + 1):
+                        for col_idx in range(min_col, max_col + 1):
+                            raw.iat[row_idx, col_idx] = value
+
+        # --------------------------------------------------
+        # CSV
+        # --------------------------------------------------
+        elif suffix == ".csv":
+            raw = pd.read_csv(
+                filepath,
+                header=None,
+            )
+        # --------------------------------------------------
+        # unsupported
+        # --------------------------------------------------
+        else:
+            raise ValueError(
+                "Only .xlsx and .csv files are supported"
+            )
+        # --------------------------------------------------
+        # split sections
+        # --------------------------------------------------
+        header_row = dimension_rows
+        dimension_df = raw.iloc[:dimension_rows].copy()
+        column_names = (
+            raw.iloc[header_row]
+            .astype(str)
+            .tolist()
+        )
+        data = raw.iloc[header_row + 1 :].copy()
+        data.columns = column_names
+        data = data.reset_index(drop=True)
+        # --------------------------------------------------
+        # build dimensions
+        # --------------------------------------------------
+        dimensions: dict[str, Dimension] = {}
+        for col_idx, column_name in enumerate(column_names):
+            attributes: dict[str, Any] = {}
+            for dim_idx in range(dimension_rows):
+                value = dimension_df.iat[dim_idx, col_idx]
+                if pd.isna(value):
+                    continue
+                attributes[value] = True
+            dimensions[column_name] = Dimension(
+                name=column_name,
+                attributes=attributes,
+            )
+        # --------------------------------------------------
+        # build dataset
+        # --------------------------------------------------
+        return Dataset(
+            dataframe=data,
+            key_column=key_column,
+            dimensions=dimensions,
+        )
+    
     def validate_schema(self) -> None:
         if self.dataframe.columns.has_duplicates:
             raise ValueError("Dataset dataframe column names must be unique")
@@ -83,6 +195,12 @@ class Dataset:
             if dimension.has_attribute(attribute) and dimension.attributes.get(attribute) == value:
                 dimensions.append(name)
         return dimensions
+
+    def get_all_attributes(self) -> dict[str, Any]:
+        attributes = {}
+        for dimension in self.dimensions.values():
+            attributes.update(dimension.attributes)
+        return attributes
 
     def filter_rows(self, mask: Iterable[bool]) -> Dataset:
         if isinstance(mask, pd.Series):

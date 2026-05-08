@@ -132,15 +132,15 @@ class FigureEngine:
         outdir: str,
         settings: dict[str, Any] | None = None,
         iterators: Sequence[DimensionIterator] | DimensionIterator | None = None,
-        filename: str | None = None,
     ) -> list[Any]:
         """Render and save all figures to the specified output directory. 
-        Filename can be a template string with context keys, or defaults to 'figure_{i}.png'."""
+        Filename can be a template string with context keys, or defaults to '{template.name}_{i}.png'."""
         figures = self.render(dataset, template, mappings, renderer, settings, iterators)
         for i, fig in enumerate(figures):
-            filename_raw = filename or f"figure_{i}.png"
-            filename_resolved = filename_raw#self._resolve_filename(filename_raw or {}, {})
-            fig.savefig(f"{outdir}/{filename_resolved}")
+            filename = f"{template.name}_{i}.png"
+            if hasattr(fig, "figname") and fig.figname:
+                filename = f"{fig.figname}.png"
+            fig.savefig(f"{outdir}/{filename}")
 
     def render_specs(self, specs: list[FigureSpec], renderer: BaseRenderer) -> list[Any]:
         """Render an existing list of FigureSpec objects."""
@@ -251,13 +251,3 @@ class FigureEngine:
 
         return resolved
     
-    def _resolve_filename(
-        self,
-        name: str,
-        context: dict[str, Any]
-    ) -> str:
-        try:
-            resolved = name.format(**context)
-        except KeyError:
-            resolved = name
-        return resolved

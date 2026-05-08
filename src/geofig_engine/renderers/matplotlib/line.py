@@ -175,11 +175,10 @@ def render_line(ax: Axes, spec: FigureSpec, layer: LineLayer, order: int,) -> No
             width_value,
             alpha_value,
         ), group in grouped:
-
             # -------------------------------------------
-            # sort left-to-right
+            # sort left-to-right, down-to-up
             # -------------------------------------------
-            group = group.sort_values("x")
+            group = group.sort_values(["x", "y"])
 
             group_kwargs: dict[str, Any] = {}
 

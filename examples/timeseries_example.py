@@ -57,12 +57,12 @@ engine.render_and_save(
     iterators=iters,
     renderer=renderer,
     outdir=output_dir,
-    #filename="timeseries_{y}.png",
     settings={
         "xlabel": "Time",
         "ylabel": "{y}",
         "title": None,
         "figsize": (8, 5),
+        "figname": "timeseries_{y}",
     },
 )
 print(f"Done. See generated figures in {output_dir}.")

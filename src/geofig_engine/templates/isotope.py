@@ -61,6 +61,7 @@ class IsotopeTemplate(FigureTemplate):
                 "xscale": "linear",
                 "yscale": "linear",
                 "grid": True,
+                "figname": None,
             },
             projection=FigureTemplate.ProjectionType.CARTESIAN,
             layers = [*line_layers, ScatterLayer()]

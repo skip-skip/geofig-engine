@@ -20,6 +20,7 @@ class BivariateTemplate(FigureTemplate):
                 "xscale": "linear",
                 "yscale": "linear",
                 "y2scale": "linear",
+                "figname": None,
                 "grid": True,
             },
             projection=FigureTemplate.ProjectionType.CARTESIAN,
