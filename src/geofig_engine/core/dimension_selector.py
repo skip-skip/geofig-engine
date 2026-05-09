@@ -68,7 +68,7 @@ class DimensionSelector:
 
     def _matches_attributes(self, dimension: Dimension, attrs: Dict[str, Any]) -> bool:
         for key, value in attrs.items():
-            if dimension.attributes.get(key) != value:
+            if dimension.labels.get(key) != value:
                 return False
         return True
 

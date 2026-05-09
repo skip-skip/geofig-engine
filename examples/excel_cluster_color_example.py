@@ -66,12 +66,12 @@ mappings = {
 
 iters = [
     DimensionIterator(
-        attribute="y",
+        channel="y",
         dimensions = {"type": "analyte"},
         mode=DimensionIterator.Mode.DIMENSION,
     ),
     DimensionIterator(
-        attribute="color",
+        channel="color",
         dimensions = {"role": "color"},
         mode=DimensionIterator.Mode.DIMENSION,
     )

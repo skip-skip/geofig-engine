@@ -53,7 +53,7 @@ def test_build_specs_with_iterator_returns_multiple_specs():
     engine = FigureEngine()
     dataset = make_dataset()
     template = BivariateTemplate()
-    iterator = DimensionIterator(attribute="group", dimensions=["group"], 
+    iterator = DimensionIterator(channel="group", dimensions=["group"], 
                                  mode=DimensionIterator.Mode.VALUE)
     specs = engine.build_specs(
         dataset=dataset,
@@ -87,11 +87,11 @@ def test_build_specs_with_column_selector_and_placeholders():
     template = BivariateTemplate()
     iterators = [
         DimensionIterator(
-            attribute="y",
+            channel="y",
             dimensions={"type": "analyte"},
             mode=DimensionIterator.Mode.DIMENSION,),
         DimensionIterator(
-            attribute="color",
+            channel="color",
             dimensions=["group"],
             mode=DimensionIterator.Mode.DIMENSION,)
     ]

@@ -149,6 +149,12 @@ class FigureEngine:
             raise ValueError("renderer must be provided")
 
         return renderer.render_all(specs)
+    
+    def render_spec(self, spec: FigureSpec, renderer: BaseRenderer) -> list[Any]:
+        if renderer is None:
+            raise ValueError("renderer must be provided")
+
+        return renderer.render(spec)
 
     def _align_required_mappings(
         self,

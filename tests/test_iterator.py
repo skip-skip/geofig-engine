@@ -115,7 +115,7 @@ class TestExpand:
 
     def test_expand_single_string_selector(self, sample_dataset):
         """Single string selector expands correctly."""
-        iterator = DimensionIterator(attribute="analyte", dimensions={"analyte": True}, mode=DimensionIterator.Mode.VALUE)
+        iterator = DimensionIterator(channel="analyte", dimensions={"analyte": True}, mode=DimensionIterator.Mode.VALUE)
         results = expand(sample_dataset, [iterator])
         assert len(results) == 2  # chem1, chem2
         values = [r.context.get("analyte") for r in results]
@@ -123,7 +123,7 @@ class TestExpand:
 
     def test_expand_dimension_selector(self, sample_dataset):
         """DimensionSelector selector expands correctly."""
-        iterator = DimensionIterator(attribute="analyte", dimensions={"analyte": True}, mode=DimensionIterator.Mode.VALUE)
+        iterator = DimensionIterator(channel="analyte", dimensions={"analyte": True}, mode=DimensionIterator.Mode.VALUE)
         results = expand(sample_dataset, [iterator])
         assert len(results) == 2
         values = [r.context.get("analyte") for r in results]
@@ -132,8 +132,8 @@ class TestExpand:
     def test_expand_cartesian_product(self, sample_dataset):
         """Multiple selectors create Cartesian product."""
         iterators = [
-            DimensionIterator(attribute="analyte", dimensions=["analyte"], mode=DimensionIterator.Mode.VALUE),
-            DimensionIterator(attribute="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE),
+            DimensionIterator(channel="analyte", dimensions=["analyte"], mode=DimensionIterator.Mode.VALUE),
+            DimensionIterator(channel="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE),
         ]
         results = expand(
             sample_dataset,
@@ -154,7 +154,7 @@ class TestExpand:
 
     def test_expand_subset_accuracy(self, sample_dataset):
         """Each subset contains correct rows."""
-        iterator = DimensionIterator(attribute="analyte", dimensions={"analyte": True}, mode=DimensionIterator.Mode.VALUE)
+        iterator = DimensionIterator(channel="analyte", dimensions={"analyte": True}, mode=DimensionIterator.Mode.VALUE)
         results = expand(
             sample_dataset,
             [iterator],
@@ -166,8 +166,8 @@ class TestExpand:
     def test_expand_deterministic_ordering(self, sample_dataset):
         """expand() returns results in deterministic order."""
         iterators = [
-            DimensionIterator(attribute="analyte", dimensions=["analyte"], mode=DimensionIterator.Mode.VALUE),
-            DimensionIterator(attribute="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE),
+            DimensionIterator(channel="analyte", dimensions=["analyte"], mode=DimensionIterator.Mode.VALUE),
+            DimensionIterator(channel="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE),
         ]
         results1 = expand(sample_dataset, iterators)
         results2 = expand(sample_dataset, iterators)
@@ -179,12 +179,12 @@ class TestExpand:
     def test_expand_selector_order_independent(self, sample_dataset):
         """Selector insertion order does not affect expansion results."""
         iterators1 = [
-            DimensionIterator(attribute="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE),
-            DimensionIterator(attribute="analyte", dimensions=["analyte"], mode=DimensionIterator.Mode.VALUE),
+            DimensionIterator(channel="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE),
+            DimensionIterator(channel="analyte", dimensions=["analyte"], mode=DimensionIterator.Mode.VALUE),
         ]
         iterators2 = [
-            DimensionIterator(attribute="analyte", dimensions=["analyte"], mode=DimensionIterator.Mode.VALUE),
-            DimensionIterator(attribute="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE),
+            DimensionIterator(channel="analyte", dimensions=["analyte"], mode=DimensionIterator.Mode.VALUE),
+            DimensionIterator(channel="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE),
         ]
         results1 = expand(sample_dataset, iterators1)
         results2 = expand(sample_dataset, iterators2)
@@ -193,20 +193,20 @@ class TestExpand:
 
     def test_expand_invalid_column_raises_key_error(self, sample_dataset):
         """Invalid column name raises KeyError."""
-        iterator = DimensionIterator(attribute="invalid", dimensions=["nonexistent"], mode=DimensionIterator.Mode.VALUE)
+        iterator = DimensionIterator(channel="invalid", dimensions=["nonexistent"], mode=DimensionIterator.Mode.VALUE)
         with pytest.raises(KeyError):
             expand(sample_dataset, [iterator])
 
     def test_expand_dimension_selector_no_match_raises_error(self, sample_dataset):
         """DimensionSelector with no matches raises ValueError."""
-        iterator = DimensionIterator(attribute="nonexistent", dimensions={"nonexistent": True}, 
+        iterator = DimensionIterator(channel="nonexistent", dimensions={"nonexistent": True}, 
                                      mode=DimensionIterator.Mode.VALUE)
         with pytest.raises(ValueError):
             expand(sample_dataset, [iterator])
 
     def test_expand_column_selector_iterates_column_names(self, sample_dataset):
         """ColumnSelector iterates over column names rather than values."""
-        iterator = DimensionIterator(attribute="y", dimensions=['analyte'], 
+        iterator = DimensionIterator(channel="y", dimensions=['analyte'], 
                                      mode=DimensionIterator.Mode.DIMENSION)
         results = expand(sample_dataset, [iterator])
 
@@ -358,8 +358,8 @@ class TestDatasetPreservation:
         original_columns = list(sample_dataset.dataframe.columns)
         
         iterators = [
-            DimensionIterator(attribute="analyte", dimensions=["analyte"], mode=DimensionIterator.Mode.VALUE),
-            DimensionIterator(attribute="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE),
+            DimensionIterator(channel="analyte", dimensions=["analyte"], mode=DimensionIterator.Mode.VALUE),
+            DimensionIterator(channel="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE),
         ]
         expand(
             sample_dataset,
@@ -372,7 +372,7 @@ class TestDatasetPreservation:
     def test_expand_result_subsets_are_views(self, sample_dataset):
         """Result subsets are independent of original."""
         iterators = [
-            DimensionIterator(attribute="analyte", dimensions=["analyte"], mode=DimensionIterator.Mode.VALUE),
+            DimensionIterator(channel="analyte", dimensions=["analyte"], mode=DimensionIterator.Mode.VALUE),
         ]
         results = expand(sample_dataset, iterators)
         
@@ -397,7 +397,7 @@ class TestIntegration:
             "value": Dimension("value", {}),
         }
         dataset = Dataset(df, "group_a", dimensions)
-        iterator = DimensionIterator(attribute="groups", dimensions=["group_a", "group_b"], mode=DimensionIterator.Mode.VALUE)
+        iterator = DimensionIterator(channel="groups", dimensions=["group_a", "group_b"], mode=DimensionIterator.Mode.VALUE)
         results = expand(
             dataset,
             [iterator],
@@ -409,8 +409,8 @@ class TestIntegration:
         """Full expansion workflow."""
         # Define what to iterate over
         iterators =[
-            DimensionIterator(attribute="analyte", dimensions={"analyte": True}, mode=DimensionIterator.Mode.VALUE),
-            DimensionIterator(attribute="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE),
+            DimensionIterator(channel="analyte", dimensions={"analyte": True}, mode=DimensionIterator.Mode.VALUE),
+            DimensionIterator(channel="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE),
         ]
         
         # Expand

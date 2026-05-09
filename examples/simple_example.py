@@ -43,7 +43,7 @@ def main() -> None:
         "size": "size",
     }
 
-    iterator = DimensionIterator(attribute="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE)
+    iterator = DimensionIterator(channel="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE)
     specs = engine.build_specs(
         dataset=dataset,
         template=template,

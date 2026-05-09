@@ -1,12 +1,12 @@
 TODO:
-- Refactor Dimension/Column indexing
-- Build engine/renderer/datacore wrapper
-- Implement scaling (log vs normal) to bivariate template
+- Refactor iterator channels/dimensions/etc
+X Build engine/renderer/datacore wrapper
+X Implement scaling (log vs normal) to bivariate template
 - Linear color ramp bivariate
 X Implement linear modeling (ex meteoric lines, compliance lines, etc.)
 X Implement timeseries (data aggregation handled by user)
-- Implement secondary y-axis and data ingestion
-- Legend generator (treat legend as figure)
+X Implement secondary y-axis and data ingestion
+- Legend generator (treat legend as figure, preserve visual mappings across renders)
 
 FUTURE IMPLEMENTATIONS:
 - Preprocessing data pipeline

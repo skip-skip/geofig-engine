@@ -19,7 +19,7 @@ class DimensionIterator:
     class Mode(Enum):
         VALUE = 'value'
         DIMENSION = 'dimension'
-    attribute: str
+    channel: str
     dimensions: Sequence[str] | dict[str, Any]
     mode: Mode = Mode.DIMENSION
 
@@ -94,7 +94,7 @@ def expand(
             )
         ]
     selectors = {
-        iterator.attribute: ColumnSelector(iterator.dimensions) 
+        iterator.channel: ColumnSelector(iterator.dimensions) 
         if iterator.mode == DimensionIterator.Mode.DIMENSION else DimensionSelector(iterator.dimensions)
         for iterator in iterators
     }

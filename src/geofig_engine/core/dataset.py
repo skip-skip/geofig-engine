@@ -34,8 +34,8 @@ class Dataset:
 
     def load_dataset(
         filepath: str | Path,
-        key_column: str,
-        dimension_rows: int = 1,
+        key_column: str = "GENERATED_KEY",
+        label_rows: int = 1,
         sheet_name: str | int = 0,
     ) -> Dataset:
         """
@@ -43,7 +43,7 @@ class Dataset:
 
         File structure:
         --------------------------------------------------
-        dimension row(s)
+        label row(s)
         column header row
         data rows
         --------------------------------------------------
@@ -80,14 +80,14 @@ class Dataset:
             # ----------------------------------------------
             # expand merged cells ONLY
             # ----------------------------------------------
-            if (dimension_rows > 0):
+            if (label_rows > 0):
                 for merged_range in worksheet.merged_cells.ranges:
                     min_col = merged_range.min_col - 1
                     max_col = merged_range.max_col - 1
                     min_row = merged_range.min_row - 1
                     max_row = merged_range.max_row - 1
                     # only process dimension rows
-                    if min_row >= dimension_rows:
+                    if min_row >= label_rows:
                         continue
                     value = raw.iat[min_row, min_col]
                     for row_idx in range(min_row, max_row + 1):
@@ -112,8 +112,8 @@ class Dataset:
         # --------------------------------------------------
         # split sections
         # --------------------------------------------------
-        header_row = dimension_rows
-        dimension_df = raw.iloc[:dimension_rows].copy()
+        header_row = label_rows
+        dimension_df = raw.iloc[:label_rows].copy()
         column_names = (
             raw.iloc[header_row]
             .astype(str)
@@ -127,19 +127,21 @@ class Dataset:
         # --------------------------------------------------
         dimensions: dict[str, Dimension] = {}
         for col_idx, column_name in enumerate(column_names):
-            attributes: dict[str, Any] = {}
-            for dim_idx in range(dimension_rows):
+            labels: dict[str, Any] = {}
+            for dim_idx in range(label_rows):
                 value = dimension_df.iat[dim_idx, col_idx]
                 if pd.isna(value):
                     continue
-                attributes[value] = True
+                labels[value] = True
             dimensions[column_name] = Dimension(
                 name=column_name,
-                attributes=attributes,
+                labels=labels,
             )
         # --------------------------------------------------
         # build dataset
         # --------------------------------------------------
+        if key_column not in data.columns:
+            data[key_column] = range(len(data))
         return Dataset(
             dataframe=data,
             key_column=key_column,
@@ -189,18 +191,21 @@ class Dataset:
 
         return self.dataframe.loc[:, selected].copy()
 
-    def get_dimensions(self, attribute: str, value: str)-> list[str]:
+    def query_dimensions(self, label: str, value: str)-> list[str]:
         dimensions = []
         for name, dimension in self.dimensions.items():
-            if dimension.has_attribute(attribute) and dimension.attributes.get(attribute) == value:
+            if dimension.has_label(label) and dimension.labels.get(label) == value:
                 dimensions.append(name)
         return dimensions
-
-    def get_all_attributes(self) -> dict[str, Any]:
-        attributes = {}
+    
+    def get_dimension_names(self) -> dict[str, Dimension]:
+        return self.dimensions.keys()
+    
+    def get_all_labels(self) -> dict[str, Any]:
+        labels = {}
         for dimension in self.dimensions.values():
-            attributes.update(dimension.attributes)
-        return attributes
+            labels.update(dimension.labels)
+        return labels
 
     def filter_rows(self, mask: Iterable[bool]) -> Dataset:
         if isinstance(mask, pd.Series):

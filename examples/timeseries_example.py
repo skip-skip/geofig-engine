@@ -25,7 +25,7 @@ df = pd.read_excel(input_path)
 dims = {}
 for analyte in df.columns.tolist():
     if "_PPM" in analyte:
-        dims[analyte] = Dimension(name=analyte, attributes={"analyte": True})
+        dims[analyte] = Dimension(name=analyte, labels={"analyte": True})
 # Create a dataset from the Excel sheet.
 dataset = Dataset(
     dataframe=df,
@@ -39,8 +39,8 @@ template = TimeseriesTemplate()
 
 iters = [
     DimensionIterator(
-        attribute="y",
-        dimensions = dataset.get_dimensions("analyte", True),
+        channel="y",
+        dimensions = dataset.query_dimensions("analyte", True),
         mode=DimensionIterator.Mode.DIMENSION,
     ),
 ]

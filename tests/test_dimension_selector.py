@@ -15,10 +15,10 @@ def make_dataset() -> Dataset:
         }
     )
     dimensions = {
-        "id": Dimension(name="id", attributes={"role": "key"}),
-        "chem1": Dimension(name="chem1", attributes={"analyte": True}),
-        "chem2": Dimension(name="chem2", attributes={"analyte": True}),
-        "group": Dimension(name="group", attributes={"role": "group"}),
+        "id": Dimension(name="id", labels={"role": "key"}),
+        "chem1": Dimension(name="chem1", labels={"analyte": True}),
+        "chem2": Dimension(name="chem2", labels={"analyte": True}),
+        "group": Dimension(name="group", labels={"role": "group"}),
     }
     return Dataset(dataframe=dataframe, key_column="id", dimensions=dimensions)
 

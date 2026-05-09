@@ -45,7 +45,7 @@ mappings = {
 
 iters = [
     DimensionIterator(
-        attribute="color",
+        channel="color",
         dimensions = color_column,
         mode=DimensionIterator.Mode.VALUE,
     ),

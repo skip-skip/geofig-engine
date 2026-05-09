@@ -47,11 +47,11 @@ template = BivariateTemplate()
 # Build one figure per period using the standard period column as the iterator.
 mappings = {
     "x": "time", #["time", "time"],  # duplicate time values for each grouped temperature series
-    "y": dataset.get_dimensions("type", "temperature"),  # select all temperature columns based on metadata
-    "color": dataset.get_dimensions("type", "temperature"),  # select all temperature columns based on metadata
+    "y": dataset.query_dimensions("type", "temperature"),  # select all temperature columns based on metadata
+    "color": dataset.query_dimensions("type", "temperature"),  # select all temperature columns based on metadata
 }
 iterators = [
-    DimensionIterator(attribute="period", dimensions=["period"], mode=DimensionIterator.Mode.VALUE)
+    DimensionIterator(channel="period", dimensions=["period"], mode=DimensionIterator.Mode.VALUE)
 ]
 specs = engine.build_specs(
     dataset=dataset,
