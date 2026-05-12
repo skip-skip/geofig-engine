@@ -6,8 +6,14 @@ Layers define reusable building blocks for constructing FigureSpecs within templ
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 @dataclass(frozen=True)
 class FigureLayer:
-    pass
+
+    def get_attribute_map(layer):
+        return {
+            f.metadata["attribute"]: getattr(layer, f.name)
+            for f in fields(layer)
+            if "attribute" in f.metadata
+        }

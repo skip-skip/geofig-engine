@@ -9,13 +9,33 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from geofig_engine.layers.base import FigureLayer
-from enum import Enum
+from geofig_engine.utils.typing import ATTRIBUTE
+
+from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class FunctionLineLayer(FigureLayer):
-    x: str = "x"              # mapping key
+    
     func: str = ""            # function reference key
-    color: str = "black"
-    linestyle: str = "--"
-    linewidth: float = 1.5
     label: str | None = None
+
+    x: str = field(
+        default="x",
+        metadata={"attribute": ATTRIBUTE.X},
+    )
+    color: str | None = field(
+        default="blue",
+        metadata={"attribute": ATTRIBUTE.COLOR},
+    )
+    style: str | None = field(
+        default="-",
+        metadata={"attribute": ATTRIBUTE.STYLE},
+    )
+    width: float | None = field(
+        default=1.5,
+        metadata={"attribute": ATTRIBUTE.WIDTH},
+    )
+    alpha: float | None = field(
+        default=0.8,
+        metadata={"attribute": ATTRIBUTE.ALPHA},
+    )
