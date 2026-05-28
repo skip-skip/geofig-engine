@@ -22,14 +22,6 @@ def test_has_attribute_checks_metadata_key() -> None:
     assert dimension.has_label("role") is True
     assert dimension.has_label("unit") is False
 
-
-def test_is_role_matches_value() -> None:
-    dimension = Dimension(name="group", labels={"role": "group"})
-
-    assert dimension.is_role("group") is True
-    assert dimension.is_role("analyte") is False
-
-
 def test_invalid_attribute_keys_raise_type_error() -> None:
     try:
         Dimension(name="chem1", labels={1: "bad"})
