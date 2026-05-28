@@ -124,7 +124,7 @@ class FigureEngine:
         self,
         dataset: Dataset,
         template: FigureTemplate,
-        mappings: dict[str, SourceType],
+        mappings: dict[Mapping, SourceType],
         renderer: BaseRenderer,
         outdir: str,
         settings: dict[str, Any] | None = None,
