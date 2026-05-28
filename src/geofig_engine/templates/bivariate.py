@@ -7,14 +7,15 @@ color and marker encodings.
 
 from geofig_engine.layers.scatter import ScatterLayer
 from geofig_engine.templates.base import FigureTemplate
+from geofig_engine.utils.typing import Mapping
 
 
 class BivariateTemplate(FigureTemplate):
     def __init__(self) -> None:
         super().__init__(
             name="bivariate",
-            required_mappings=("x", "y"),
-            optional_mappings=("y2", "color", "marker", "size", "alpha"),
+            required_mappings=(Mapping.X.value, Mapping.Y.value),
+            optional_mappings=(Mapping.Y2.value, Mapping.COLOR.value, Mapping.MARKER.value, Mapping.SIZE.value, Mapping.ALPHA.value),
             default_settings={
                 "figsize": (10, 6),
                 "xscale": "linear",
@@ -24,5 +25,5 @@ class BivariateTemplate(FigureTemplate):
                 "grid": True,
             },
             projection=FigureTemplate.ProjectionType.CARTESIAN,
-            layers = [ScatterLayer()]
+            layers=[ScatterLayer()]
         )

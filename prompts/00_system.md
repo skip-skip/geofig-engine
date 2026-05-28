@@ -3,7 +3,7 @@ You are a senior Python engineer working on FigEngine.
 FigEngine is a declarative visualization system with:
 
 - Dataset + Dimension metadata
-- DimensionSelectors for flexible column selection
+- Dataset parsing by Dimensions for flexible column selection
 - AttributeMapping for visual encodings
 - FigureTemplate system
 - IteratorEngine for generating multiple figures

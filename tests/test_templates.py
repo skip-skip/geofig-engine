@@ -7,14 +7,15 @@ import pandas as pd
 
 from geofig_engine.templates import BivariateTemplate, FigureTemplate
 from geofig_engine.core.spec import FigureSpec
+from geofig_engine.utils.typing import Mapping
 
 
 class TestFigureTemplateBase:
     def test_validate_mappings_rejects_missing_required(self):
         template = FigureTemplate(
             name="test",
-            required_mappings=("x", "y"),
-            optional_mappings=("color",),
+            required_mappings=(Mapping.X.value, Mapping.Y.value),
+            optional_mappings=(Mapping.COLOR.value,),
         )
 
         with pytest.raises(ValueError, match="requires mapping 'x'"):
@@ -23,8 +24,8 @@ class TestFigureTemplateBase:
     def test_validate_mappings_rejects_unsupported_mapping(self):
         template = FigureTemplate(
             name="test",
-            required_mappings=("x",),
-            optional_mappings=("color",),
+            required_mappings=(Mapping.X.value,),
+            optional_mappings=(Mapping.COLOR.value,),
         )
 
         with pytest.raises(ValueError, match="Unsupported mapping 'z'"):
@@ -33,11 +34,11 @@ class TestFigureTemplateBase:
     def test_supported_mappings_combines_required_and_optional(self):
         template = FigureTemplate(
             name="test",
-            required_mappings=("x",),
-            optional_mappings=("color", "marker"),
+            required_mappings=(Mapping.X.value,),
+            optional_mappings=(Mapping.COLOR.value, Mapping.MARKER.value),
         )
 
-        assert template.supported_mappings == ("color", "marker", "x")
+        assert template.supported_mapping_names == ("color", "marker", "x")
 
 
 class TestBivariateTemplate:

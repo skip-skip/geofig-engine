@@ -175,7 +175,6 @@ class Dataset:
                 raise ValueError(
                     f"Dimension object for '{name}' has mismatched name '{dimension.name}'"
                 )
-
     def get_column(self, name: str) -> pd.Series:
         if name not in self.dataframe.columns:
             raise KeyError(f"Column '{name}' not found in dataset")

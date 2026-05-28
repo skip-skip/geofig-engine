@@ -11,6 +11,7 @@ from geofig_engine.core.iterator import DimensionIterator
 from geofig_engine.engine import EngineConfig, FigureEngine
 from geofig_engine.renderers.base import BaseRenderer
 from geofig_engine.templates import BivariateTemplate
+from geofig_engine.utils.typing import Mapping
 
 
 class DummyRenderer(BaseRenderer):
@@ -38,7 +39,7 @@ def test_build_specs_creates_single_spec():
     specs = engine.build_specs(
         dataset=dataset,
         template=template,
-        mappings={"x": ["x"], "y": ["y"]},
+        mappings={Mapping.X: ["x"], Mapping.Y: ["y"]},
     )
     print(specs)
     assert len(specs) == 1
@@ -58,7 +59,7 @@ def test_build_specs_with_iterator_returns_multiple_specs():
     specs = engine.build_specs(
         dataset=dataset,
         template=template,
-        mappings={"x": ["x"], "y": ["y"]},
+        mappings={Mapping.X: ["x"], Mapping.Y: ["y"]},
         iterators=iterator,
     )
 
@@ -99,7 +100,7 @@ def test_build_specs_with_column_selector_and_placeholders():
     specs = engine.build_specs(
         dataset=dataset,
         template=template,
-        mappings={"x": "x", "y": "{y}", "color": "{color}"},
+        mappings={Mapping.X: "x", Mapping.Y: "{y}", Mapping.COLOR: "{color}"},
         iterators=iterators,
         settings={"xlabel": "x"},
     )
@@ -118,7 +119,7 @@ def test_render_dispatches_to_renderer():
     results = engine.render(
         dataset=dataset,
         template=template,
-        mappings={"x": ["x"], "y": ["y"]},
+        mappings={Mapping.X: ["x"], Mapping.Y: ["y"]},
         renderer=renderer,
     )
 
@@ -134,7 +135,7 @@ def test_render_specs_uses_existing_specs():
     specs = engine.build_specs(
         dataset=dataset,
         template=template,
-        mappings={"x": ["x"], "y": ["y"]},
+        mappings={Mapping.X: ["x"], Mapping.Y: ["y"]},
     )
 
     results = engine.render_specs(specs, renderer)
@@ -150,7 +151,7 @@ def test_engine_respects_default_context_and_settings():
     spec = engine.build_specs(
         dataset=dataset,
         template=template,
-        mappings={"x": ["x"], "y": ["y"]},
+        mappings={Mapping.X: ["x"], Mapping.Y: ["y"]},
     )[0]
 
     assert spec.settings["title"] == "Default Title"
@@ -165,7 +166,7 @@ def test_build_specs_applies_template_default_mappings():
     spec = engine.build_specs(
         dataset=dataset,
         template=template,
-        mappings={"x": ["x"], "y": ["y"]},
+        mappings={Mapping.X: ["x"], Mapping.Y: ["y"]},
     )[0]
 
     assert spec.mappings["alpha"] == 0.8
@@ -180,7 +181,7 @@ def test_build_specs_mapping_overrides_template_defaults():
     spec = engine.build_specs(
         dataset=dataset,
         template=template,
-        mappings={"x": ["x"], "y": ["y"], "alpha": 0.3},
+        mappings={Mapping.X: ["x"], Mapping.Y: ["y"], Mapping.ALPHA: 0.3},
     )[0]
 
     assert spec.mappings["alpha"] == 0.3

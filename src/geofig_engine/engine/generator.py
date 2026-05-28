@@ -17,6 +17,7 @@ from geofig_engine.core.spec import FigureSpec
 from geofig_engine.renderers.base import BaseRenderer
 from geofig_engine.templates.base import FigureTemplate
 from geofig_engine.utils.validation import validate_dict
+from geofig_engine.utils.typing import Mapping
 
 
 @dataclass(frozen=True)
@@ -25,7 +26,7 @@ class EngineConfig:
 
     default_settings: dict[str, Any] = field(default_factory=dict)
     default_context: dict[str, Any] = field(default_factory=dict)
-    strict: bool = False
+    strict: bool = False ## Enables/Disables single value literals (ex. 'Blue')
 
 
 class FigureEngine:
@@ -38,27 +39,24 @@ class FigureEngine:
         self,
         dataset: Dataset,
         template: FigureTemplate,
-        mappings: dict[str, SourceType],
+        mappings: dict[Mapping, SourceType],
         settings: dict[str, Any] | None = None,
         iterators: Sequence[DimensionIterator] | DimensionIterator | None = None,
     ) -> list[FigureSpec]:
         """Build one or more fully resolved FigureSpec objects."""
-        validate_dict(mappings, "mappings", key_type=str, allow_empty=True)
+        validate_dict(mappings, "mappings", key_type=Mapping, allow_empty=True)
         validate_dict(settings or {}, "settings", key_type=str, allow_empty=True)
 
         if isinstance(iterators, DimensionIterator):
             iterators = [iterators]
 
         template_defaults = template.default_settings or {}
-        template_default_mappings = {
-            key: value
-            for key, value in template_defaults.items()
-            if key in template.supported_mappings
-        }
+        # Separate template default settings from any layer defaults
+        # Layer defaults are applied via template.fill_mappings()
         template_default_settings = {
             key: value
             for key, value in template_defaults.items()
-            if key not in template.supported_mappings
+            if key not in template.supported_mapping_channels
         }
 
         final_settings = {
@@ -67,10 +65,9 @@ class FigureEngine:
             **(settings or {}),
         }
         final_context = {**self.config.default_context}
-        merged_mappings = {**template_default_mappings, **mappings}
-        alligned_mappings = self._align_required_mappings(
-            merged_mappings, template.required_mappings
-        )
+        
+        # User mappings override any layer defaults via fill_mappings
+        merged_mappings = mappings.copy()
         results = expand(dataset, iterators or [])
         specs: list[FigureSpec] = []
         for result in results:
@@ -82,7 +79,7 @@ class FigureEngine:
             merged_context = {**final_context, **result.context.values}
             resolved_mappings = self._resolve_mappings(
                 subset_dataset,
-                alligned_mappings,
+                merged_mappings,
                 merged_context,
             )
             resolved_settings = self._resolve_settings(
@@ -104,7 +101,7 @@ class FigureEngine:
         self,
         dataset: Dataset,
         template: FigureTemplate,
-        mappings: dict[str, SourceType],
+        mappings: dict[Mapping, SourceType],
         renderer: BaseRenderer,
         settings: dict[str, Any] | None = None,
         iterators: Sequence[DimensionIterator] | DimensionIterator | None = None,
@@ -158,9 +155,9 @@ class FigureEngine:
 
     def _align_required_mappings(
         self,
-        mappings: dict[str, Any],
-        required_keys: tuple[str, ...],
-    ) -> dict[str, Any]:
+        mappings: dict[Mapping, SourceType],
+        required_keys: tuple[Mapping, ...],
+    ) -> dict[Mapping, SourceType]:
         """
         Align required mappings by broadcasting single values.
 
@@ -223,13 +220,15 @@ class FigureEngine:
     def _resolve_mappings(
         self,
         dataset: Dataset,
-        mappings: dict[str, SourceType],
+        mappings: dict[Mapping, SourceType],
         context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        """Convert Mapping enum keys to string names and resolve sources."""
         resolved: dict[str, Any] = {}
 
-        for name, source in mappings.items():
-            resolved[name] = resolve_source(
+        for mapping_enum, source in mappings.items():
+            mapping_name = mapping_enum.value.name
+            resolved[mapping_name] = resolve_source(
                 source,
                 dataset,
                 strict=self.config.strict,

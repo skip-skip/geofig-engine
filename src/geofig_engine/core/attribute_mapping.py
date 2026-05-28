@@ -120,3 +120,4 @@ def resolve_source(
 
     # Constant value
     return source
+

@@ -12,6 +12,8 @@ from geofig_engine.layers.scatter import ScatterLayer
 from geofig_engine.templates.base import FigureTemplate
 from enum import Enum
 
+from geofig_engine.utils.typing import Mapping
+
 class IsotopeTemplate(FigureTemplate):
     class MeteoricWaterLines(Enum):
         # Craig, 1961
@@ -54,8 +56,8 @@ class IsotopeTemplate(FigureTemplate):
         ]
         super().__init__(
             name="isotope",
-            required_mappings=("x", "y"),
-            optional_mappings=("color", "marker", "size", "alpha"),
+            required_mappings=(Mapping.DEUTERIUM.value, Mapping.OXYGEN_18.value),
+            optional_mappings=(Mapping.COLOR.value, Mapping.MARKER.value, Mapping.SIZE.value, Mapping.ALPHA.value),
             default_settings={
                 "figsize": (10, 6),
                 "xscale": "linear",
@@ -64,5 +66,5 @@ class IsotopeTemplate(FigureTemplate):
                 "figname": None,
             },
             projection=FigureTemplate.ProjectionType.CARTESIAN,
-            layers = [*line_layers, ScatterLayer()]
+            layers=[*line_layers, ScatterLayer()]
         )

@@ -11,9 +11,9 @@ from dataclasses import dataclass, fields
 @dataclass(frozen=True)
 class FigureLayer:
 
-    def get_attribute_map(layer):
+    def get_channel_map(layer):
         return {
-            f.metadata["attribute"]: getattr(layer, f.name)
+            f.metadata["channel"]: getattr(layer, f.name)
             for f in fields(layer)
-            if "attribute" in f.metadata
+            if "channel" in f.metadata
         }

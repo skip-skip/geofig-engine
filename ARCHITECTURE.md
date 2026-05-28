@@ -175,6 +175,9 @@ Layers must
 Layers declare channels, Template mappings link values (or Iterators) to channels.
 The dumb renderer draws Layers using mapped values.
 
+Layers represent HOW mappings are interpreted by a renderer,
+Templates represent WHICH mappings are interpreted by a renderer.  
+
 ---
 
 ### 6. FigureSpec

@@ -7,6 +7,6 @@ Architecture constraints:
 - IteratorEngine must not depend on templates or rendering
 - Renderer must not perform data transformations
 
-DimensionSelectors must resolve to column names before rendering.
+Dimension parsing must resolve to column names before rendering.
 
 Templates must only define structure and defaults.

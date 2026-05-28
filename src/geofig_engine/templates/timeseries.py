@@ -8,14 +8,15 @@ color and marker encodings.
 from geofig_engine.layers.line import LineLayer
 from geofig_engine.layers.scatter import ScatterLayer
 from geofig_engine.templates.base import FigureTemplate
+from geofig_engine.utils.typing import Mapping
 
 
 class TimeseriesTemplate(FigureTemplate):
     def __init__(self) -> None:
         super().__init__(
             name="timeseries",
-            required_mappings=("x", "y"),
-            optional_mappings=("y2", "color", "marker", "size", "style", "alpha", "width"),
+            required_mappings=(Mapping.X.value, Mapping.Y.value),
+            optional_mappings=(Mapping.Y2.value, Mapping.COLOR.value, Mapping.MARKER.value, Mapping.SIZE.value, Mapping.ALPHA.value),
             default_settings={
                 "figsize": (10, 6),
                 "xscale": "linear",
@@ -26,5 +27,5 @@ class TimeseriesTemplate(FigureTemplate):
                 "figname": None,
             },
             projection=FigureTemplate.ProjectionType.CARTESIAN,
-            layers = [LineLayer(), ScatterLayer()]
+            layers=[LineLayer(), ScatterLayer()]
         )
