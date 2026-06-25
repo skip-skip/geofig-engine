@@ -7,6 +7,13 @@ X Implement linear modeling (ex meteoric lines, compliance lines, etc.)
 X Implement timeseries (data aggregation handled by user)
 X Implement secondary y-axis and data ingestion
 - Legend generator (treat legend as figure, preserve visual mappings across renders)
+- add layers
+    - step line, histo, bar
+    - box, violin
+    - grid, heatmap, hexgrid, image
+    - contour
+    - integral
+    - area
 
 FUTURE IMPLEMENTATIONS:
 - Preprocessing data pipeline

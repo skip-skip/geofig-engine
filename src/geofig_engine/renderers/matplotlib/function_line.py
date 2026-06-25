@@ -73,8 +73,8 @@ def render_function_line(
         x_plot,
         y_plot,
         color=layer.color,
-        linestyle=layer.linestyle,
-        linewidth=layer.linewidth,
+        linestyle=layer.style,
+        linewidth=layer.width,
         label=layer.label,
         zorder=order,
     )

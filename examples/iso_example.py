@@ -1,9 +1,11 @@
-"""Excel example: cluster marker shapes and color grouping."""
+"""Isotope example: demonstrates water isotope reference lines with Idaho and global data."""
 
 from pathlib import Path
 import sys
 
 from geofig_engine.templates.isotope import IsotopeTemplate
+from geofig_engine.data import get_function_registry
+from geofig_engine.utils.typing import Mapping
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -30,17 +32,30 @@ dataset = Dataset(
     dimensions={},
 )
 
+# Query the function registry for water isotope lines
+registry = get_function_registry()
+
+# Get the global meteoric water line
+gmwl_func = registry.get("GMWL")
+
+# Get all Idaho water isotope lines
+idaho_funcs = registry.get_by_state("ID")
+
+# Combine GMWL with all Idaho lines
+selected_function_ids = ["GMWL"] + [f.id for f in idaho_funcs if f.id != "GMWL"]
+
+print(f"Selected functions: {selected_function_ids}")
+print(f"  - Global: GMWL")
+print(f"  - Idaho lines: {[f.id for f in idaho_funcs if f.id != 'GMWL']}")
+
 engine = FigureEngine()
 renderer = MatplotlibRenderer()
-template = IsotopeTemplate([IsotopeTemplate.MeteoricWaterLines.GLOBAL, 
-                            IsotopeTemplate.MeteoricWaterLines.ID_FALLS,
-                            IsotopeTemplate.MeteoricWaterLines.ID_SOUTHEAST,
-                            IsotopeTemplate.MeteoricWaterLines.ID_SNAKERIVER])
+template = IsotopeTemplate(functions=selected_function_ids)
 
 mappings = {
-    "x": "Oxygen 18",
-    "y": "Deuterium",
-    "color": color_column,
+    Mapping.OXYGEN_18: "Oxygen 18",
+    Mapping.DEUTERIUM: "Deuterium",
+    Mapping.COLOR: color_column,
 }
 
 iters = [

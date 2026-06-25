@@ -61,6 +61,25 @@ class FigureTemplate:
                 if channel_key not in mappings and hasattr(layer, channel_key):
                     mappings[channel_key] = getattr(layer, channel_key)
         return mappings
+    
+    def _translate_mapping_names_to_channels(self, mappings: dict[str, Any]) -> dict[str, Any]:
+        """Translate Mapping names to Channel values for spec building.
+        
+        Converts keys like 'oxygen_18' to 'x' based on the template's MappingData.
+        This is necessary because mappings are validated using Mapping names,
+        but specs and layers expect Channel values.
+        """
+        translated = {}
+        mapping_lookup = {
+            m.name: m.channel.value 
+            for m in self.required_mappings + self.optional_mappings
+        }
+        
+        for mapping_name, value in mappings.items():
+            channel_key = mapping_lookup.get(mapping_name, mapping_name)
+            translated[channel_key] = value
+        
+        return translated
     def validate_mappings(self, mappings: dict[str, Any]) -> None:
         validate_dict(mappings, "mappings", key_type=str, allow_empty=True)
 
@@ -86,6 +105,8 @@ class FigureTemplate:
     ) -> FigureSpec:
         """Build a validated FigureSpec using template defaults and mappings."""
         self.validate_mappings(mappings)
+        # Translate Mapping names (e.g., 'oxygen_18') to Channel values (e.g., 'x') BEFORE filling
+        mappings = self._translate_mapping_names_to_channels(mappings)
         mappings = self.fill_mappings(mappings)
 
         template_settings = {

@@ -16,7 +16,6 @@ from geofig_engine.core.spec import FigureSpec
 
 class BaseRenderer(ABC):
     """Abstract base class for FigEngine renderers."""
-
     @abstractmethod
     def render(self, spec: FigureSpec) -> Any:
         """Render a single FigureSpec and return a backend object."""

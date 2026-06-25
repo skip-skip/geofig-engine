@@ -190,14 +190,14 @@ def apply_layer_options_to_template(template: Any, state: ConfigState) -> Any:
     """
     Apply toggled layer options back to the template before rendering.
 
-    For isotope templates, selected MeteoricWaterLines become template.lines.
+    For isotope templates, selected functions become the template functions parameter.
     """
     if isinstance(template, IsotopeTemplate):
-        selected_lines = [
+        selected_functions = [
             option.value
             for option in state.layer_options
-            if option.key == "lines" and option.selected
+            if option.key == "functions" and option.selected
         ]
-        return IsotopeTemplate(selected_lines)
+        return IsotopeTemplate(functions=selected_functions if selected_functions else None)
 
     return template
