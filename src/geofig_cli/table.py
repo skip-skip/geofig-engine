@@ -1,18 +1,17 @@
 from typing import Any
 
 from geofig_cli.state import Cell, ConfigState, LayerOption
-from geofig_engine.templates.isotope import IsotopeTemplate
 from geofig_engine.data import get_function_registry, FunctionCategory, FunctionType
 
 
 def get_supported_mappings(template: Any) -> list[str]:
-    return list(getattr(template, "supported_mappings", []))
+    return []
 
 def get_default_settings(template: Any) -> dict[str, Any]:
     return dict(getattr(template, "default_settings", {}))
 
 def get_default_layer_settings(template: Any) -> dict[str, Any]:
-    return dict(getattr(template, "default_layer_settings", {}))
+    return {}
 
 def initialize_config_state(template: Any) -> ConfigState:
 
@@ -133,33 +132,4 @@ def build_cells(template: Any, state: ConfigState) -> list[list[Cell]]:
 
 
 def get_template_layer_options(template: Any) -> list[LayerOption]:
-    """
-    Return selectable/togglable layer options associated with a template.
-
-    For isotope templates, this exposes available water isotope lines as toggleable layers.
-    Extend this function as other templates gain configurable options.
-    """
-    options: list[LayerOption] = []
-
-    if isinstance(template, IsotopeTemplate):
-        # Get the currently selected function IDs from template initialization
-        # Since template stores functions as layers, we extract their labels
-        current_func_ids = set()
-        
-        # Query registry for available water isotope functions
-        registry = get_function_registry()
-        available_lines = registry.filter(
-            category=FunctionCategory.WATER_ISOTOPE,
-            func_type=FunctionType.LINEAR,
-        )
-        
-        for func in available_lines:
-            options.append(
-                LayerOption(
-                    key="functions",
-                    value=func.id,
-                    selected=func.id in current_func_ids,
-                )
-            )
-
-    return options
+    return []

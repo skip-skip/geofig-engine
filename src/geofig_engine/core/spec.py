@@ -10,7 +10,10 @@ from typing import Any, Union
 
 import pandas as pd
 
-from geofig_engine.layers.base import FigureLayer
+from geofig_engine.core.coord import Coord, CoordCartesian
+from geofig_engine.core.facet import Facet, FacetNull
+from geofig_engine.core.layer import LayerSpec
+
 from geofig_engine.utils.validation import (
     validate_columns_exist,
     validate_dataframe,
@@ -32,13 +35,14 @@ class FigureSpec:
 
     Attributes:
         data: The DataFrame containing the data to plot.
-        mappings: Dict mapping visual attributes to resolved data sources:
-            - list[str]: column names (concatenated if multiple)
-            - Any: constant values (colors, numbers, etc.)
+        mappings: Dict mapping visual attributes to resolved data sources.
         settings: Dict of rendering settings (alpha, title, figsize, etc.).
         context: Dict of iterator context values for this figure.
         template_name: Name of the template that generated this spec.
         iterator_key: Tuple of column names used for iteration (empty if none).
+        layers: List of LayerSpec (resolved layers with visual mapping).
+        coord: Coordinate system for the figure.
+        facet: Facet specification for subplot splitting.
     """
 
     data: pd.DataFrame
@@ -47,7 +51,9 @@ class FigureSpec:
     context: dict[str, Any]
     template_name: str
     iterator_key: tuple[str, ...] = ()
-    layers: list[FigureLayer] = field(default_factory=list)
+    layers: list[LayerSpec] = field(default_factory=list)
+    coord: Coord = field(default_factory=CoordCartesian)
+    facet: Facet = field(default_factory=FacetNull)
     
     def __post_init__(self) -> None:
         """Validate spec on creation."""
@@ -91,7 +97,9 @@ def build_spec(
     context: dict[str, Any],
     template_name: str,
     iterator_key: tuple[str, ...] = (),
-    layers: list[FigureLayer] | None = None,
+    layers: list[LayerSpec] | None = None,
+    coord: Coord | None = None,
+    facet: Facet | None = None,
 ) -> FigureSpec:
     """
     Factory function to create and validate a FigureSpec.
@@ -103,6 +111,9 @@ def build_spec(
         context: Dict of iterator context values.
         template_name: Name of the template that generated this spec.
         iterator_key: Tuple of column names used for iteration.
+        layers: List of resolved LayerSpec objects.
+        coord: Coordinate system for the figure.
+        facet: Facet specification for subplot splitting.
 
     Returns:
         A validated FigureSpec instance.
@@ -119,6 +130,8 @@ def build_spec(
         template_name=template_name,
         iterator_key=iterator_key,
         layers=layers or [],
+        coord=coord or CoordCartesian(),
+        facet=facet or FacetNull(),
     )
 
 

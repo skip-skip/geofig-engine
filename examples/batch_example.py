@@ -1,15 +1,13 @@
 """Minimal batch figure generation example."""
 
 from pathlib import Path
-import sys
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pandas as pd
 from geofig_engine.core.dataset import Dataset
+from geofig_engine.core.iterator import DimensionIterator
 from geofig_engine.engine import FigureEngine
 from geofig_engine.renderers import MatplotlibRenderer
-from geofig_engine.templates import BivariateTemplate
+from geofig_engine.templates import bivariate
 
 out = Path(__file__).resolve().parent / "outputs" / "batch_output"
 out.mkdir(exist_ok=True)
@@ -26,14 +24,10 @@ data = pd.DataFrame(
 
 engine = FigureEngine()
 dataset = Dataset(dataframe=data, key_column="id")
-template = BivariateTemplate()
+template = bivariate(mapping={"x": "x", "y": "y", "color": "color"})
 
-specs = engine.build_specs(
-    dataset,
-    template,
-    {"x": "x", "y": "y", "color": "color"},
-    iterator_selectors={"group": "group"},
-)
+iterator = DimensionIterator(channel="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE)
+specs = engine.build_specs_from_template(dataset, template=template, iterators=iterator)
 
 renderer = MatplotlibRenderer()
 figures = engine.render_specs(specs, renderer)

@@ -5,90 +5,113 @@ Tests for FigEngine template classes.
 import pytest
 import pandas as pd
 
-from geofig_engine.templates import BivariateTemplate, FigureTemplate
-from geofig_engine.core.spec import FigureSpec
-from geofig_engine.utils.typing import Mapping
+from geofig_engine.templates import (
+    FigureTemplate,
+    bivariate,
+    timeseries,
+    isotope,
+)
+from geofig_engine.core.geom import GeomPoint, GeomLine, GeomFunctionLine
+from geofig_engine.core.layer import Layer
+from geofig_engine.core.scale import ScaleContinuous, ScaleOrdinal
+from geofig_engine.core.stat import StatIdentity
 
 
-class TestFigureTemplateBase:
-    def test_validate_mappings_rejects_missing_required(self):
+class TestFigureTemplate:
+    def test_requires_at_least_one_layer(self):
+        with pytest.raises(ValueError, match="at least one Layer"):
+            FigureTemplate(layers=[])
+
+    def test_requires_layer_instances(self):
+        with pytest.raises(TypeError, match="Layer instances"):
+            FigureTemplate(layers=["not_a_layer"])
+
+    def test_defaults(self):
+        template = FigureTemplate(layers=[Layer(geom=GeomPoint())])
+        assert len(template.layers) == 1
+        assert template.default_settings == {}
+        assert template.coord.name == "cartesian"
+
+    def test_custom_settings_and_coord(self):
+        from geofig_engine.core.coord import CoordPolar
         template = FigureTemplate(
-            name="test",
-            required_mappings=(Mapping.X.value, Mapping.Y.value),
-            optional_mappings=(Mapping.COLOR.value,),
+            layers=[Layer(geom=GeomPoint())],
+            default_settings={"figsize": (8, 8)},
+            coord=CoordPolar(),
         )
-
-        with pytest.raises(ValueError, match="requires mapping 'x'"):
-            template.validate_mappings({"y": ["y"]})
-
-    def test_validate_mappings_rejects_unsupported_mapping(self):
-        template = FigureTemplate(
-            name="test",
-            required_mappings=(Mapping.X.value,),
-            optional_mappings=(Mapping.COLOR.value,),
-        )
-
-        with pytest.raises(ValueError, match="Unsupported mapping 'z'"):
-            template.validate_mappings({"x": ["x"], "z": ["z"]})
-
-    def test_supported_mappings_combines_required_and_optional(self):
-        template = FigureTemplate(
-            name="test",
-            required_mappings=(Mapping.X.value,),
-            optional_mappings=(Mapping.COLOR.value, Mapping.MARKER.value),
-        )
-
-        assert template.supported_mapping_names == ("color", "marker", "x")
+        assert template.default_settings["figsize"] == (8, 8)
+        assert template.coord.name == "polar"
 
 
-class TestBivariateTemplate:
-    @pytest.fixture
-    def data(self) -> pd.DataFrame:
-        return pd.DataFrame({"x": [1, 2], "y": [3, 4], "group": ["A", "B"]})
+class TestBivariateFactory:
+    def test_returns_template_with_geom_point(self):
+        template = bivariate()
+        assert isinstance(template, FigureTemplate)
+        assert len(template.layers) == 1
+        assert isinstance(template.layers[0].geom, GeomPoint)
+        assert isinstance(template.layers[0].stat, StatIdentity)
 
-    def test_default_settings_are_applied(self, data):
-        template = BivariateTemplate()
-        spec = template.build_template_spec(
-            data=data,
-            mappings={"x": ["x"], "y": ["y"]},
-            settings={"title": "Plot"},
-            context={"group": "A"},
-        )
+    def test_with_mapping(self):
+        mapping = {"x": "chem1", "y": "chem2", "color": "group"}
+        template = bivariate(mapping=mapping)
+        assert template.layers[0].mapping["x"] == "chem1"
+        assert template.layers[0].mapping["color"] == "group"
 
-        assert isinstance(spec, FigureSpec)
-        assert spec.template_name == "bivariate"
-        assert spec.settings["figsize"] == (10, 6)
-        assert spec.settings["title"] == "Plot"
+    def test_with_scales(self):
+        scales = {"x": ScaleContinuous(), "color": ScaleOrdinal(palette=["red", "blue"])}
+        template = bivariate(scales=scales)
+        assert template.layers[0].scales["x"].name == "continuous"
 
-    def test_build_spec_requires_x_and_y(self, data):
-        template = BivariateTemplate()
+    def test_default_settings(self):
+        template = bivariate()
+        assert template.default_settings["figsize"] == (10, 6)
+        assert template.default_settings["grid"] is True
 
-        with pytest.raises(ValueError, match="requires mapping 'x'"):
-            template.build_template_spec(
-                data=data,
-                mappings={"y": ["y"]},
-                settings={},
-                context={},
-            )
 
-    def test_build_spec_rejects_unsupported_mapping(self, data):
-        template = BivariateTemplate()
+class TestTimeseriesFactory:
+    def test_returns_two_layers(self):
+        template = timeseries()
+        assert len(template.layers) == 2
 
-        with pytest.raises(ValueError, match="Unsupported mapping 'z'"):
-            template.build_template_spec(
-                data=data,
-                mappings={"x": ["x"], "y": ["y"], "z": ["group"]},
-                settings={},
-                context={},
-            )
+    def test_first_layer_is_line(self):
+        template = timeseries()
+        assert isinstance(template.layers[0].geom, GeomLine)
+        assert isinstance(template.layers[0].stat, StatIdentity)
 
-    def test_build_spec_accepts_optional_color(self, data):
-        template = BivariateTemplate()
-        spec = template.build_template_spec(
-            data=data,
-            mappings={"x": ["x"], "y": ["y"], "color": ["group"]},
-            settings={},
-            context={},
-        )
+    def test_second_layer_is_point(self):
+        template = timeseries()
+        assert isinstance(template.layers[1].geom, GeomPoint)
+        assert isinstance(template.layers[1].stat, StatIdentity)
 
-        assert spec.mappings["color"] == ["group"]
+    def test_mapping_shared_across_layers(self):
+        mapping = {"x": "date", "y": "value"}
+        template = timeseries(mapping=mapping)
+        for layer in template.layers:
+            assert layer.mapping["x"] == "date"
+
+    def test_default_settings(self):
+        template = timeseries()
+        assert "time_format" in template.default_settings
+
+
+class TestIsotopeFactory:
+    def test_default_returns_point_layer(self):
+        template = isotope()
+        assert isinstance(template.layers[-1].geom, GeomPoint)
+
+    def test_with_mapping(self):
+        mapping = {"x": "d18O", "y": "dD"}
+        template = isotope(mapping=mapping)
+        assert template.layers[-1].mapping["x"] == "d18O"
+
+    def test_auto_filter_loads_function_layers(self):
+        pytest.importorskip("geofig_engine.data")
+        template = isotope(auto_filter=True)
+        assert len(template.layers) >= 2
+        for layer in template.layers[:-1]:
+            assert isinstance(layer.geom, GeomFunctionLine)
+        assert isinstance(template.layers[-1].geom, GeomPoint)
+
+    def test_default_settings(self):
+        template = isotope()
+        assert template.default_settings["figsize"] == (10, 6)

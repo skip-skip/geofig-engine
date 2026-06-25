@@ -2,57 +2,77 @@
 
 ## Overview
 
-FigEngine is a declarative visualization system built around:
+FigEngine is a declarative visualization system built around the **Grammar of Graphics** (GoG) – a formal framework where statistical graphics are composed from independent, reusable components.
+
+### Core GoG Concepts
 
 1. **Tidy dataset**
 2. **Semantic dimension metadata**
-3. **Figure attribute mappings**
-4. **Figure templates**
-5. **Rendering backends**
+3. **Aesthetic mappings + Scales** (data → visual domain)
+4. **Geoms** (visual marks – points, lines, bars, etc.)
+5. **Stats** (statistical transformations – identity, bin, smooth, etc.)
+6. **Coord** (coordinate system – Cartesian, polar, etc.)
+7. **Facet** (subplot splitting)
+8. **Layer** (Geom + Stat + mapping bound to data)
+9. **Rendering backends**
 
-The system transforms:
+### Pipeline
 
+```
 Dataset
 → DimensionSelector (resolve columns)
-→ IteratorEngine (expand contexts)
-→ FigureTemplate (build spec)
+→ IteratorEngine / Facet (expand contexts)
+→ Layers (Geom + Stat + mapping)
+→ Scale resolution (data → visual domain)
+→ Coord transform
 → FigureSpec
 → Renderer
 → Figures
+```
+
 ---
 
 ## Core Design Principles
 
-### 1. Separation of Concerns
+### 1. Strict Separation: Data → Spec → Render
 
 - Data is never mutated by visualization logic
 - Dimension metadata is independent of rendering
-- Templates define structure, not execution
-- Renderers only draw (no business logic)
-
----
+- Layers define structure, not execution
+- Scales are pure transformations (data domain → visual domain)
+- Renderers only draw (no business logic, no data transforms)
 
 ### 2. Declarative Configuration
 
 Figures are defined by *what they represent*, not *how to draw them*.
 
-Example:
-
-- x = analytes
-- y = chem1
-- color = 'blue'
-- marker = group
-
----
+```python
+layer = Layer(
+    geom=GeomPoint(),
+    stat=StatIdentity(),
+    mapping={
+        "x": DimensionSelector(analyte=True),
+        "y": "chem1",
+        "color": "group",
+    },
+    scales={
+        "x": ScaleContinuous(),
+        "y": ScaleContinuous(),
+        "color": ScaleOrdinal(palette="Set1"),
+    },
+)
+```
 
 ### 3. Extensibility
 
 The system must support:
 
-- new figure types (templates)
+- new Geom types (geometric marks)
+- new Stat transformations
+- new Coord systems
+- new Facet strategies
+- new Scale types
 - new rendering backends
-- new dimension roles
-- new attribute mappings
 
 Without modifying core logic.
 
@@ -77,6 +97,7 @@ Responsibilities:
 - validate schema
 - expose selection/filtering
 - expose unique values per dimension
+```
 
 ---
 
@@ -84,269 +105,427 @@ Responsibilities:
 
 Represents a column with semantic metadata.
 
+```python
 Dimension:
     name: str
-    attributes: dict[str, Any]
+    labels: dict[str, Any]
+```
 
-Example attributes:
-- analyte=True
-- unit="mg/L"
-- role="group"
+Example labels:
+- `{"analyte": True}`
+- `{"unit": "mg/L"}`
+- `{"role": "group"}`
 
-Attributes are purely metadata and must not encode visualization behavior.
+Labels are purely metadata and must not encode visualization behavior.
 
 ---
 
 ### 3. DimensionSelector
 
-Flexible way to select dimensions.
+Flexible way to select dimensions by name or metadata.
 
-Supports:
-- single column: "chem1"
-- attribute-based: {"analyte": True}
-- explicit list: ["chem1", "chem2"]
-
+```python
 DimensionSelector:
     resolve(dataset) -> list[str]
+```
+
+Supports:
+- single column: `"chem1"`
+- attribute-based: `{"analyte": True}`
+- explicit list: `["chem1", "chem2"]`
 
 ---
 
-### 4. Attribute Mapping
+### 4. Attribute Mapping & Scale
 
-Maps data (or constants) to visual encodings.
+**AttributeMapping** maps data (or constants) to visual channels declaratively.
+**Scale** transforms data-domain values into visual-domain values (e.g., position, color, size).
 
+```python
 AttributeMapping:
-    target: str   # "x", "y", "color", "marker"
-    source: Union[
-        DimensionSelector,
-        str,           # single column
-        list[str],     # multiple columns
-        constant value
-    ]
+    target: str          # "x", "y", "color", "size", "shape"
+    source: SourceType   # DimensionSelector, str, list[str], constant
+    scale: Scale         # how to map data → visual
+
+Scale:
+    transform(values) -> visual_values    # e.g., linear, log, ordinal
+    invert(visual_values) -> values       # inverse transform (for interactivity)
+```
 
 Responsibilities:
-- store declarative mapping only
-- resolve sources into concrete values before rendering
-- support constants and selectors uniformly
+- **AttributeMapping**: stores *what* maps to *which* channel
+- **Scale**: stores *how* the mapping is computed (linear, log, ordinal palette, etc.)
+- Resolution order: resolve selectors → extract data → apply scales → produce visual values
+
+Examples:
+| Channel | Source | Scale |
+|---------|--------|-------|
+| `x` | `DimensionSelector(analyte=True)` | `ScaleContinuous()` |
+| `y` | `"chem1"` | `ScaleContinuous()` |
+| `color` | `"group"` | `ScaleOrdinal(palette="Set1")` |
+| `color` | `"blue"` | `ScaleConstant()` |
+
 AttributeMapping must NOT:
 - access dataset directly
 - perform rendering logic
 
-Examples:
-- x = DimensionSelector(analyte=True)
-- y = "chem1"
-- color = "blue"
-- marker = "group"
-
 ---
 
-### 5. FigureTemplate and FigureLayers
+### 5. Geom (Geometric Object)
 
-FigureTemplate is a figure type with defaults.
+Defines the type of visual mark to draw.
 
-FigureTemplate:
+```python
+Geom:
     name: str
-    required_mappings: list[str]
-    default_settings: dict
-    build_spec(
-        data: pd.DataFrame,
-        mappings: dict,
-        settings: dict,
-        context: dict
-    ) -> FigureSpec
+    required_channels: list[str]    # e.g., ["x", "y"]
+    optional_channels: list[str]    # e.g., ["color", "size", "alpha"]
+```
 
-Templates must:
+Built-in Geoms:
+- `GeomPoint` – scatter plot marks
+- `GeomLine` – connected line segments
+- `GeomBar` – bar/column marks
+- `GeomArea` – filled area under a line
+- `GeomRibbon` – confidence band / envelope
+- `GeomText` – text labels
+- `GeomPath` – arbitrary path
+- `GeomErrorbar` – error bars
+- `GeomSmooth` – smoothed conditional mean (composition of StatSmooth + GeomRibbon/Line)
+
+Geoms must:
+- declare required and optional channels
 - not resolve DimensionSelectors
-- not perform iteration
-- only apply structure + defaults
-
-Example:
-BivariateTemplate:
-- requires x, y
-- optional color, marker
-- default alpha=0.8
-
-FigureLayers serialize visual stacks to be drawn by the renderer.
-
-Layers must
-- be dataclasses with no defined class functions
-- declare all required and optional channels for the visual stack
-
-Layers declare channels, Template mappings link values (or Iterators) to channels.
-The dumb renderer draws Layers using mapped values.
-
-Layers represent HOW mappings are interpreted by a renderer,
-Templates represent WHICH mappings are interpreted by a renderer.  
+- not perform data transformation
+- only define *what* to draw
 
 ---
 
-### 6. FigureSpec
+### 6. Stat (Statistical Transformation)
 
-Concrete, fully resolved plotting instruction.
+Transforms data before visual encoding.
 
+```python
+Stat:
+    name: str
+    compute(data, mapping) -> pd.DataFrame   # transformed data
+```
+
+Built-in Stats:
+- `StatIdentity` – pass-through (no transformation)
+- `StatBin` – bin continuous values into intervals
+- `StatCount` – count occurrences (for bar charts)
+- `StatSmooth` – smoothing / regression (LOESS, linear, etc.)
+- `StatSummary` – summary statistics (mean, median, quartiles)
+- `StatDensity` – kernel density estimate
+- `StatEcdf` – empirical cumulative distribution
+
+Stats must:
+- be pure functions of data
+- preserve column names for channel mapping
+- not depend on rendering
+
+---
+
+### 7. Layer
+
+A Layer binds a Geom, a Stat, mappings, and scales into a drawing unit.
+
+```python
+Layer:
+    geom: Geom
+    stat: Stat
+    mapping: dict[str, SourceType]       # channel → data source
+    scales: dict[str, Scale]            # channel → scale (optional; inferred if absent)
+    data: pd.DataFrame | None           # override dataset for this layer (optional)
+```
+
+A figure may contain **multiple layers**, each independently specifying *what* to draw, *how* to transform it, and *which* scales to use. Layers are drawn in order (later layers are drawn on top).
+
+Layer resolution pipeline:
+1. Resolve DimensionSelectors → column names
+2. Apply Stat transformation → transformed DataFrame
+3. Extract data series per channel
+4. Apply Scale → visual-domain values
+5. Package into LayerSpec for renderer
+
+---
+
+### 8. Coord (Coordinate System)
+
+Transforms visual-domain values to screen space.
+
+```python
+Coord:
+    name: str
+    transform(visual_values) -> screen_coords
+    aspect_ratio: float | None
+```
+
+Built-in Coords:
+- `CoordCartesian` – standard x/y plane (default)
+- `CoordPolar` – polar coordinates (radial + angular)
+- `CoordTransformed` – arbitrary scale transforms (log, sqrt, etc.)
+- `CoordFlip` – swapped x/y axes
+- `CoordFixed` – fixed aspect ratio
+
+Coords must:
+- operate on pre-scaled visual values
+- not depend on data or rendering backend
+- be composable with facets
+
+---
+
+### 9. Facet (Subplot Splitting)
+
+Divides data into subsets, each rendered as a separate subplot.
+
+```python
+Facet:
+    name: str                    # "wrap", "grid", "null"
+    by: DimensionSelector        # dimension(s) to split by
+    scales: "fixed" | "free"     # share scales across facets
+```
+
+Built-in Facets:
+- `FacetNull` – single plot (default)
+- `FacetWrap` – split by one dimension, wrap into rows/cols
+- `FacetGrid` – split by two dimensions (rows × cols)
+
+Facets replace some uses of the IteratorEngine. The key difference:
+- **Facet**: multiple panels within a single figure (shared axes/layout)
+- **IteratorEngine**: multiple *independent* figures (separate files, contexts)
+
+---
+
+### 10. FigureSpec
+
+Concrete, fully resolved plotting instruction – the contract between system and renderer.
+
+```python
 FigureSpec:
-    data: pandas.DataFrame
-    mappings: dict[str, Any]
-    settings: dict
-    context: dict   # iterator values
+    data: pd.DataFrame
+    layers: list[LayerSpec]       # resolved layers with visual-domain values
+    coord: Coord
+    facet: Facet
+    scales: dict[str, Scale]      # global scale registry
+    settings: dict                # title, figsize, theme, etc.
+    context: dict                 # iterator / facet context values
+```
 
-This is the contract between system and renderer.
+`LayerSpec` is the resolved form of a Layer:
 
----
+```python
+LayerSpec:
+    geom: Geom
+    stat: Stat                   # already applied; included for renderer metadata
+    visual_mapping: dict[str, Any]  # channel → concrete visual values
+```
 
-### 6.5  Mapping Resolution
-
-Before FigureSpec creation, all mappings must be resolved.
-
-Resolution includes:
-- DimensionSelector → list of column names
-- column names → actual data series
-- constants → preserved as-is
-
-This produces fully concrete mappings used in FigureSpec.
-
-This step must occur BEFORE rendering and AFTER iterator expansion.
+This is the final, renderer-agnostic spec. Backends consume this to produce figures.
 
 ---
 
-### 7. Iterator Engine
+### 11. IteratorEngine
 
-Generates multiple figures based on dimension expansion.
+Generates multiple independent figures based on dimension expansion.
 
-Supports:
-- iterating over dimension values
-- iterating over dimension groups (e.g., analytes)
-
+```python
 IteratorEngine:
     expand(dataset, selectors) -> list[(subset_df, context)]
+```
 
 Where:
-- subset_df is a filtered view of the dataset
-- context is a dict of iterator values (e.g., {"analyte": "chem2"})
+- `subset_df` is a filtered view of the dataset
+- `context` is a dict of iterator values (e.g., `{"analyte": "chem2"}`)
+
+Use for: generating one figure *per* combination of values (e.g., one plot per analyte).
+Use Facet for: multiple panels *within* a single figure.
 
 IteratorEngine must:
 - not modify original dataset
-- not depend on templates or mappings
+- not depend on templates, layers, or mappings
 - operate only on dataset + selectors
 
 ---
 
-### 8. FigureGenerator (Orchestrator)
+### 12. FigureGenerator (Orchestrator)
 
 Top-level system entry point.
 
+```python
 FigureGenerator:
     dataset
-    template
-    mappings
-    iterator
+    layers: list[Layer]
+    coord: Coord
+    facet: Facet
+    scales: dict[str, Scale]      # optional global defaults
+    settings: dict
+    iterators: list[DimensionIterator]  # optional (for multi-figure output)
 
 Responsibilities:
 - resolve dimension selectors
-- expand iterators
+- expand iterators (for multi-figure)
+- apply facets (for multi-panel)
+- resolve scales (data → visual domain)
 - build FigureSpec(s)
 - send to renderer
+```
 
 FigureGenerator is the ONLY component allowed to orchestrate multiple subsystems.
 
 ---
 
-### 9. Renderer
+### 13. Renderer
 
 Backend-specific drawing logic.
 
+```python
 Renderer:
     render(spec: FigureSpec) -> Figure
+    render_all(specs: list[FigureSpec]) -> list[Figure]
+```
 
 Examples:
-- MatplotlibRenderer
-- PlotlyRenderer (future)
+- `MatplotlibRenderer`
+- `PlotlyRenderer` (future)
+
+Renderers must:
+- consume only FigureSpec (no access to Dataset, Dimensions, etc.)
+- not perform data transformations or scale resolution
+- handle all Geom types they support (return NotImplemented for unsupported)
+- respect Coord and Facet
 
 ---
 
 ## Example Flow
-### Input
-- Dataset with columns:
-    - chem1, chem2, chem3
-    - group
-    - metadata
-- Metadata:
-    - chem2, chem3 → analyte=True
+
+### User Configuration
+
+```python
+# Define layers
+layer = Layer(
+    geom=GeomPoint(),
+    stat=StatIdentity(),
+    mapping={
+        "x": DimensionSelector(analyte=True),
+        "y": "chem1",
+        "color": "group",
+    },
+    scales={
+        "x": ScaleContinuous(),
+        "y": ScaleContinuous(),
+        "color": ScaleOrdinal(palette="Set1"),
+    },
+)
+
+# Compose figure
+generator = FigureGenerator(
+    layers=[layer],
+    coord=CoordCartesian(),
+    facet=FacetNull(),
+    settings={"title": "Analyte vs chem1 by group"},
+)
+```
+
+### Execution
+
+1. Resolve `x` → `["chem2", "chem3"]`
+2. Iterate over `x` (optional, per-figure expansion)
+3. For each iteration:
+   a. Apply Stat (identity → no change)
+   b. Extract data series per channel
+   c. Apply Scales (data → visual domain)
+   d. Build FigureSpec with resolved layers + coord
+4. Render
 
 ---
 
 ## Layer Ownership
 
+```
 core/
-- Dataset
-- Dimension
-- DimensionSelector
-- AttributeMapping
-- IteratorEngine
-- FigureSpec
-
-templates/
-- FigureTemplate implementations
-
-renderers/
-- Renderer implementations
+  Dataset
+  Dimension
+  DimensionSelector
+  AttributeMapping
+  Scale (and implementations)
+  Geom (and implementations)
+  Stat (and implementations)
+  Coord (and implementations)
+  Facet (and implementations)
+  Layer / LayerSpec
+  FigureSpec
+  IteratorEngine
 
 engine/
-- FigureGenerator (orchestration)
+  FigureGenerator (orchestration)
 
-utils/
-- shared helpers only
+renderers/
+  Renderer implementations
+  (one module per backend)
+
+layers/
+  Reusable layer configurations (pre-built combinations)
+
+templates/           (optional, backward compat)
+  Pre-built figure compositions (common recipes)
+```
 
 Rules:
-- core must not depend on templates or renderers
-- templates must not depend on renderers
-- renderers must only depend on FigureSpec
-- engine is the only layer allowed to connect everything
-
----
-
-### User Configuration
-template = "bivariate"
-
-mappings = {
-    "x": DimensionSelector(analyte=True),
-    "y": "chem1",
-    "marker": "group",
-    "color": "blue"
-}
-
----
-
-### Execution
-1. resolve x → ["chem2", "chem3"]
-2. iterate over x (optional)
-3. build FigureSpec(s)
-4. render each
+- `core/` must not depend on `renderers/`
+- `core/` must not depend on `engine/`
+- `renderers/` must only depend on `FigureSpec` + `LayerSpec`
+- `engine/` is the only layer allowed to connect everything
 
 ---
 
 ## Extensibility Strategy
-### Adding a new figure type
-- subclass FigureTemplate
-- define required mappings
-- define defaults
 
-### Adding new attribute
-- extend AttributeMapping targets
-- update renderer interpretation
+### Adding a new Geom
+- subclass `Geom`
+- declare required and optional channels
+- add rendering support in each backend
 
-### Adding new backend
-- implement Renderer interface
-- no changes to core system
+### Adding a new Stat
+- subclass `Stat`
+- implement `compute(data, mapping) -> pd.DataFrame`
+- no changes to rendering
+
+### Adding a new Coord
+- subclass `Coord`
+- implement `transform(visual_values) -> screen_coords`
+- update renderer to apply coord during drawing
+
+### Adding a new Facet
+- subclass `Facet`
+- implement split logic
+- update FigureGenerator to apply facet during spec building
+
+### Adding a new Scale
+- subclass `Scale`
+- implement `transform()` and optionally `invert()`
+
+### Adding a new backend
+- implement `Renderer` interface
+- handle all Geom types (or raise NotImplemented)
+
+---
 
 ## Non-Goals (for now)
+
 - no GUI
 - no automatic layout engine
-- no full grammar-of-graphics implementation
+- no full grammar-of-graphics implementation (we target the subset useful for environmental data)
+
+---
 
 ## Key Constraint
 
 The system must always preserve:
+
+```
 Data → Spec → Render separation
+```
 
 Breaking this will lead to tight coupling and poor extensibility.

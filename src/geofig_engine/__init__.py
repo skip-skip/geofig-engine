@@ -16,9 +16,6 @@ from .engine import FigureEngine
 # Renderers
 from .renderers import MatplotlibRenderer
 
-# Templates
-from .templates import BivariateTemplate
-
 __all__ = [
     "Dataset",
     "Dimension",
@@ -26,5 +23,4 @@ __all__ = [
     "ColumnSelector",
     "FigureEngine",
     "MatplotlibRenderer",
-    "BivariateTemplate",
 ]

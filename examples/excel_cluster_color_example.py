@@ -1,19 +1,15 @@
 """Excel example: cluster marker shapes and color grouping."""
 
 from pathlib import Path
-import sys
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import matplotlib.pyplot as plt
 import pandas as pd
 from geofig_engine.core.dataset import Dataset
 from geofig_engine.core.dimension import Dimension
-from geofig_engine.core.dimension_selector import DimensionSelector
-from geofig_engine.core.iterator import DimensionIterator, IteratorMode
+from geofig_engine.core.iterator import DimensionIterator
 from geofig_engine.engine import FigureEngine
 from geofig_engine.renderers import MatplotlibRenderer
-from geofig_engine.templates import BivariateTemplate
+from geofig_engine.templates import bivariate
 
 output_dir = Path(__file__).resolve().parent / "outputs" / "excel_output"
 output_dir.mkdir(exist_ok=True)
@@ -55,38 +51,30 @@ dataset = Dataset(
 
 engine = FigureEngine()
 renderer = MatplotlibRenderer()
-template = BivariateTemplate()
-
-mappings = {
-    "x": "sulfate_mg_L",
-    "y": "{y}",
-    "color": "{color}",
-    "marker": "cluster",
-}
+template = bivariate(mapping={"x": "sulfate_mg_L", "y": "{y}", "color": "{color}"})
 
 iters = [
     DimensionIterator(
         channel="y",
-        dimensions = {"type": "analyte"},
+        dimensions={"type": "analyte"},
         mode=DimensionIterator.Mode.DIMENSION,
     ),
     DimensionIterator(
         channel="color",
-        dimensions = {"role": "color"},
+        dimensions={"role": "color"},
         mode=DimensionIterator.Mode.DIMENSION,
     )
 ]
-specs = engine.build_specs(
+specs = engine.build_specs_from_template(
     dataset=dataset,
     template=template,
-    mappings=mappings,
-    iterators=iters,
     settings={
         "xlabel": "sulfate_mg_L",
         "ylabel": "{y}",
         "title": "{y} vs sulfate_mg_L",
         "figsize": (8, 5),
     },
+    iterators=iters,
 )
 
 figures = engine.render_specs(specs, renderer)

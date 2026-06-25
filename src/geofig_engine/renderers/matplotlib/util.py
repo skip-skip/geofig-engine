@@ -2,9 +2,6 @@ from typing import Any
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import is_color_like, to_hex
-from geofig_engine.core.spec import FigureSpec, extract_data_for_mapping
-from geofig_engine.layers.base import FigureLayer
-from geofig_engine.layers.scatter import ScatterLayer
 
 ### List of templates that have a valid implementation in this renderer.
 IMPLEMENTED: list[str] = ["test", "bivariate", "isotope", "timeseries"]
@@ -75,19 +72,3 @@ def resolve_color_series(color_data: Any) -> Any:
         for i, value in enumerate(unique_values)
     }
     return color_series.map(mapping)
-def extract_channel_data(spec: FigureSpec, layer: ScatterLayer, channel: str) -> Any:
-    """
-    Extract data for a given channel from the FigureSpec mappings.
-
-    Args:
-        spec: The FigureSpec to extract from.
-        layer: The ScatterLayer defining the channel mapping.
-        channel: The channel name (e.g., "x", "y", "color").
-
-    Returns:
-        The extracted data for the channel, or None if not defined.
-    """
-    data = extract_data_for_mapping(spec, channel)
-    if data is None:
-        data = getattr(layer, channel)
-    return data

@@ -5,25 +5,37 @@ Defines the contract for two-dimensional plots with optional
 color and marker encodings.
 """
 
-from geofig_engine.layers.scatter import ScatterLayer
+from typing import Any
+
+from geofig_engine.core.geom import GeomPoint
+from geofig_engine.core.layer import Layer
+from geofig_engine.core.scale import Scale
+from geofig_engine.core.stat import StatIdentity
 from geofig_engine.templates.base import FigureTemplate
-from geofig_engine.utils.typing import Mapping
+from geofig_engine.utils.typing import SourceType
 
 
-class BivariateTemplate(FigureTemplate):
-    def __init__(self) -> None:
-        super().__init__(
-            name="bivariate",
-            required_mappings=(Mapping.X.value, Mapping.Y.value),
-            optional_mappings=(Mapping.Y2.value, Mapping.COLOR.value, Mapping.MARKER.value, Mapping.SIZE.value, Mapping.ALPHA.value),
-            default_settings={
-                "figsize": (10, 6),
-                "xscale": "linear",
-                "yscale": "linear",
-                "y2scale": "linear",
-                "figname": None,
-                "grid": True,
-            },
-            projection=FigureTemplate.ProjectionType.CARTESIAN,
-            layers=[ScatterLayer()]
-        )
+BIVARIATE_DEFAULTS: dict[str, Any] = {
+    "figsize": (10, 6),
+    "xscale": "linear",
+    "yscale": "linear",
+    "y2scale": "linear",
+    "grid": True,
+}
+
+
+def bivariate(
+    mapping: dict[str, SourceType] | None = None,
+    scales: dict[str, Scale] | None = None,
+) -> FigureTemplate:
+    return FigureTemplate(
+        layers=[
+            Layer(
+                geom=GeomPoint(),
+                stat=StatIdentity(),
+                mapping=mapping or {},
+                scales=scales,
+            )
+        ],
+        default_settings=dict(BIVARIATE_DEFAULTS),
+    )

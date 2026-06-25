@@ -12,7 +12,7 @@ from geofig_cli.table import build_cells, initialize_config_state
 from geofig_cli.ui import ENTER_KEYS, ESCAPE, choose_vertical, choose_vertical_multi, draw_footer, message, prompt, truncate
 from geofig_cli.ui import choose_option
 from geofig_engine.core.dataset import Dataset
-from geofig_engine.templates.isotope import IsotopeTemplate
+
 
 
 def run_cli() -> None:

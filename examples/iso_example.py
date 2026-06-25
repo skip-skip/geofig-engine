@@ -1,22 +1,14 @@
 """Isotope example: demonstrates water isotope reference lines with Idaho and global data."""
 
 from pathlib import Path
-import sys
-
-from geofig_engine.templates.isotope import IsotopeTemplate
-from geofig_engine.data import get_function_registry
-from geofig_engine.utils.typing import Mapping
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import matplotlib.pyplot as plt
 import pandas as pd
 from geofig_engine.core.dataset import Dataset
-from geofig_engine.core.dimension import Dimension
-from geofig_engine.core.dimension_selector import DimensionSelector
-from geofig_engine.core.iterator import DimensionIterator
 from geofig_engine.engine import FigureEngine
 from geofig_engine.renderers import MatplotlibRenderer
+from geofig_engine.templates import isotope
+from geofig_engine.data import get_function_registry
 
 output_dir = Path(__file__).resolve().parent / "outputs" / "iso_output"
 output_dir.mkdir(exist_ok=True)
@@ -50,30 +42,11 @@ print(f"  - Idaho lines: {[f.id for f in idaho_funcs if f.id != 'GMWL']}")
 
 engine = FigureEngine()
 renderer = MatplotlibRenderer()
-template = IsotopeTemplate(functions=selected_function_ids)
+template = isotope(functions=selected_function_ids, mapping={"x": "Oxygen 18", "y": "Deuterium", "color": color_column})
 
-mappings = {
-    Mapping.OXYGEN_18: "Oxygen 18",
-    Mapping.DEUTERIUM: "Deuterium",
-    Mapping.COLOR: color_column,
-}
-
-iters = [
-    DimensionIterator(
-        channel="color",
-        dimensions = color_column,
-        mode=DimensionIterator.Mode.VALUE,
-    ),
-]
-iters = None
-engine.render_and_save(
+specs = engine.build_specs_from_template(
     dataset=dataset,
     template=template,
-    mappings=mappings,
-    iterators=iters,
-    renderer=renderer,
-    outdir=output_dir,
-    #filename="iso_{color}.png",
     settings={
         "xlabel": "Oxygen 18",
         "ylabel": "Deuterium",
@@ -81,4 +54,9 @@ engine.render_and_save(
         "figsize": (8, 5),
     },
 )
+
+figures = engine.render_specs(specs, renderer)
+for spec, fig in zip(specs, figures):
+    fig.savefig(output_dir / "iso.png")
+    plt.close(fig)
 print(f"Done. See generated figures in {output_dir}.")

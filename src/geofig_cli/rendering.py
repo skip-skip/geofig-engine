@@ -11,7 +11,7 @@ from geofig_engine.renderers import MatplotlibRenderer
 
 from geofig_cli.selectors import build_dimension_iterator
 from geofig_cli.state import ConfigState
-from geofig_engine.templates.isotope import IsotopeTemplate
+from geofig_engine.templates import FigureTemplate
 
 
 def materialize_mappings(state: ConfigState) -> dict[str, Any]:
@@ -47,15 +47,18 @@ def render_to_folder(
     if state.layer_settings:
         settings["layer_settings"] = dict(state.layer_settings)
 
-    engine.render_and_save(
+    specs = engine.build_specs_from_template(
         dataset=dataset,
         template=template,
-        mappings=materialize_mappings(state),
-        iterators=materialize_iterators(state, dataset),
-        renderer=renderer,
-        outdir=str(outdir),
         settings=settings,
+        iterators=materialize_iterators(state, dataset),
     )
+    for i, spec in enumerate(specs):
+        fig = renderer.render(spec)
+        filename = f"figure_{i}.png"
+        if hasattr(fig, "figname") and fig.figname:
+            filename = f"{fig.figname}.png"
+        fig.savefig(str(outdir / filename))
 def draw_progress_bar(
     stdscr,
     y: int,
@@ -121,12 +124,11 @@ def render_figures(
         settings["layer_settings"] = dict(state.layer_settings)
     template = apply_layer_options_to_template(template, state)
 
-    specs = engine.build_specs(
+    specs = engine.build_specs_from_template(
         dataset=dataset,
         template=template,
-        mappings=materialize_mappings(state),
-        iterators=materialize_iterators(state, dataset),
         settings=settings,
+        iterators=materialize_iterators(state, dataset),
     )
 
     total = len(specs)
@@ -167,7 +169,7 @@ def render_figures(
         stdscr.refresh()
 
         fig = renderer.render(spec)
-        filename = f"{template.name}_{i - 1}.png"
+        filename = f"figure_{i - 1}.png"
         if hasattr(fig, "figname") and fig.figname:
             filename = f"{fig.figname}.png"
         fig.savefig(outdir / filename)
@@ -187,17 +189,4 @@ def render_figures(
     message(stdscr, f"Done. Output saved to: {outdir}")
 
 def apply_layer_options_to_template(template: Any, state: ConfigState) -> Any:
-    """
-    Apply toggled layer options back to the template before rendering.
-
-    For isotope templates, selected functions become the template functions parameter.
-    """
-    if isinstance(template, IsotopeTemplate):
-        selected_functions = [
-            option.value
-            for option in state.layer_options
-            if option.key == "functions" and option.selected
-        ]
-        return IsotopeTemplate(functions=selected_functions if selected_functions else None)
-
     return template

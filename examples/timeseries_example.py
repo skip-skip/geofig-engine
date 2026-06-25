@@ -1,19 +1,15 @@
-"""Excel example: cluster marker shapes and color grouping."""
+"""Timeseries example: generates time-series figures from lithology data."""
 
 from pathlib import Path
-import sys
-from geofig_engine.utils.typing import Mapping
 
-from geofig_engine.templates.timeseries import TimeseriesTemplate
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-
+import matplotlib.pyplot as plt
 import pandas as pd
 from geofig_engine.core.dataset import Dataset
 from geofig_engine.core.dimension import Dimension
 from geofig_engine.core.iterator import DimensionIterator
 from geofig_engine.engine import FigureEngine
 from geofig_engine.renderers import MatplotlibRenderer
+from geofig_engine.templates import timeseries
 
 output_dir = Path(__file__).resolve().parent / "outputs" / "timeseries_output"
 output_dir.mkdir(exist_ok=True)
@@ -28,34 +24,25 @@ for analyte in df.columns.tolist():
 # Create a dataset from the Excel sheet.
 dataset = Dataset(
     dataframe=df,
-    key_column="Index", # Try Sample ID
+    key_column="Index",
     dimensions=dims,
 )
 
 engine = FigureEngine()
 renderer = MatplotlibRenderer()
-template = TimeseriesTemplate()
+template = timeseries(mapping={"x": "Sample Date", "y": "{y}", "color": "hole_id"})
 
 iters = [
     DimensionIterator(
         channel="y",
-        dimensions = dataset.query_dimensions("analyte", True),
+        dimensions=dataset.query_dimensions("analyte", True),
         mode=DimensionIterator.Mode.DIMENSION,
     ),
 ]
 
-mappings = {
-    Mapping.X: "Sample Date",
-    Mapping.Y: "{y}",
-    Mapping.COLOR: "hole_id",
-}
-engine.render_and_save(
+specs = engine.build_specs_from_template(
     dataset=dataset,
     template=template,
-    mappings=mappings,
-    iterators=iters,
-    renderer=renderer,
-    outdir=output_dir,
     settings={
         "xlabel": "Time",
         "ylabel": "{y}",
@@ -63,5 +50,16 @@ engine.render_and_save(
         "figsize": (8, 5),
         "figname": "timeseries_{y}",
     },
+    iterators=iters,
 )
+
+figures = engine.render_specs(specs, renderer)
+for spec, fig in zip(specs, figures):
+    figname = spec.settings.get("figname", "timeseries")
+    fig.savefig(output_dir / f"{figname}.png")
+    plt.close(fig)
+
+legend_fig = engine.render_legend(renderer)
+legend_fig.savefig(output_dir / "legend.png")
+plt.close(legend_fig)
 print(f"Done. See generated figures in {output_dir}.")

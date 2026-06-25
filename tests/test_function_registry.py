@@ -16,7 +16,8 @@ from geofig_engine.data import (
     FunctionLoadError,
     get_function_registry,
 )
-from geofig_engine.templates.isotope import IsotopeTemplate
+from geofig_engine.core.layer import Layer
+from geofig_engine.templates.isotope import _load_functions, isotope
 
 
 class TestFunctionValidator:
@@ -341,43 +342,26 @@ class TestGlobalRegistry:
         assert registry1 is registry2
 
 
-class TestIsotopeTemplate:
-    """Test IsotopeTemplate integration."""
+class TestIsotopeFactoryIntegration:
+    """Test isotope factory integration with function registry."""
 
-    def test_template_with_no_functions(self):
-        """Test template with empty functions list."""
-        template = IsotopeTemplate(functions=[])
-        assert len(template.layers) == 1  # Just ScatterLayer
+    def test_load_functions_empty(self):
+        layers = _load_functions(functions=[])
+        assert len(layers) == 0
 
-    def test_template_with_auto_filter(self):
-        """Test template with auto-filtering."""
-        template = IsotopeTemplate(auto_filter=True)
-        # Should have function line layers + scatter layer
-        assert len(template.layers) > 1
+    def test_load_functions_auto_filter(self):
+        layers = _load_functions(auto_filter=True)
+        assert len(layers) >= 1
+        assert all(isinstance(l, Layer) for l in layers)
 
-    def test_template_with_specific_functions(self):
-        """Test template with specific function IDs."""
-        template = IsotopeTemplate(functions=["GMWL", "ID_FALLS"])
-        # Should have 2 function line layers + scatter layer
-        assert len(template.layers) == 3
+    def test_load_functions_specific(self):
+        layers = _load_functions(functions=["GMWL", "ID_FALLS"])
+        assert len(layers) == 2
 
-    def test_template_with_single_function(self):
-        """Test template with single function."""
-        template = IsotopeTemplate(functions=["GMWL"])
-        # Should have 1 function line layer + scatter layer
-        assert len(template.layers) == 2
+    def test_load_functions_invalid_id(self):
+        with pytest.raises(KeyError, match="not found in registry"):
+            _load_functions(functions=["NONEXISTENT"])
 
-    def test_template_invalid_function_id(self):
-        """Test template with invalid function ID."""
-        with pytest.raises(ValueError, match="Unknown function ID"):
-            IsotopeTemplate(functions=["NONEXISTENT"])
-
-    def test_template_invalid_category(self):
-        """Test that only water isotope category accepted."""
-        # This would require a non-water-isotope function, which we don't have
-        # So we just verify the check exists through the class definition
-        assert FunctionCategory.WATER_ISOTOPE in IsotopeTemplate.ACCEPTED_CATEGORIES
-
-    def test_template_invalid_type(self):
-        """Test that only linear type accepted."""
-        assert FunctionType.LINEAR in IsotopeTemplate.ACCEPTED_TYPES
+    def test_isotope_factory_uses_load_functions(self):
+        template = isotope(auto_filter=True)
+        assert len(template.layers) >= 2

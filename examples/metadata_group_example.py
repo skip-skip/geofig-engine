@@ -1,22 +1,21 @@
-"""Example showing metadata-based dimension grouping and iteration."""
+"""Example showing metadata-based dimension grouping with faceting."""
 
 from pathlib import Path
-import sys
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pandas as pd
 from geofig_engine.core.dataset import Dataset
 from geofig_engine.core.dimension import Dimension
-from geofig_engine.core.iterator import DimensionIterator
+from geofig_engine.core.facet import FacetWrap
+from geofig_engine.core.geom import GeomPoint
+from geofig_engine.core.layer import Layer
+from geofig_engine.core.stat import StatIdentity
 from geofig_engine.engine import FigureEngine
 from geofig_engine.renderers import MatplotlibRenderer
-from geofig_engine.templates import BivariateTemplate
+from geofig_engine.templates.base import FigureTemplate
 
 output_dir = Path(__file__).resolve().parent / "outputs" / "metadata_output"
 output_dir.mkdir(exist_ok=True)
 
-# A simple dataset with time series values for two sensors and two periods.
 data = pd.DataFrame(
     {
         "time": [1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3],
@@ -28,7 +27,6 @@ data = pd.DataFrame(
     }
 )
 
-# Define metadata for each column so we can group dimensions by their attributes.
 dimensions = {
     "time": Dimension("time", {"role": "index"}),
     "temp_A": Dimension("temp_A", {"sensor": "A", "type": "temperature"}),
@@ -41,33 +39,22 @@ dimensions = {
 dataset = Dataset(dataframe=data, key_column="time", dimensions=dimensions)
 engine = FigureEngine()
 renderer = MatplotlibRenderer()
-template = BivariateTemplate()
 
-# Use metadata to select all temperature columns as the y source.
-# Build one figure per period using the standard period column as the iterator.
-mappings = {
-    "x": "time", #["time", "time"],  # duplicate time values for each grouped temperature series
-    "y": dataset.query_dimensions("type", "temperature"),  # select all temperature columns based on metadata
-    "color": dataset.query_dimensions("type", "temperature"),  # select all temperature columns based on metadata
-}
-iterators = [
-    DimensionIterator(channel="period", dimensions=["period"], mode=DimensionIterator.Mode.VALUE)
+temp_cols = dataset.query_dimensions("type", "temperature")
+layers = [
+    Layer(geom=GeomPoint(), stat=StatIdentity(), mapping={"x": "time", "y": col})
+    for col in temp_cols
 ]
-specs = engine.build_specs(
-    dataset=dataset,
-    template=template,
-    mappings=mappings,
-    iterators=iterators,
-    #iter_cols
-    #iter_vals
-    settings={"xlabel": "Time", "ylabel": "Temperature"},
-)
-print(specs)
-print(f"Generated {len(specs)} specs using metadata grouping")
-for spec, fig in zip(specs, engine.render_specs(specs, renderer)):
-    period = spec.context["period"]
-    filename = output_dir / f"temperature_{period}.png"
-    fig.savefig(filename)
-    print(f"Saved {filename}")
+template = FigureTemplate(layers=layers, default_settings={"figsize": (10, 6), "xscale": "linear", "yscale": "linear", "grid": True})
 
-print("Done. See generated figures in examples/metadata_output.")
+specs = engine.build_specs_from_template(
+    dataset=dataset, template=template,
+    settings={"xlabel": "Time", "ylabel": "Temperature"},
+    facet=FacetWrap(by="period"),
+)
+print(f"Generated {len(specs)} spec(s)")
+for spec, fig in zip(specs, engine.render_specs(specs, renderer)):
+    fig.savefig(output_dir / "temperature_faceted.png")
+    print("Saved temperature_faceted.png")
+
+print("Done. See generated figure in examples/metadata_output.")

@@ -1,7 +1,7 @@
 """Simple FigEngine example.
 
-This example creates a small dataset, builds one or more figure specs using
-FigureEngine and BivariateTemplate, and renders them with MatplotlibRenderer.
+Creates a small dataset, builds figure specs using a bivariate preset,
+and renders them with MatplotlibRenderer.
 """
 
 from pathlib import Path
@@ -11,7 +11,7 @@ import pandas as pd
 from geofig_engine.core.dataset import Dataset
 from geofig_engine.engine import EngineConfig, FigureEngine
 from geofig_engine.renderers import MatplotlibRenderer
-from geofig_engine.templates import BivariateTemplate
+from geofig_engine.templates import bivariate
 from geofig_engine.core.iterator import DimensionIterator
 
 
@@ -32,24 +32,12 @@ def main() -> None:
 
     dataset = Dataset(dataframe=data, key_column="id")
 
-    template = BivariateTemplate()
+    template = bivariate(mapping={"x": "x", "y": "y", "color": "color", "size": "size"})
     engine = FigureEngine(config=EngineConfig(default_settings={"xlabel": "X value", "ylabel": "Y value"}))
     renderer = MatplotlibRenderer()
 
-    mappings = {
-        "x": "x",
-        "y": "y",
-        "color": "color",
-        "size": "size",
-    }
-
     iterator = DimensionIterator(channel="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE)
-    specs = engine.build_specs(
-        dataset=dataset,
-        template=template,
-        mappings=mappings,
-        iterators=iterator,
-    )
+    specs = engine.build_specs_from_template(dataset=dataset, template=template, iterators=iterator)
 
     print(f"Created {len(specs)} figure specs")
 

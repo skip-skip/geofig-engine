@@ -1,20 +1,18 @@
 from typing import Any
 
-from geofig_engine.templates.bivariate import BivariateTemplate
-from geofig_engine.templates.isotope import IsotopeTemplate
-from geofig_engine.templates.timeseries import TimeseriesTemplate
+from geofig_engine.templates import bivariate, isotope, timeseries
 
 
 TEMPLATE_REGISTRY = {
-    "timeseries": TimeseriesTemplate,
-    "isotope": IsotopeTemplate,
-    "bivariate": BivariateTemplate,
+    "timeseries": timeseries,
+    "isotope": isotope,
+    "bivariate": bivariate,
 }
 
 
 def create_template(name: str, **kwargs) -> Any:
-    template_cls = TEMPLATE_REGISTRY[name]
-    return template_cls(**kwargs)
+    factory = TEMPLATE_REGISTRY[name]
+    return factory(**kwargs)
 
 
 def get_template_names() -> list[str]:
