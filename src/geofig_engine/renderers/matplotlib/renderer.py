@@ -130,14 +130,24 @@ class MatplotlibRenderer(BaseRenderer):
         ax.set_xlim(xlim_data)
         ax.set_ylim(ylim_data)
 
+    @staticmethod
+    def _channel_label(spec: FigureSpec, channel: str) -> str | None:
+        for layer in spec.layers:
+            if layer.geom.name == "function_line":
+                continue
+            s = layer.visual_mapping.get(channel)
+            if s is not None and hasattr(s, "name") and isinstance(s.name, str) and s.name:
+                return s.name
+        return None
+
     def _apply_settings(self, ax, fig, spec):
         """Apply global settings to a single Axes."""
         coord = spec.coord
         title = spec.settings.get("title")
         if title:
             ax.set_title(title)
-        xlabel = spec.settings.get("xlabel")
-        ylabel = spec.settings.get("ylabel")
+        xlabel = spec.settings.get("xlabel") or self._channel_label(spec, "x")
+        ylabel = spec.settings.get("ylabel") or self._channel_label(spec, "y")
         if isinstance(coord, CoordFlipped):
             if ylabel:
                 ax.set_xlabel(ylabel)

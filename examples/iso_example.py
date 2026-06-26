@@ -48,8 +48,6 @@ specs = engine.build_specs_from_template(
     dataset=dataset,
     template=template,
     settings={
-        "xlabel": "Oxygen 18",
-        "ylabel": "Deuterium",
         "title": "Deuterium vs Oxygen 18",
         "figsize": (8, 5),
     },

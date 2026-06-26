@@ -44,8 +44,8 @@ class TestBivariateIntegration:
         assert len(fig.axes) == 1
         assert len(fig.axes[0].collections) == 1
         ax = fig.axes[0]
-        assert ax.get_xlabel() == ""
-        assert ax.get_ylabel() == ""
+        assert ax.get_xlabel() == "x"
+        assert ax.get_ylabel() == "y"
 
     def test_bivariate_with_color_renders_colored_scatter(self):
         engine = FigureEngine()
