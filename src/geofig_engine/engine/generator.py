@@ -55,6 +55,7 @@ class FigureEngine:
         iterators: Sequence[DimensionIterator] | DimensionIterator | None = None,
         coord: Coord | None = None,
         facet: Facet | None = None,
+        _template_name: str = "custom",
     ) -> list[FigureSpec]:
         """Build FigureSpecs from Layer objects (Grammar of Graphics path)."""
         if isinstance(iterators, DimensionIterator):
@@ -78,7 +79,7 @@ class FigureEngine:
                 mappings=self._summarize_mappings(layers, layer_specs),
                 settings=resolved_settings,
                 context=merged_context,
-                template_name="custom",
+                template_name=_template_name,
                 iterator_key=result.iterator_key,
                 layers=layer_specs,
                 coord=coord or CoordCartesian(),
@@ -109,6 +110,7 @@ class FigureEngine:
             iterators=iterators,
             coord=template.coord,
             facet=facet,
+            _template_name=template.name,
         )
 
 

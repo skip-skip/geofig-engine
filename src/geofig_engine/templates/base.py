@@ -18,6 +18,7 @@ class FigureTemplate:
     layers: list[Layer]
     default_settings: dict[str, Any] = field(default_factory=dict)
     coord: Coord = field(default_factory=CoordCartesian)
+    name: str = "custom"
 
     def __post_init__(self) -> None:
         if not isinstance(self.layers, list) or not self.layers:

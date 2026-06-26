@@ -30,6 +30,7 @@ def timeseries(
     scales: dict[str, Scale] | None = None,
 ) -> FigureTemplate:
     return FigureTemplate(
+        name="timeseries",
         layers=[
             Layer(
                 geom=GeomLine(),

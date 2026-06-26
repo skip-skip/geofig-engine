@@ -95,6 +95,7 @@ def isotope(
         scales=scales,
     )
     return FigureTemplate(
+        name="isotope",
         layers=[*func_layers, data_layer],
         default_settings=dict(ISOTOPE_DEFAULTS),
     )

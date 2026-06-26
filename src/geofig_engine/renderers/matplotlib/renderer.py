@@ -119,13 +119,14 @@ class MatplotlibRenderer(BaseRenderer):
         ylim_data = ax.get_ylim()
         ax.autoscale(False)
 
-        for i, layer in func_layers:
+        for f_idx, (_, layer) in enumerate(func_layers):
             filtered = LayerSpec(
                 geom=layer.geom,
                 stat=layer.stat,
                 visual_mapping={k: _filter_series(v, rows) for k, v in layer.visual_mapping.items() if k != "x"},
             )
-            self._render_layer(ax, spec, filtered, 1 + i)
+            # Keep function lines below data layers (data starts at zorder=10)
+            self._render_layer(ax, spec, filtered, 1 + f_idx)
 
         ax.set_xlim(xlim_data)
         ax.set_ylim(ylim_data)

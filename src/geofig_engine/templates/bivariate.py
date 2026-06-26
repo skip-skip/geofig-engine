@@ -29,6 +29,7 @@ def bivariate(
     scales: dict[str, Scale] | None = None,
 ) -> FigureTemplate:
     return FigureTemplate(
+        name="bivariate",
         layers=[
             Layer(
                 geom=GeomPoint(),
