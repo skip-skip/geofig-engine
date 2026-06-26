@@ -1,0 +1,338 @@
+"""
+Converter functions for serializing core types to/from plain dicts.
+
+All converters produce JSON-compatible dicts (lists, dicts, scalars, None).
+pd.Series objects are converted using a wrapper with ``__series__`` sentinel.
+pd.DataFrame objects use ``orient="split"`` format.
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+import pandas as pd
+
+from geofig_engine.core.geom import (
+    Geom,
+    GeomArea,
+    GeomBar,
+    GeomErrorbar,
+    GeomFunctionLine,
+    GeomLine,
+    GeomPoint,
+    GeomRibbon,
+    GeomText,
+)
+from geofig_engine.core.coord import (
+    Coord,
+    CoordCartesian,
+    CoordFlipped,
+    CoordFixed,
+    CoordPolar,
+)
+from geofig_engine.core.facet import (
+    Facet,
+    FacetGrid,
+    FacetNull,
+    FacetWrap,
+)
+from geofig_engine.core.scale import (
+    Scale,
+    ScaleConstant,
+    ScaleContinuous,
+    ScaleDateTime,
+    ScaleOrdinal,
+)
+from geofig_engine.core.stat import (
+    Stat,
+    StatBin,
+    StatCount,
+    StatFn,
+    StatIdentity,
+    StatSmooth,
+)
+from geofig_engine.core.spec import FigureSpec, build_spec
+from geofig_engine.core.layer import LayerSpec
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _series_to_dict(series: pd.Series) -> dict:
+    return {
+        "__series__": True,
+        "name": series.name,
+        "values": series.tolist(),
+    }
+
+
+def _series_from_dict(data: dict) -> pd.Series:
+    return pd.Series(data["values"], name=data.get("name"))
+
+
+def _visual_mapping_to_dict(vm: dict[str, Any]) -> dict[str, Any]:
+    return {
+        k: _series_to_dict(v) if isinstance(v, pd.Series) else v
+        for k, v in vm.items()
+    }
+
+
+def _visual_mapping_from_dict(data: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for k, v in data.items():
+        if isinstance(v, dict) and v.get("__series__"):
+            result[k] = _series_from_dict(v)
+        else:
+            result[k] = v
+    return result
+
+
+def _dataframe_to_dict(df: pd.DataFrame) -> dict:
+    return df.to_dict(orient="split")
+
+
+def _dataframe_from_dict(data: dict) -> pd.DataFrame:
+    return pd.DataFrame(
+        data["data"],
+        columns=data["columns"],
+        index=data.get("index"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Geom converters
+# ---------------------------------------------------------------------------
+
+def geom_to_dict(geom: Geom) -> dict:
+    base: dict[str, Any] = {"type": geom.name}
+    if isinstance(geom, GeomFunctionLine):
+        base["func"] = geom.func
+        base["label"] = geom.label
+    return base
+
+
+def geom_from_dict(data: dict) -> Geom:
+    geom_type = data["type"]
+    if geom_type == "point":
+        return GeomPoint()
+    elif geom_type == "line":
+        return GeomLine()
+    elif geom_type == "function_line":
+        return GeomFunctionLine(
+            func=data.get("func", ""),
+            label=data.get("label"),
+        )
+    elif geom_type == "bar":
+        return GeomBar()
+    elif geom_type == "area":
+        return GeomArea()
+    elif geom_type == "ribbon":
+        return GeomRibbon()
+    elif geom_type == "text":
+        return GeomText()
+    elif geom_type == "errorbar":
+        return GeomErrorbar()
+    else:
+        raise ValueError(f"Unknown geom type: {geom_type}")
+
+
+# ---------------------------------------------------------------------------
+# Coord converters
+# ---------------------------------------------------------------------------
+
+def coord_to_dict(coord: Coord) -> dict:
+    return {"type": coord.name, "params": coord.params}
+
+
+def coord_from_dict(data: dict) -> Coord:
+    name = data["type"]
+    params = data.get("params", {})
+    if name == "cartesian":
+        return CoordCartesian()
+    elif name == "flipped":
+        return CoordFlipped()
+    elif name == "polar":
+        return CoordPolar(**params)
+    elif name == "fixed":
+        return CoordFixed(**params)
+    else:
+        raise ValueError(f"Unknown coord type: {name}")
+
+
+# ---------------------------------------------------------------------------
+# Facet converters
+# ---------------------------------------------------------------------------
+
+def facet_to_dict(facet: Facet) -> dict:
+    return {
+        "type": facet.name,
+        "by": list(facet.by),
+        "scales": facet.scales,
+        "params": facet.params,
+    }
+
+
+def facet_from_dict(data: dict) -> Facet:
+    name = data["type"]
+    scales = data.get("scales", "fixed")
+    if name == "null":
+        return FacetNull()
+    elif name == "wrap":
+        return FacetWrap(
+            by=data.get("by", []),
+            ncol=data.get("params", {}).get("ncol", 0),
+            nrow=data.get("params", {}).get("nrow", 0),
+            scales=scales,
+        )
+    elif name == "grid":
+        params = data.get("params", {})
+        return FacetGrid(
+            row=params["row"],
+            col=params["col"],
+            scales=scales,
+        )
+    else:
+        raise ValueError(f"Unknown facet type: {name}")
+
+
+# ---------------------------------------------------------------------------
+# Scale converters
+# ---------------------------------------------------------------------------
+
+def scale_to_dict(scale: Scale) -> dict:
+    return {
+        "type": scale.name,
+        "params": scale.params,
+        "domain": list(scale.domain) if scale.domain else None,
+        "range": list(scale.range) if scale.range else None,
+    }
+
+
+def scale_from_dict(data: dict) -> Scale:
+    name = data["type"]
+    params = data.get("params", {})
+    domain = tuple(data["domain"]) if data.get("domain") else None
+    range_ = tuple(data["range"]) if data.get("range") else None
+    if name == "continuous":
+        return ScaleContinuous(
+            trans=params.get("trans", "identity"),
+            domain=domain,
+            range=range_,
+        )
+    elif name == "ordinal":
+        return ScaleOrdinal(
+            palette=params.get("palette", ()),
+            domain=domain,
+            range=range_,
+        )
+    elif name == "constant":
+        return ScaleConstant(value=params.get("value"))
+    elif name == "datetime":
+        return ScaleDateTime(
+            fmt=params.get("format", "%Y-%m-%d"),
+            domain=domain,
+            range=range_,
+        )
+    else:
+        raise ValueError(f"Unknown scale type: {name}")
+
+
+# ---------------------------------------------------------------------------
+# Stat converters
+# ---------------------------------------------------------------------------
+
+def stat_to_dict(stat: Stat) -> dict:
+    return {"type": stat.name, "params": stat.params}
+
+
+def stat_from_dict(data: dict) -> Stat:
+    name = data["type"]
+    params = data.get("params", {})
+    if name == "identity":
+        return StatIdentity()
+    elif name == "fn":
+        # Callable can't be serialized; post-engine data is already transformed.
+        return StatIdentity()
+    elif name == "bin":
+        return StatBin(**params)
+    elif name == "count":
+        return StatCount()
+    elif name == "smooth":
+        return StatSmooth(**params)
+    else:
+        raise ValueError(f"Unknown stat type: {name}")
+
+
+# ---------------------------------------------------------------------------
+# LayerSpec converters
+# ---------------------------------------------------------------------------
+
+def layer_spec_to_dict(layer: LayerSpec) -> dict:
+    return {
+        "geom": geom_to_dict(layer.geom),
+        "stat": stat_to_dict(layer.stat),
+        "visual_mapping": _visual_mapping_to_dict(layer.visual_mapping),
+        "data_override": layer.data_override,
+    }
+
+
+def layer_spec_from_dict(data: dict) -> LayerSpec:
+    return LayerSpec(
+        geom=geom_from_dict(data["geom"]),
+        stat=stat_from_dict(data["stat"]),
+        visual_mapping=_visual_mapping_from_dict(data["visual_mapping"]),
+        data_override=data.get("data_override"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# FigureSpec converters
+# ---------------------------------------------------------------------------
+
+def figure_spec_to_dict(spec: FigureSpec) -> dict:
+    """Convert a FigureSpec to a JSON-compatible dict."""
+    return {
+        "template_name": spec.template_name,
+        "iterator_key": list(spec.iterator_key),
+        "coord": coord_to_dict(spec.coord),
+        "facet": facet_to_dict(spec.facet),
+        "layers": [layer_spec_to_dict(l) for l in spec.layers],
+        "settings": spec.settings,
+        "context": spec.context,
+        "mappings": _visual_mapping_to_dict(spec.mappings),
+        "data": _dataframe_to_dict(spec.data),
+    }
+
+
+def figure_spec_from_dict(data: dict) -> FigureSpec:
+    """Reconstruct a FigureSpec from a JSON-compatible dict."""
+    df = _dataframe_from_dict(data["data"])
+    layers = [layer_spec_from_dict(l) for l in data["layers"]]
+    return build_spec(
+        data=df,
+        mappings=_visual_mapping_from_dict(data["mappings"]),
+        settings=data["settings"],
+        context=data["context"],
+        template_name=data["template_name"],
+        iterator_key=tuple(data.get("iterator_key", [])),
+        layers=layers,
+        coord=coord_from_dict(data["coord"]),
+        facet=facet_from_dict(data["facet"]),
+    )
+
+
+# ---------------------------------------------------------------------------
+# JSON convenience
+# ---------------------------------------------------------------------------
+
+def spec_to_json(spec: FigureSpec, **kwargs: Any) -> str:
+    """Serialize a FigureSpec to a JSON string."""
+    return json.dumps(figure_spec_to_dict(spec), **kwargs)
+
+
+def spec_from_json(json_str: str) -> FigureSpec:
+    """Deserialize a FigureSpec from a JSON string."""
+    data = json.loads(json_str)
+    return figure_spec_from_dict(data)
