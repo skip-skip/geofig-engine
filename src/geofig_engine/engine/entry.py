@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from geofig_engine.core.dataset import Dataset
+from geofig_engine.core.facet import Facet
 from geofig_engine.core.iterator import DimensionIterator
 from geofig_engine.templates.base import FigureTemplate
 from geofig_engine.engine.generator import FigureEngine
@@ -21,6 +22,7 @@ def render_template(
     template: FigureTemplate,
     iterators: Sequence[DimensionIterator] | DimensionIterator | None = None,
     settings: dict[str, Any] | None = None,
+    facet: Facet | None = None,
     renderer_name: str = "matplotlib",
     savedir: str | Path | None = None,
 ) -> tuple[list, list, Any]:
@@ -31,6 +33,7 @@ def render_template(
         template: A ``FigureTemplate`` defining layers, coord, defaults.
         iterators: Optional iterators for multi-figure expansion.
         settings: Override settings merged on top of template defaults.
+        facet: Optional facet spec for subplot splitting.
         renderer_name: Backend name. Only ``"matplotlib"`` is supported.
         savedir: If provided, each rendered figure is saved here as a PNG,
                  including a ``legend.png``.
@@ -57,6 +60,7 @@ def render_template(
         template=template,
         settings=settings,
         iterators=iterators,
+        facet=facet,
     )
 
     renderer = MatplotlibRenderer()

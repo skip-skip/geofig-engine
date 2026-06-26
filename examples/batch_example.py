@@ -5,12 +5,10 @@ from pathlib import Path
 import pandas as pd
 from geofig_engine.core.dataset import Dataset
 from geofig_engine.core.iterator import DimensionIterator
-from geofig_engine.engine import FigureEngine
-from geofig_engine.renderers import MatplotlibRenderer
+from geofig_engine.engine import render_template
 from geofig_engine.templates import bivariate
 
 out = Path(__file__).resolve().parent / "outputs" / "batch_output"
-out.mkdir(exist_ok=True)
 
 data = pd.DataFrame(
     {
@@ -22,14 +20,8 @@ data = pd.DataFrame(
     }
 )
 
-engine = FigureEngine()
 dataset = Dataset(dataframe=data, key_column="id")
 template = bivariate(mapping={"x": "x", "y": "y", "color": "color"})
 
 iterator = DimensionIterator(channel="group", dimensions=["group"], mode=DimensionIterator.Mode.VALUE)
-specs = engine.build_specs_from_template(dataset, template=template, iterators=iterator)
-
-renderer = MatplotlibRenderer()
-figures = engine.render_specs(specs, renderer)
-for spec, fig in zip(specs, figures):
-    fig.savefig(out / f"group_{spec.context['group']}.png")
+render_template(dataset=dataset, template=template, iterators=iterator, savedir=out)

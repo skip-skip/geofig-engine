@@ -138,6 +138,17 @@ class TestRenderTemplate:
         assert len(specs) == 1
         assert specs[0].template_name == "isotope"
 
+    def test_with_facet(self, sample_dataset, sample_template, tmp_path):
+        from geofig_engine.core.facet import FacetWrap
+        specs, figures, _ = render_template(
+            dataset=sample_dataset,
+            template=sample_template,
+            facet=FacetWrap(by="group"),
+            savedir=tmp_path,
+        )
+        assert len(specs) == 1
+        assert len(figures) == 1
+
     def test_legend_with_color_mapping(self, sample_dataset, tmp_path):
         template = bivariate(mapping={"x": "x", "y": "y", "color": "group"})
         _, _, legend_fig = render_template(
