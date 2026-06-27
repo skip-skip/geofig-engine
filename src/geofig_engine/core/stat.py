@@ -132,3 +132,202 @@ class StatSmooth(Stat):
 
     def compute(self, data: pd.DataFrame) -> pd.DataFrame:
         return data
+
+
+@dataclass(frozen=True)
+class StatSum(Stat):
+    column: str | None = None
+    group: str | None = None
+    sort: bool = True
+    show_percent: bool = False
+    show_count: bool = False
+    show_name: bool = True
+
+    def __init__(
+        self,
+        column: str | None = None,
+        group: str | None = None,
+        sort: bool = True,
+        show_percent: bool = False,
+        show_count: bool = False,
+        show_name: bool = True,
+    ) -> None:
+        object.__setattr__(self, "column", column)
+        object.__setattr__(self, "group", group)
+        object.__setattr__(self, "sort", sort)
+        object.__setattr__(self, "show_percent", show_percent)
+        object.__setattr__(self, "show_count", show_count)
+        object.__setattr__(self, "show_name", show_name)
+        super().__init__(
+            name="sum",
+            params={"column": column, "group": group, "sort": sort,
+                    "show_percent": show_percent, "show_count": show_count,
+                    "show_name": show_name},
+        )
+
+    def compute(self, data: pd.DataFrame) -> pd.DataFrame:
+        column = self.params.get("column")
+        group = self.params.get("group")
+        if column is None or column not in data.columns:
+            return data
+        if group is None or group not in data.columns:
+            return data
+
+        result = data.groupby(group, observed=True)[column].sum().reset_index()
+        result.columns = ["label", "y"]
+        total = result["y"].sum()
+        result["width"] = result["y"] / total * 2 * np.pi
+        if self.params.get("sort", True):
+            result = result.sort_values("y", ascending=False).reset_index(drop=True)
+
+        show_pct = self.params.get("show_percent", False)
+        show_cnt = self.params.get("show_count", False)
+        show_nm = self.params.get("show_name", True)
+        if show_pct or show_cnt or not show_nm:
+            parts: list[str] = []
+            for _, row in result.iterrows():
+                pct = row["y"] / total * 100
+                cnt = int(row["y"])
+                name = row["label"]
+                sub: list[str] = []
+                if show_nm:
+                    sub.append(str(name))
+                if show_cnt:
+                    sub.append(f"n={cnt}")
+                if show_pct:
+                    sub.append(f"{pct:.1f}%")
+                parts.append("\n".join(sub) if sub else str(name))
+            result["label"] = parts
+
+        starts = result["y"].cumsum().shift(1).fillna(0) / total * 2 * np.pi
+        result["x"] = starts + result["width"] / 2
+        return result[["x", "y", "width", "label"]]
+
+
+@dataclass(frozen=True)
+class StatPieLabels(Stat):
+    column: str | None = None
+    group: str | None = None
+    show_percent: bool = True
+    show_count: bool = False
+    label_distance: float = 1.3
+    sort: bool = True
+
+    def __init__(
+        self,
+        column: str | None = None,
+        group: str | None = None,
+        show_percent: bool = True,
+        show_count: bool = False,
+        label_distance: float = 1.3,
+        sort: bool = True,
+    ) -> None:
+        object.__setattr__(self, "column", column)
+        object.__setattr__(self, "group", group)
+        object.__setattr__(self, "show_percent", show_percent)
+        object.__setattr__(self, "show_count", show_count)
+        object.__setattr__(self, "label_distance", label_distance)
+        object.__setattr__(self, "sort", sort)
+        super().__init__(
+            name="pie_labels",
+            params={
+                "column": column,
+                "group": group,
+                "show_percent": show_percent,
+                "show_count": show_count,
+                "label_distance": label_distance,
+                "sort": sort,
+            },
+        )
+
+    def compute(self, data: pd.DataFrame) -> pd.DataFrame:
+        column = self.params.get("column")
+        group = self.params.get("group")
+        if column is None or column not in data.columns:
+            return data
+        if group is None or group not in data.columns:
+            return data
+
+        total = data[column].sum()
+        result = data.groupby(group, observed=True)[column].sum().reset_index()
+        result.columns = ["label", "count"]
+        if self.params.get("sort", True):
+            result = result.sort_values("count", ascending=False).reset_index(drop=True)
+
+        result["prop"] = result["count"] / total
+        result["angle"] = result["prop"].cumsum() * 2 * np.pi - result["prop"] * np.pi
+        result["x"] = result["angle"]
+        result["y"] = self.params.get("label_distance", 1.3)
+
+        parts: list[str] = []
+        for _, row in result.iterrows():
+            label = row["label"]
+            pct = row["prop"] * 100
+            cnt = int(row["count"])
+            if self.params.get("show_count") and self.params.get("show_percent"):
+                parts.append(f"{cnt} ({pct:.1f}%)")
+            elif self.params.get("show_percent"):
+                parts.append(f"{pct:.1f}%")
+            elif self.params.get("show_count"):
+                parts.append(str(cnt))
+            else:
+                parts.append(str(label))
+        result["label_text"] = parts
+        return result[["x", "y", "label_text"]]
+
+
+@dataclass(frozen=True)
+class StatRadar(Stat):
+    shared_axes: bool = True
+
+    def __init__(self, shared_axes: bool = True, x_col: str = "x", y_col: str = "y", color_col: str | None = None) -> None:
+        object.__setattr__(self, "shared_axes", shared_axes)
+        super().__init__(
+            name="radar",
+            params={"shared_axes": shared_axes, "x_col": x_col, "y_col": y_col, "color_col": color_col},
+        )
+
+    def compute(self, data: pd.DataFrame) -> pd.DataFrame:
+        x_col = self.params.get("x_col", "x")
+        y_col = self.params.get("y_col", "y")
+        color_col = self.params.get("color_col")
+        required = {x_col, y_col}
+        if not required.issubset(data.columns):
+            return data
+
+        result = data.copy()
+        categories = result[x_col].unique()
+        n = len(categories)
+        angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
+
+        angle_map = dict(zip(categories, angles))
+
+        if color_col is not None and color_col in result.columns and not self.params.get("shared_axes", True):
+            result[y_col] = result.groupby(color_col)[y_col].transform(
+                lambda g: (g - g.min()) / (g.max() - g.min()) if g.max() > g.min() else g * 0
+            )
+        else:
+            y_min, y_max = result[y_col].min(), result[y_col].max()
+            if y_max > y_min:
+                result[y_col] = (result[y_col] - y_min) / (y_max - y_min)
+            else:
+                result[y_col] = 0.0
+
+        result["x_label"] = result[x_col]
+        result["x"] = result[x_col].map(angle_map)
+        result["y"] = result[y_col]
+
+        closed_rows = []
+        group_col = color_col if color_col is not None and color_col in result.columns else "__all__"
+        if group_col not in result.columns:
+            result[group_col] = "all"
+        for _, group_df in result.groupby(group_col):
+            group_df = group_df.sort_values("x")
+            closed_rows.append(group_df)
+            if n > 0:
+                first = group_df.iloc[:1].copy()
+                first["x"] = group_df.iloc[0]["x"] + 2 * np.pi
+                closed_rows.append(first)
+
+        result = pd.concat(closed_rows, ignore_index=False) if closed_rows else result
+        return result

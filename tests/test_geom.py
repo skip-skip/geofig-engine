@@ -181,3 +181,18 @@ class TestChannel:
         assert "x" in names
         assert "y" in names
         assert "color" in names
+
+
+class TestGeomBarPosition:
+    def test_default_position_is_identity(self):
+        assert GeomBar().position == "identity"
+
+    def test_accepts_stack(self):
+        assert GeomBar(position="stack").position == "stack"
+
+    def test_accepts_fill(self):
+        assert GeomBar(position="fill").position == "fill"
+
+    def test_rejects_invalid_position(self):
+        with pytest.raises(ValueError, match="position must be"):
+            GeomBar(position="dodge")

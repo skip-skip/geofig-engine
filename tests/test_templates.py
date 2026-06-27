@@ -10,9 +10,13 @@ from geofig_engine.templates import (
     bivariate,
     timeseries,
     isotope,
+    pie,
+    radar,
 )
-from geofig_engine.core.geom import GeomPoint, GeomLine, GeomFunctionLine
+from geofig_engine.core.geom import GeomPoint, GeomLine, GeomFunctionLine, GeomBar, GeomArea, GeomText
 from geofig_engine.core.layer import Layer
+from geofig_engine.core.coord import CoordPolar
+from geofig_engine.core.stat import StatIdentity, StatSum, StatRadar
 from geofig_engine.core.scale import ScaleContinuous, ScaleOrdinal
 from geofig_engine.core.stat import StatIdentity
 
@@ -115,3 +119,59 @@ class TestIsotopeFactory:
     def test_default_settings(self):
         template = isotope()
         assert template.default_settings["figsize"] == (10, 6)
+
+
+class TestPieTemplate:
+    def test_requires_x_and_y(self):
+        with pytest.raises(ValueError, match="requires 'x'"):
+            pie(mapping={"x": "cat"})
+        with pytest.raises(ValueError, match="requires 'x'"):
+            pie(mapping={"y": "val"})
+
+    def test_layers_include_bar(self):
+        t = pie(mapping={"x": "cat", "y": "val"})
+        assert len(t.layers) == 1
+        assert isinstance(t.layers[0].geom, GeomBar)
+        assert isinstance(t.layers[0].stat, StatSum)
+
+    def test_bar_layer_has_label_in_mapping(self):
+        t = pie(mapping={"x": "cat", "y": "val"})
+        assert "label" in t.layers[0].mapping
+        assert t.layers[0].mapping["label"] == "label"
+
+    def test_coord_is_polar(self):
+        t = pie(mapping={"x": "cat", "y": "val"})
+        assert isinstance(t.coord, CoordPolar)
+        assert t.coord.theta == "x"
+
+    def test_default_settings(self):
+        t = pie(mapping={"x": "cat", "y": "val"})
+        assert t.default_settings["figsize"] == (8, 8)
+        assert t.default_settings.get("polar_tick_labels") is True
+
+
+class TestRadarTemplate:
+    def test_requires_x_and_y(self):
+        with pytest.raises(ValueError, match="requires 'x'"):
+            radar(mapping={"x": "axis"})
+        with pytest.raises(ValueError, match="requires 'x'"):
+            radar(mapping={"y": "val"})
+
+    def test_layers_include_line_and_area(self):
+        t = radar(mapping={"x": "axis", "y": "val"})
+        assert any(isinstance(l.geom, GeomArea) for l in t.layers)
+        assert any(isinstance(l.geom, GeomLine) for l in t.layers)
+
+    def test_fill_false_omits_area(self):
+        t = radar(mapping={"x": "axis", "y": "val"}, fill=False)
+        assert not any(isinstance(l.geom, GeomArea) for l in t.layers)
+        assert any(isinstance(l.geom, GeomLine) for l in t.layers)
+
+    def test_coord_is_polar(self):
+        t = radar(mapping={"x": "axis", "y": "val"})
+        assert isinstance(t.coord, CoordPolar)
+        assert t.coord.theta == "x"
+
+    def test_default_settings(self):
+        t = radar(mapping={"x": "axis", "y": "val"})
+        assert t.default_settings["figsize"] == (8, 8)

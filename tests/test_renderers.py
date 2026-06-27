@@ -1107,3 +1107,155 @@ class TestMatplotlibRendererFacet:
             else:
                 assert len(ytl) == 0, f"axis[{idx}] should NOT have y-labels (right column)"
         plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Tests for GeomBar stacking
+# ---------------------------------------------------------------------------
+
+class TestGeomBarStacking:
+    def test_stacked_bar(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({"x": ["A", "A", "B", "B"], "y": [1, 2, 3, 4], "g": ["a", "b", "a", "b"]})
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomBar(position="stack"),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"], "y": data["y"], "color": data["g"]},
+                ),
+            ],
+        )
+        fig = renderer.render(spec)
+        assert len(fig.axes[0].containers) == 1
+        bars = fig.axes[0].containers[0]
+        bottoms = [b.get_y() for b in bars]
+        assert any(b > 0 for b in bottoms)
+        plt.close(fig)
+
+    def test_fill_bar(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({"x": ["A", "A", "B", "B"], "y": [1, 2, 3, 4], "g": ["a", "b", "a", "b"]})
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomBar(position="fill"),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"], "y": data["y"], "color": data["g"]},
+                ),
+            ],
+        )
+        fig = renderer.render(spec)
+        bars = fig.axes[0].containers[0]
+        tops = [b.get_y() + b.get_height() for b in bars]
+        assert all(t <= 1.0 + 1e-10 for t in tops)
+        assert any(abs(t - 1.0) < 1e-10 for t in tops)
+        plt.close(fig)
+
+    def test_identity_bar_no_bottom(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({"x": ["A", "B"], "y": [1, 2]})
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomBar(position="identity"),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"], "y": data["y"]},
+                ),
+            ],
+        )
+        fig = renderer.render(spec)
+        bars = fig.axes[0].containers[0]
+        bottoms = [b.get_y() for b in bars]
+        assert all(b == 0.0 for b in bottoms)
+        plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Tests for polar text alignment
+# ---------------------------------------------------------------------------
+
+class TestPolarTextAlignment:
+    def test_polar_text_ha_right_on_left_side(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({"x": [3.0], "y": [1.0], "l": ["left-side"]})
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            coord=CoordPolar(),
+            layers=[
+                LayerSpec(
+                    geom=GeomText(),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"], "y": data["y"], "label": data["l"]},
+                ),
+            ],
+        )
+        fig = renderer.render(spec)
+        txt = fig.axes[0].texts[0]
+        assert txt.get_ha() == "right"
+        plt.close(fig)
+
+    def test_polar_text_ha_left_on_right_side(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({"x": [0.5], "y": [1.0], "l": ["right-side"]})
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            coord=CoordPolar(),
+            layers=[
+                LayerSpec(
+                    geom=GeomText(),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"], "y": data["y"], "label": data["l"]},
+                ),
+            ],
+        )
+        fig = renderer.render(spec)
+        txt = fig.axes[0].texts[0]
+        assert txt.get_ha() == "left"
+        plt.close(fig)
+
+    def test_cartesian_text_unchanged(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({"x": [0.5], "y": [1.0], "l": ["label"]})
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomText(),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"], "y": data["y"], "label": data["l"]},
+                ),
+            ],
+        )
+        fig = renderer.render(spec)
+        txt = fig.axes[0].texts[0]
+        assert txt.get_ha() == "left"
+        assert txt.get_va() == "baseline"
+        plt.close(fig)

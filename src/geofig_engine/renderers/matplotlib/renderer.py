@@ -153,8 +153,12 @@ class MatplotlibRenderer(BaseRenderer):
         title = spec.settings.get("title")
         if title:
             ax.set_title(title)
-        xlabel = spec.settings.get("xlabel") or self._channel_label(spec, "x")
-        ylabel = spec.settings.get("ylabel") or self._channel_label(spec, "y")
+        xlabel = spec.settings.get("xlabel")
+        if xlabel is None:
+            xlabel = self._channel_label(spec, "x")
+        ylabel = spec.settings.get("ylabel")
+        if ylabel is None:
+            ylabel = self._channel_label(spec, "y")
         if isinstance(coord, CoordFlipped):
             if ylabel:
                 ax.set_xlabel(ylabel)
@@ -191,15 +195,43 @@ class MatplotlibRenderer(BaseRenderer):
                 ax.set_yscale(yscale)
         if isinstance(coord, CoordFixed):
             ax.set_aspect(coord.params.get("ratio", 1.0))
-        grid = spec.settings.get("grid")
-        if grid:
-            ax.grid(grid, zorder=0)
+        if "grid" in spec.settings:
+            if spec.settings["grid"]:
+                ax.grid(True, zorder=0)
+            else:
+                ax.grid(False)
+        if isinstance(coord, CoordPolar):
+            if spec.settings.get("hide_spine", False):
+                ax.spines['polar'].set_visible(False)
+            if spec.settings.get("hide_angular_ticks", False):
+                ax.tick_params(axis='x', length=0)
+            if spec.settings.get("hide_angular_labels", False):
+                ax.set_xticklabels([])
+            if spec.settings.get("hide_radial_labels", False):
+                ax.set_yticklabels([])
+            if spec.settings.get("hide_radial_ticks", False):
+                ax.set_yticks([])
+            if spec.settings.get("polar_tick_labels", False):
+                self._apply_polar_ticks(ax, spec)
         time_format = spec.settings.get("time_format")
         if time_format:
             ax.xaxis.set_major_formatter(DateFormatter(time_format))
         figname = spec.settings.get("figname")
         if figname:
             fig.figname = figname
+
+    @staticmethod
+    def _apply_polar_ticks(ax, spec):
+        for layer in spec.layers:
+            x = layer.visual_mapping.get("x")
+            labels = layer.visual_mapping.get("label")
+            if x is not None and labels is not None and isinstance(labels, pd.Series):
+                df = pd.DataFrame({"x": x.values, "label": labels.values})
+                mask = df["x"] < 2 * np.pi - 1e-9
+                unique = df[mask].drop_duplicates(subset="x").sort_values("x")
+                ax.set_xticks(unique["x"].values)
+                ax.set_xticklabels(unique["label"].values)
+                return
 
     # ------------------------------------------------------------------
     # Faceted (multi-panel)

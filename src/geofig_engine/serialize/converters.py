@@ -53,7 +53,10 @@ from geofig_engine.core.stat import (
     StatCount,
     StatFn,
     StatIdentity,
+    StatPieLabels,
+    StatRadar,
     StatSmooth,
+    StatSum,
 )
 from geofig_engine.core.spec import FigureSpec, build_spec
 from geofig_engine.core.layer import LayerSpec
@@ -133,6 +136,9 @@ def geom_to_dict(geom: Geom) -> dict:
             base["jitter"] = geom.jitter
         if geom.dodge != 0.0:
             base["dodge"] = geom.dodge
+    elif isinstance(geom, GeomBar):
+        if geom.position != "identity":
+            base["position"] = geom.position
     return base
 
 
@@ -151,7 +157,7 @@ def geom_from_dict(data: dict) -> Geom:
             label=data.get("label"),
         )
     elif geom_type == "bar":
-        return GeomBar()
+        return GeomBar(position=data.get("position", "identity"))
     elif geom_type == "area":
         return GeomArea()
     elif geom_type == "ribbon":
@@ -308,6 +314,12 @@ def stat_from_dict(data: dict) -> Stat:
         return StatCount()
     elif name == "smooth":
         return StatSmooth(**params)
+    elif name == "sum":
+        return StatSum(**params)
+    elif name == "pie_labels":
+        return StatPieLabels(**params)
+    elif name == "radar":
+        return StatRadar(**params)
     else:
         raise ValueError(f"Unknown stat type: {name}")
 

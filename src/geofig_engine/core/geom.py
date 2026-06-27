@@ -91,11 +91,16 @@ class GeomFunctionLine(Geom):
 
 @dataclass(frozen=True)
 class GeomBar(Geom):
-    def __init__(self) -> None:
+    position: str = "identity"
+
+    def __init__(self, position: str = "identity") -> None:
+        if position not in ("identity", "stack", "fill"):
+            raise ValueError(f"position must be 'identity', 'stack', or 'fill', got {position!r}")
+        object.__setattr__(self, "position", position)
         super().__init__(
             name="bar",
             required_channels=("x", "y"),
-            optional_channels=("color", "alpha", "width"),
+            optional_channels=("color", "alpha", "width", "label"),
         )
 
 

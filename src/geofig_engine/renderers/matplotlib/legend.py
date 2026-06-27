@@ -49,7 +49,11 @@ class LegendAccumulator:
                 continue
 
             for col, channels in col_to_channels.items():
-                raw_col = spec.data[col]
+                # Use original data if available, otherwise stat-produced Series
+                if col in spec.data.columns:
+                    raw_col = spec.data[col]
+                else:
+                    raw_col = next(iter(channels.values()))
                 entries: list[LegendEntry] = []
                 seen: set[Any] = set()
 

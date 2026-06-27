@@ -39,6 +39,9 @@ from geofig_engine.core.stat import (
     StatBin,
     StatCount,
     StatSmooth,
+    StatSum,
+    StatPieLabels,
+    StatRadar,
 )
 from geofig_engine.core.spec import FigureSpec
 from geofig_engine.core.layer import LayerSpec
@@ -98,6 +101,22 @@ class TestGeomSerialize:
 
     def test_geom_bar_roundtrip(self):
         assert type(geom_from_dict(geom_to_dict(GeomBar()))) is GeomBar
+
+    def test_geom_bar_stack_roundtrip(self):
+        g = GeomBar(position="stack")
+        d = geom_to_dict(g)
+        assert d["position"] == "stack"
+        restored = geom_from_dict(d)
+        assert type(restored) is GeomBar
+        assert restored.position == "stack"
+
+    def test_geom_bar_fill_roundtrip(self):
+        g = GeomBar(position="fill")
+        d = geom_to_dict(g)
+        assert d["position"] == "fill"
+        restored = geom_from_dict(d)
+        assert type(restored) is GeomBar
+        assert restored.position == "fill"
 
     def test_geom_area_roundtrip(self):
         assert type(geom_from_dict(geom_to_dict(GeomArea()))) is GeomArea
@@ -298,6 +317,30 @@ class TestStatSerialize:
     def test_stat_unknown_type_raises(self):
         with pytest.raises(ValueError, match="Unknown stat type"):
             stat_from_dict({"type": "bogus"})
+
+    def test_stat_sum_roundtrip(self):
+        g = StatSum(column="val", group="cat", sort=False)
+        d = stat_to_dict(g)
+        assert d["type"] == "sum"
+        restored = stat_from_dict(d)
+        assert type(restored) is StatSum
+        assert restored.params["group"] == "cat"
+
+    def test_stat_pie_labels_roundtrip(self):
+        g = StatPieLabels(column="val", group="cat", show_percent=False, label_distance=1.5)
+        d = stat_to_dict(g)
+        assert d["type"] == "pie_labels"
+        restored = stat_from_dict(d)
+        assert type(restored) is StatPieLabels
+        assert restored.params["label_distance"] == 1.5
+
+    def test_stat_radar_roundtrip(self):
+        g = StatRadar(shared_axes=False)
+        d = stat_to_dict(g)
+        assert d["type"] == "radar"
+        restored = stat_from_dict(d)
+        assert type(restored) is StatRadar
+        assert restored.params["shared_axes"] is False
 
 
 # ---------------------------------------------------------------------------

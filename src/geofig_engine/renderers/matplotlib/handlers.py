@@ -13,12 +13,14 @@ from geofig_engine.renderers.matplotlib.util import resolve_color_series
 
 
 def _resolve_constant(series: pd.Series) -> Any:
-    """Return the first non-NA value from a Series, or the raw value if scalar."""
+    """Return the first non-NA value if constant, else return the full Series."""
     if not isinstance(series, pd.Series):
         return series
     cleaned = series.dropna()
-    if len(cleaned) > 0:
+    if len(cleaned) > 0 and cleaned.nunique() == 1:
         return cleaned.iloc[0]
+    if len(cleaned) > 0:
+        return series
     return None
 
 
@@ -135,6 +137,18 @@ def render_line(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     ax.plot(x_vals, y_vals, **kwargs)
 
 
+def _stack_values(x: pd.Series, y: pd.Series, fill: bool = False) -> tuple[pd.Series, pd.Series]:
+    """Compute stacked y and bottom values for bars at each x.
+
+    Returns (adjusted_y, bottom) where adjusted_y is normalised for fill.
+    """
+    df = pd.DataFrame({"x": x.values, "y": y.values})
+    if fill:
+        df["y"] = df.groupby("x")["y"].transform(lambda g: g / g.sum() if g.sum() > 0 else g)
+    df["bottom"] = df.groupby("x")["y"].cumsum() - df["y"]
+    return pd.Series(df["y"].values), pd.Series(df["bottom"].values)
+
+
 def render_bar(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     x = layer_spec.visual_mapping.get("x")
     y = layer_spec.visual_mapping.get("y")
@@ -157,7 +171,34 @@ def render_bar(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
         if alpha_val is not None:
             kwargs["alpha"] = float(alpha_val)
 
+    position = getattr(layer_spec.geom, "position", "identity")
+    if position in ("stack", "fill"):
+        y_adj, bottom = _stack_values(x, y, fill=(position == "fill"))
+        kwargs["bottom"] = bottom
+        y = y_adj
     ax.bar(x, y, **kwargs)
+
+
+def _draw_areas_grouped(ax, x, y, color_series, kwargs, polar=False):
+    for c_val in color_series.unique():
+        if pd.isna(c_val):
+            continue
+        mask = color_series == c_val
+        xg = x[mask] if isinstance(x, pd.Series) else pd.Series(x)[mask]
+        yg = y[mask] if isinstance(y, pd.Series) else pd.Series(y)[mask]
+        valid = ~(pd.isna(xg) | pd.isna(yg))
+        xs, ys = xg[valid], yg[valid]
+        if len(xs) < 2:
+            continue
+        order = np.argsort(xs.values, kind="stable")
+        kw = dict(kwargs)
+        if polar:
+            kw["facecolor"] = c_val
+            kw.pop("color", None)
+            ax.fill(xs.values[order], ys.values[order], **kw)
+        else:
+            kw["color"] = c_val
+            ax.fill_between(xs.values[order], ys.values[order], 0, **kw)
 
 
 def render_area(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
@@ -168,18 +209,26 @@ def render_area(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
 
     kwargs: dict[str, Any] = {"zorder": order}
 
-    color = layer_spec.visual_mapping.get("color")
-    if color is not None:
-        resolved = resolve_color_series(color)
-        kwargs["color"] = _resolve_constant(resolved) if isinstance(resolved, pd.Series) else resolved
-
     alpha = layer_spec.visual_mapping.get("alpha")
     if alpha is not None:
         alpha_val = _resolve_constant(alpha) if isinstance(alpha, pd.Series) else alpha
         if alpha_val is not None:
             kwargs["alpha"] = float(alpha_val)
 
-    ax.fill_between(x, y, 0, **kwargs)
+    color = layer_spec.visual_mapping.get("color")
+    if color is not None:
+        resolved = resolve_color_series(color)
+        if isinstance(resolved, pd.Series) and resolved.nunique() > 1:
+            _draw_areas_grouped(ax, x, y, resolved, kwargs, polar=(ax.name == "polar"))
+            return
+        kwargs["color"] = _resolve_constant(resolved) if isinstance(resolved, pd.Series) else resolved
+
+    if ax.name == "polar":
+        fill_kw = {"facecolor": kwargs.pop("color", None)} if "color" in kwargs else {}
+        fill_kw.update(kwargs)
+        ax.fill(x, y, **fill_kw)
+    else:
+        ax.fill_between(x, y, 0, **kwargs)
 
 
 def render_ribbon(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
@@ -286,6 +335,12 @@ def render_text(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
         if alpha is not None:
             a = alpha.values[i] if isinstance(alpha, pd.Series) else alpha
             kw["alpha"] = float(a)
+
+        if ax.name == "polar":
+            angle = float(x_vals[i])
+            kw["ha"] = "left" if -np.pi / 2 <= angle % (2 * np.pi) <= np.pi / 2 else "right"
+            kw["va"] = "center"
+
         ax.text(x_vals[i], y_vals[i], str(labels[i]), **kw)
 
 
