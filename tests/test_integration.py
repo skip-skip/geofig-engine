@@ -12,9 +12,9 @@ from geofig_engine.core.coord import CoordCartesian, CoordFlipped, CoordFixed, C
 from geofig_engine.core.dataset import Dataset
 from geofig_engine.core.dimension import Dimension
 from geofig_engine.core.facet import FacetWrap
-from geofig_engine.core.geom import GeomErrorbar, GeomLine, GeomPoint, GeomText
+from geofig_engine.core.geom import GeomBar, GeomBox, GeomErrorbar, GeomLine, GeomPoint, GeomStepLine, GeomText, GeomViolin
 from geofig_engine.core.layer import Layer
-from geofig_engine.core.stat import StatIdentity
+from geofig_engine.core.stat import StatBin, StatIdentity
 from geofig_engine.engine import FigureEngine
 from geofig_engine.renderers import MatplotlibRenderer
 from geofig_engine.templates import bivariate, timeseries, isotope
@@ -294,3 +294,78 @@ class TestErrorbarIntegration:
         renderer = MatplotlibRenderer()
         fig = renderer.render(specs[0])
         assert len(fig.axes[0].containers) >= 1
+
+
+class TestBoxIntegration:
+    """End-to-end tests: GeomBox through the full pipeline."""
+
+    def test_box_via_layers_api(self):
+        engine = FigureEngine()
+        data = pd.DataFrame({
+            "id": [1, 2, 3, 4],
+            "x": ["A", "A", "B", "B"],
+            "y": [1.0, 2.0, 3.0, 4.0],
+        })
+        dataset = Dataset(dataframe=data, key_column="id")
+        layers = [Layer(geom=GeomBox(), mapping={"x": "x", "y": "y"})]
+        specs = engine.build_specs_from_layers(dataset, layers)
+        renderer = MatplotlibRenderer()
+        fig = renderer.render(specs[0])
+        assert len(fig.axes[0].patches) >= 2
+
+
+class TestViolinIntegration:
+    """End-to-end tests: GeomViolin through the full pipeline."""
+
+    def test_violin_via_layers_api(self):
+        engine = FigureEngine()
+        data = pd.DataFrame({
+            "id": [1, 2, 3, 4],
+            "x": ["A", "A", "B", "B"],
+            "y": [1.0, 2.0, 3.0, 4.0],
+        })
+        dataset = Dataset(dataframe=data, key_column="id")
+        layers = [Layer(geom=GeomViolin(), mapping={"x": "x", "y": "y"})]
+        specs = engine.build_specs_from_layers(dataset, layers)
+        renderer = MatplotlibRenderer()
+        fig = renderer.render(specs[0])
+        assert len(fig.axes[0].collections) >= 1
+
+
+class TestStepLineIntegration:
+    """End-to-end tests: GeomStepLine through the full pipeline."""
+
+    def test_step_line_via_layers_api(self):
+        engine = FigureEngine()
+        data = pd.DataFrame({
+            "id": [1, 2, 3],
+            "x": [1.0, 2.0, 3.0],
+            "y": [1.0, 4.0, 9.0],
+        })
+        dataset = Dataset(dataframe=data, key_column="id")
+        layers = [Layer(geom=GeomStepLine(), mapping={"x": "x", "y": "y"})]
+        specs = engine.build_specs_from_layers(dataset, layers)
+        renderer = MatplotlibRenderer()
+        fig = renderer.render(specs[0])
+        assert len(fig.axes[0].lines) == 1
+
+
+class TestHistogramIntegration:
+    """End-to-end tests: StatBin + GeomBar histogram pipeline."""
+
+    def test_histogram_via_layers_api(self):
+        engine = FigureEngine()
+        data = pd.DataFrame({
+            "id": list(range(20)),
+            "x": [1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 7],
+        })
+        dataset = Dataset(dataframe=data, key_column="id")
+        layers = [Layer(
+            geom=GeomBar(),
+            stat=StatBin(column="x", bins=10),
+            mapping={"x": "x", "y": "y", "width": "width"},
+        )]
+        specs = engine.build_specs_from_layers(dataset, layers)
+        renderer = MatplotlibRenderer()
+        fig = renderer.render(specs[0])
+        assert len(fig.axes[0].patches) >= 1

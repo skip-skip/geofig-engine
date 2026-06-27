@@ -16,6 +16,9 @@ from geofig_engine.core.geom import (
     GeomRibbon,
     GeomText,
     GeomErrorbar,
+    GeomBox,
+    GeomViolin,
+    GeomStepLine,
 )
 from geofig_engine.core.coord import (
     CoordCartesian,
@@ -107,6 +110,27 @@ class TestGeomSerialize:
 
     def test_geom_errorbar_roundtrip(self):
         assert type(geom_from_dict(geom_to_dict(GeomErrorbar()))) is GeomErrorbar
+
+    def test_geom_box_roundtrip(self):
+        geom = GeomBox(showfliers=False, showmeans=True, show_n=True, sort_mode="forward")
+        restored = geom_from_dict(geom_to_dict(geom))
+        assert type(restored) is GeomBox
+        assert restored.showfliers is False
+        assert restored.showmeans is True
+        assert restored.sort_mode == "forward"
+
+    def test_geom_violin_roundtrip(self):
+        geom = GeomViolin(show_medians=False, sort_mode="reverse")
+        restored = geom_from_dict(geom_to_dict(geom))
+        assert type(restored) is GeomViolin
+        assert restored.show_medians is False
+        assert restored.sort_mode == "reverse"
+
+    def test_geom_step_line_roundtrip(self):
+        geom = GeomStepLine(where="mid")
+        restored = geom_from_dict(geom_to_dict(geom))
+        assert type(restored) is GeomStepLine
+        assert restored.where == "mid"
 
     def test_geom_unknown_type_raises(self):
         with pytest.raises(ValueError, match="Unknown geom type"):

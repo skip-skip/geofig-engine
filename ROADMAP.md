@@ -9,22 +9,26 @@ All 9 phases from the original refactor: Geom, Stat, Scale, Coord, Facet, LayerS
 
 ---
 
-## 🔜 Phase 10 — Remaining simple Geom types
-Implement as new Geom subclasses + matplotlib handlers.
+## ✅ Phase 10 — Remaining simple Geom types
+Four implemented (one later refactored to GoG pattern).
 
-- `GeomBox` — boxplot with configurable show_points (jitter), show_n, min_box_n, showfliers, showmeans, horizontal orientation
-- `GeomViolin` — violin plot with show_medians, log_scale
-- `GeomStepLine` — line plot with step drawstyle (where="pre"|"mid"|"post")
-- `GeomHistogram` — histogram with bins config, density, cumulative
+- `GeomBox` — boxplot with configurable show_points (jitter), show_n, min_box_n, showfliers, showmeans, horizontal orientation; color palette via `_apply_box_colors()`; alpha from visual mapping
+- `GeomViolin` — violin plot with show_medians, log_scale; alpha passed to bodies
+- `GeomStepLine` — step line with drawstyle (where="pre"|"mid"|"post"), black default color
+- **Shared utilities extracted**: `dodge_positions()` in `position.py` used by box and violin; `_sort_and_filter_groups()` with multi-mode sorting including `value_forward`/`value_reverse`
+- ✅ **Histogram refactored** — `GeomHistogram` removed; replaced by `StatBin` + `GeomBar` composed via `histogram()` template in `templates/histogram.py`. `StatBin.compute()` bins data via `np.histogram`, returns `x`, `y`, `width` columns. Resolver in `generator.py` resolves stat-produced columns from `stat_data` before falling back to the original dataset.
+- ✅ **Black outline defaults** — `render_bar`, `render_step_line`, `render_histogram` (and box/violin) all default to black edgecolor/color with `linewidth=0.5`
+- ✅ **xtick preservation fix** — `_apply_settings` now guards `set_xscale`/`set_yscale` against redundant `"linear"` calls that reset tick locators
 
 ---
 
-## 📋 Phase 11 — Enhanced bar / area features
+## ✅ Phase 11 — Enhanced bar / area features
 Extend existing `GeomBar` and `GeomArea` handlers and the visual-mapping / stat pipeline.
 
 - **Bar stacking** — new `StatStack` or `stack_col` in bar mapping that stacks series
-- **Bar / boxplot sorting** — multi-mode sort: `none`, `forward`, `reverse`, `value_forward`, `value_reverse`
-- **Bar / boxplot smush** — remove gaps when a series is absent within a group
+- ✅ **Bar / boxplot sorting** — multi-mode sort via `_sort_and_filter_groups()` in `handlers.py`: `none`, `forward`, `reverse`, `value_forward`, `value_reverse`
+- ✅ **Bar / boxplot smush** — smush parameter in `_sort_and_filter_groups()` removes gaps when a series is absent within a group
+- ✅ **`StatBin` implemented** — `StatBin.compute()` bins a numeric column into `x`, `y`, `width` using `np.histogram`, supporting `bins`, `density`, `cumulative`, and `range` parameters. Resolver in `generator.py` routes stat-produced columns directly from `stat_data`.
 - **Continuous color ramp** — `GeomPoint` / `GeomLine` support for mapping a numeric column to a continuous color scale (e.g., viridis), not just categorical
 
 ---

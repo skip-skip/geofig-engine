@@ -4,11 +4,12 @@ Tests for FigEngine renderers.
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 import pytest
 
 from geofig_engine.core.coord import CoordCartesian, CoordFlipped, CoordFixed, CoordPolar
 from geofig_engine.core.facet import FacetGrid, FacetNull, FacetWrap
-from geofig_engine.core.geom import Geom, GeomArea, GeomBar, GeomErrorbar, GeomFunctionLine, GeomLine, GeomPoint, GeomRibbon, GeomText
+from geofig_engine.core.geom import Geom, GeomArea, GeomBar, GeomBox, GeomErrorbar, GeomFunctionLine, GeomLine, GeomPoint, GeomRibbon, GeomStepLine, GeomText, GeomViolin
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.core.spec import FigureSpec
 from geofig_engine.core.stat import StatIdentity
@@ -71,7 +72,7 @@ class TestMatplotlibRendererLayerSpec:
             template_name="custom",
             layers=[
                 LayerSpec(
-                    geom=Geom(name="histogram", required_channels=("x",)),
+                    geom=Geom(name="unknown_geom", required_channels=("x",)),
                     stat=StatIdentity(),
                     visual_mapping={},
                 ),
@@ -149,7 +150,7 @@ class TestMatplotlibRendererLayerSpec:
             template_name="custom",
             layers=[
                 LayerSpec(
-                    geom=Geom(name="histogram", required_channels=("x",)),
+                    geom=Geom(name="unknown_geom", required_channels=("x",)),
                     stat=StatIdentity(),
                     visual_mapping={},
                 ),
@@ -521,6 +522,210 @@ class TestMatplotlibRendererLayerSpec:
         fig = renderer.render(spec)
         assert len(fig.axes[0].containers) >= 1
 
+    def test_render_box(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({"x": ["A", "A", "B", "B"], "y": [1, 2, 3, 4]})
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomBox(),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"], "y": data["y"]},
+                ),
+            ],
+        )
+        fig = renderer.render(spec)
+
+    def test_render_box_missing_channel_raises(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({"x": [1, 2]})
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomBox(),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"]},
+                ),
+            ],
+        )
+        with pytest.raises(ValueError, match="requires both x and y"):
+            renderer.render(spec)
+
+    def test_render_box_with_show_n(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({"x": ["A", "A", "A", "B", "B", "B"], "y": [1, 2, 3, 4, 5, 6]})
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomBox(show_n=True),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"], "y": data["y"]},
+                ),
+            ],
+        )
+        fig = renderer.render(spec)
+        assert len(fig.axes[0].texts) == 2
+
+    def test_render_point_with_jitter(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1.0, 2.0, 3.0, 4.0]})
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomPoint(jitter=0.1),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"], "y": data["y"]},
+                ),
+            ],
+        )
+        fig = renderer.render(spec)
+        assert len(fig.axes[0].collections) >= 1
+
+    def test_render_point_with_dodge_and_jitter(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({
+            "x": ["A", "A", "B", "B"],
+            "y": [1.0, 2.0, 3.0, 4.0],
+            "g": ["X", "Y", "X", "Y"],
+        })
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomPoint(jitter=0.05, dodge=0.8),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"], "y": data["y"], "color": data["g"]},
+                ),
+            ],
+        )
+        fig = renderer.render(spec)
+        assert len(fig.axes[0].collections) >= 1
+
+    def test_render_violin(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({"x": ["A", "A", "B", "B"], "y": [1, 2, 3, 4]})
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomViolin(),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"], "y": data["y"]},
+                ),
+            ],
+        )
+        fig = renderer.render(spec)
+
+    def test_render_violin_missing_channel_raises(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({"x": [1, 2]})
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomViolin(),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"]},
+                ),
+            ],
+        )
+        with pytest.raises(ValueError, match="requires both x and y"):
+            renderer.render(spec)
+
+    def test_render_step_line(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomStepLine(),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"], "y": data["y"]},
+                ),
+            ],
+        )
+        fig = renderer.render(spec)
+        assert len(fig.axes[0].lines) == 1
+
+    def test_render_step_line_missing_channel_raises(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({"x": [1, 2]})
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomStepLine(),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"]},
+                ),
+            ],
+        )
+        with pytest.raises(ValueError, match="requires both x and y"):
+            renderer.render(spec)
+
+    def test_render_histogram(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({"x": [1, 1, 2, 2, 2, 3]})
+        from geofig_engine.core.stat import StatBin
+        stat = StatBin(column="x", bins=3)
+        stat_data = stat.compute(data)
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (4, 3)},
+            context={},
+            template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomBar(),
+                    stat=stat,
+                    visual_mapping={"x": stat_data["x"], "y": stat_data["y"]},
+                ),
+            ],
+        )
+        fig = renderer.render(spec)
+        assert len(fig.axes[0].patches) >= 1
 
 class TestMatplotlibRendererCoord:
     def test_coord_polar(self):
@@ -863,3 +1068,42 @@ class TestMatplotlibRendererFacet:
             ],
         )
         assert renderer.supports(spec) is True
+
+    def test_facet_shared_x_suppresses_inner_ticks_2x2(self):
+        renderer = MatplotlibRenderer()
+        data = pd.DataFrame({
+            "x": [1, 2, 3, 4], "y": [5, 6, 7, 8],
+            "row": ["A", "A", "B", "B"], "col": ["X", "Y", "X", "Y"],
+        })
+        spec = FigureSpec(
+            data=data,
+            mappings={},
+            settings={"figsize": (6, 3)},
+            context={},
+            template_name="custom",
+            facet=FacetGrid(row="row", col="col"),
+            layers=[
+                LayerSpec(
+                    geom=GeomPoint(),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": data["x"], "y": data["y"]},
+                ),
+            ],
+        )
+        fig = renderer.render(spec)
+        # 2x2 grid: [0,0]=top-left, [0,1]=top-right, [1,0]=bottom-left, [1,1]=bottom-right
+        # With sharex=True, sharey=True:
+        # bottom row (indices 2,3) show x-labels; left column (indices 0,2) show y-labels
+        # top row (indices 0,1) hide x-labels; right column (indices 1,3) hide y-labels
+        for idx, ax in enumerate(fig.axes):
+            xtl = [t.get_text() for t in ax.get_xticklabels() if t.get_text()]
+            ytl = [t.get_text() for t in ax.get_yticklabels() if t.get_text()]
+            if idx in (2, 3):  # bottom row
+                assert len(xtl) > 0, f"axis[{idx}] should have x-labels (bottom row)"
+            else:
+                assert len(xtl) == 0, f"axis[{idx}] should NOT have x-labels (top row)"
+            if idx in (0, 2):  # left column
+                assert len(ytl) > 0, f"axis[{idx}] should have y-labels (left column)"
+            else:
+                assert len(ytl) == 0, f"axis[{idx}] should NOT have y-labels (right column)"
+        plt.close(fig)

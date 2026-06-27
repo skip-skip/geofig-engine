@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+import numpy as np
 import pandas as pd
 
 
@@ -60,17 +61,50 @@ class StatFn(Stat):
 class StatBin(Stat):
     bins: int | str = 10
     range: tuple[float, float] | None = None
+    density: bool = False
+    cumulative: bool = False
 
     def __init__(
-        self, bins: int | str = 10, range: tuple[float, float] | None = None
+        self,
+        column: str | None = None,
+        bins: int | str = 10,
+        range: tuple[float, float] | None = None,
+        density: bool = False,
+        cumulative: bool = False,
     ) -> None:
+        object.__setattr__(self, "bins", bins)
+        object.__setattr__(self, "range", range)
+        object.__setattr__(self, "density", density)
+        object.__setattr__(self, "cumulative", cumulative)
         super().__init__(
             name="bin",
-            params={"bins": bins, "range": range},
+            params={"column": column, "bins": bins, "range": range, "density": density, "cumulative": cumulative},
         )
 
     def compute(self, data: pd.DataFrame) -> pd.DataFrame:
-        return data
+        column = self.params.get("column")
+        if column is None or column not in data.columns:
+            return data
+
+        vals = data[column].dropna()
+        bins = self.params.get("bins", 10)
+        range_param = self.params.get("range")
+        density = self.params.get("density", False)
+        cumulative = self.params.get("cumulative", False)
+
+        counts, bin_edges = np.histogram(vals, bins=bins, range=range_param, density=density)
+
+        if cumulative:
+            counts = np.cumsum(counts)
+
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        widths = bin_edges[1:] - bin_edges[:-1]
+
+        return pd.DataFrame({
+            "x": bin_centers,
+            "y": counts,
+            "width": widths,
+        })
 
 
 @dataclass(frozen=True)

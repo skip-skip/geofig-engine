@@ -17,12 +17,15 @@ from geofig_engine.core.geom import (
     Geom,
     GeomArea,
     GeomBar,
+    GeomBox,
     GeomErrorbar,
     GeomFunctionLine,
     GeomLine,
     GeomPoint,
     GeomRibbon,
+    GeomStepLine,
     GeomText,
+    GeomViolin,
 )
 from geofig_engine.core.coord import (
     Coord,
@@ -110,13 +113,36 @@ def geom_to_dict(geom: Geom) -> dict:
     if isinstance(geom, GeomFunctionLine):
         base["func"] = geom.func
         base["label"] = geom.label
+    elif isinstance(geom, GeomBox):
+        base["showfliers"] = geom.showfliers
+        base["showmeans"] = geom.showmeans
+        base["show_n"] = geom.show_n
+        base["min_box_n"] = geom.min_box_n
+        base["is_horizontal"] = geom.is_horizontal
+        base["sort_mode"] = geom.sort_mode
+        base["smush"] = geom.smush
+        base["box_width"] = geom.box_width
+    elif isinstance(geom, GeomViolin):
+        base["show_medians"] = geom.show_medians
+        base["sort_mode"] = geom.sort_mode
+        base["smush"] = geom.smush
+    elif isinstance(geom, GeomStepLine):
+        base["where"] = geom.where
+    elif isinstance(geom, GeomPoint):
+        if geom.jitter != 0.0:
+            base["jitter"] = geom.jitter
+        if geom.dodge != 0.0:
+            base["dodge"] = geom.dodge
     return base
 
 
 def geom_from_dict(data: dict) -> Geom:
     geom_type = data["type"]
     if geom_type == "point":
-        return GeomPoint()
+        return GeomPoint(
+            jitter=data.get("jitter", 0.0),
+            dodge=data.get("dodge", 0.0),
+        )
     elif geom_type == "line":
         return GeomLine()
     elif geom_type == "function_line":
@@ -134,6 +160,27 @@ def geom_from_dict(data: dict) -> Geom:
         return GeomText()
     elif geom_type == "errorbar":
         return GeomErrorbar()
+    elif geom_type == "box":
+        return GeomBox(
+            showfliers=data.get("showfliers", True),
+            showmeans=data.get("showmeans", False),
+            show_n=data.get("show_n", False),
+            min_box_n=data.get("min_box_n", 1),
+            is_horizontal=data.get("is_horizontal", False),
+            sort_mode=data.get("sort_mode", "none"),
+            smush=data.get("smush", False),
+            box_width=data.get("box_width", 0.8),
+        )
+    elif geom_type == "violin":
+        return GeomViolin(
+            show_medians=data.get("show_medians", True),
+            sort_mode=data.get("sort_mode", "none"),
+            smush=data.get("smush", False),
+        )
+    elif geom_type == "step_line":
+        return GeomStepLine(
+            where=data.get("where", "pre"),
+        )
     else:
         raise ValueError(f"Unknown geom type: {geom_type}")
 

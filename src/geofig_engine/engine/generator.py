@@ -167,6 +167,15 @@ class FigureEngine:
             # 2. Resolve each mapping channel
             visual_mapping: dict[str, Any] = {}
             for channel, source in layer.mapping.items():
+
+                # Check if source is a stat-produced column first
+                if isinstance(source, str) and source in stat_data.columns:
+                    series = stat_data[source]
+                    if layer.scales and channel in layer.scales:
+                        series = layer.scales[channel].transform(series)
+                    visual_mapping[channel] = series
+                    continue
+
                 resolved = resolve_source(
                     source,
                     dataset,

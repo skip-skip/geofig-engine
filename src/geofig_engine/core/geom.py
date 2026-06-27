@@ -51,7 +51,12 @@ class Geom:
 
 @dataclass(frozen=True)
 class GeomPoint(Geom):
-    def __init__(self) -> None:
+    jitter: float = 0.0
+    dodge: float = 0.0
+
+    def __init__(self, jitter: float = 0.0, dodge: float = 0.0) -> None:
+        object.__setattr__(self, "jitter", jitter)
+        object.__setattr__(self, "dodge", dodge)
         super().__init__(
             name="point",
             required_channels=("x", "y"),
@@ -131,4 +136,76 @@ class GeomErrorbar(Geom):
             name="errorbar",
             required_channels=("x", "y", "ymin", "ymax"),
             optional_channels=("color", "width", "alpha"),
+        )
+
+
+@dataclass(frozen=True)
+class GeomBox(Geom):
+    showfliers: bool = True
+    showmeans: bool = False
+    show_n: bool = False
+    min_box_n: int = 1
+    is_horizontal: bool = False
+    sort_mode: str = "none"
+    smush: bool = False
+    box_width: float = 0.8
+
+    def __init__(
+        self,
+        showfliers: bool = True,
+        showmeans: bool = False,
+        show_n: bool = False,
+        min_box_n: int = 1,
+        is_horizontal: bool = False,
+        sort_mode: str = "none",
+        smush: bool = False,
+        box_width: float = 0.8,
+    ) -> None:
+        object.__setattr__(self, "showfliers", showfliers)
+        object.__setattr__(self, "showmeans", showmeans)
+        object.__setattr__(self, "show_n", show_n)
+        object.__setattr__(self, "min_box_n", min_box_n)
+        object.__setattr__(self, "is_horizontal", is_horizontal)
+        object.__setattr__(self, "sort_mode", sort_mode)
+        object.__setattr__(self, "smush", smush)
+        object.__setattr__(self, "box_width", box_width)
+        super().__init__(
+            name="box",
+            required_channels=("x", "y"),
+            optional_channels=("color", "alpha"),
+        )
+
+
+@dataclass(frozen=True)
+class GeomViolin(Geom):
+    show_medians: bool = True
+    sort_mode: str = "none"
+    smush: bool = False
+
+    def __init__(
+        self,
+        show_medians: bool = True,
+        sort_mode: str = "none",
+        smush: bool = False,
+    ) -> None:
+        object.__setattr__(self, "show_medians", show_medians)
+        object.__setattr__(self, "sort_mode", sort_mode)
+        object.__setattr__(self, "smush", smush)
+        super().__init__(
+            name="violin",
+            required_channels=("x", "y"),
+            optional_channels=("color", "alpha"),
+        )
+
+
+@dataclass(frozen=True)
+class GeomStepLine(Geom):
+    where: str = "pre"
+
+    def __init__(self, where: str = "pre") -> None:
+        object.__setattr__(self, "where", where)
+        super().__init__(
+            name="step_line",
+            required_channels=("x", "y"),
+            optional_channels=("color", "style", "width", "alpha"),
         )

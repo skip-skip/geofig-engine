@@ -21,12 +21,15 @@ from geofig_engine.renderers.base import BaseRenderer
 from geofig_engine.renderers.matplotlib.handlers import (
     render_area,
     render_bar,
+    render_box,
     render_errorbar,
     render_function_line,
     render_line,
     render_point,
     render_ribbon,
+    render_step_line,
     render_text,
+    render_violin,
 )
 from geofig_engine.renderers.matplotlib.legend import LegendAccumulator, render_legend_figure
 from geofig_engine.renderers.matplotlib.util import IMPLEMENTED
@@ -40,6 +43,9 @@ _GEOM_HANDLERS = {
     "ribbon": render_ribbon,
     "text": render_text,
     "errorbar": render_errorbar,
+    "box": render_box,
+    "violin": render_violin,
+    "step_line": render_step_line,
 }
 
 
@@ -174,14 +180,14 @@ class MatplotlibRenderer(BaseRenderer):
         xscale = spec.settings.get("xscale")
         yscale = spec.settings.get("yscale")
         if isinstance(coord, CoordFlipped):
-            if yscale:
+            if yscale and yscale != ax.get_xscale():
                 ax.set_xscale(yscale)
-            if xscale:
+            if xscale and xscale != ax.get_yscale():
                 ax.set_yscale(xscale)
         else:
-            if xscale:
+            if xscale and xscale != ax.get_xscale():
                 ax.set_xscale(xscale)
-            if yscale:
+            if yscale and yscale != ax.get_yscale():
                 ax.set_yscale(yscale)
         if isinstance(coord, CoordFixed):
             ax.set_aspect(coord.params.get("ratio", 1.0))
@@ -234,10 +240,15 @@ class MatplotlibRenderer(BaseRenderer):
             panels = grid_panels  # type: ignore[assignment]
             n = nrow * ncol
 
-        fig, axes = plt.subplots(*layout, figsize=figsize, squeeze=False)
+        # Determine axis sharing based on facet scales
+        scales = facet.scales
+        sharex = scales in ("fixed", "free_y")
+        sharey = scales in ("fixed", "free_x")
 
-        # Compute global limits for fixed scales
-        glims = self._compute_facet_limits(spec, panels, facet.scales)
+        fig, axes = plt.subplots(*layout, figsize=figsize, squeeze=False, sharex=sharex, sharey=sharey)
+
+        # Compute global limits for fixed/partially-fixed scales
+        glims = self._compute_facet_limits(spec, panels, scales)
 
         if isinstance(facet, FacetWrap):
             axes_flat = axes.flat

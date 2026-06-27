@@ -28,7 +28,10 @@ def render_point(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     if x is None or y is None:
         raise ValueError("GeomPoint requires both x and y channels")
 
-    kwargs: dict[str, Any] = {"zorder": order}
+    from geofig_engine.renderers.matplotlib.position import dodge_positions
+
+    geom = layer_spec.geom  # GeomPoint
+    kwargs: dict[str, Any] = {"zorder": order, "s": 20, "edgecolors": "black", "linewidths": 0.5}
 
     color = layer_spec.visual_mapping.get("color")
     if color is not None:
@@ -48,8 +51,36 @@ def render_point(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
         if alpha_val is not None:
             kwargs["alpha"] = float(alpha_val)
 
-    x_vals = x.values if isinstance(x, pd.Series) else x
-    y_vals = y.values if isinstance(y, pd.Series) else y
+    x_vals = x.values if isinstance(x, pd.Series) else np.asarray(x)
+    y_vals = y.values if isinstance(y, pd.Series) else np.asarray(y)
+
+    # Dodge positions when color grouping is active
+    if geom.dodge > 0 and color is not None and isinstance(color, pd.Series):
+        from geofig_engine.renderers.matplotlib.position import dodge_positions
+        color_str = color.astype(str)
+        x_str = x.astype(str) if not pd.api.types.is_numeric_dtype(x) else x
+        all_series = list(color_str.unique())
+        groups = []
+        try:
+            groups = sorted(x_str.unique())
+        except Exception:
+            groups = list(dict.fromkeys(x_str))
+        n_series = len(all_series)
+        x_out = np.empty_like(x_vals, dtype=float)
+        for gi, gval in enumerate(groups):
+            for si, sname in enumerate(all_series):
+                mask = (x_str == gval) & (color_str == sname)
+                if not mask.any():
+                    continue
+                pos, _ = dodge_positions(float(gi + 1), si, n_series, geom.dodge)
+                x_out[mask.values] = pos
+        x_vals = x_out
+
+    # Add jitter
+    if geom.jitter > 0:
+        rng = np.random.default_rng(42)
+        x_vals = x_vals + rng.uniform(-geom.jitter, geom.jitter, len(x_vals))
+
     ax.scatter(x_vals, y_vals, **kwargs)
 
 
@@ -110,7 +141,7 @@ def render_bar(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     if x is None or y is None:
         raise ValueError("GeomBar requires both x and y channels")
 
-    kwargs: dict[str, Any] = {"zorder": order}
+    kwargs: dict[str, Any] = {"zorder": order, "edgecolor": "black", "linewidth": 0.5}
 
     color = layer_spec.visual_mapping.get("color")
     if color is not None:
@@ -292,3 +323,305 @@ def render_errorbar(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
             kwargs["alpha"] = float(alpha_val)
 
     ax.errorbar(x_vals, y_vals, yerr=[yerr_lower, yerr_upper], **kwargs)
+
+
+def _sort_and_filter_groups(
+    x_series: pd.Series,
+    sort_mode: str,
+    smush: bool,
+    y_series: pd.Series | None = None,
+) -> list:
+    """Sort unique x-group labels by sort_mode, optionally filtering empty groups.
+
+    Parameters
+    ----------
+    x_series : pd.Series
+        Categorical x-values used for grouping.
+    sort_mode : str
+        One of ``"none"``, ``"forward"``, ``"reverse"``, ``"value_forward"``,
+        or ``"value_reverse"``.
+    smush : bool
+        If True, groups with no data are omitted.
+    y_series : pd.Series or None
+        Numeric y-values. Required for ``value_forward`` / ``value_reverse``.
+    """
+    if len(x_series) == 0:
+        return []
+    unique = list(x_series.unique())
+    if sort_mode == "forward":
+        return sorted(unique)
+    elif sort_mode == "reverse":
+        return sorted(unique, reverse=True)
+    elif sort_mode in ("value_forward", "value_reverse"):
+        if y_series is None:
+            return unique
+        meds = {g: float(y_series[x_series == g].median()) for g in unique}
+        rev = sort_mode == "value_reverse"
+        return sorted(unique, key=lambda g: meds.get(g, 0), reverse=rev)
+    return unique  # none
+
+
+def _build_color_map(color_series):
+    """Build {label -> rgba} from the matplotlib prop cycle (first-appearance order)."""
+    import matplotlib.pyplot as plt
+    cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    unique = list(color_series.astype(str).unique())
+    return {s: cycle[i % len(cycle)] for i, s in enumerate(unique)}
+
+
+def render_box(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+    x = layer_spec.visual_mapping.get("x")
+    y = layer_spec.visual_mapping.get("y")
+    if x is None or y is None:
+        raise ValueError("GeomBox requires both x and y channels")
+
+    from geofig_engine.renderers.matplotlib.position import dodge_positions
+
+    geom = layer_spec.geom  # GeomBox
+    color = layer_spec.visual_mapping.get("color")
+    alpha_val = layer_spec.visual_mapping.get("alpha")
+    x_labels = x.astype(str) if not pd.api.types.is_string_dtype(x) else x
+    color_map: dict = {}
+
+    if color is not None and isinstance(color, pd.Series):
+        color_vals = color.astype(str)
+        all_series = list(color_vals.unique())
+        color_map = _build_color_map(color)
+        groups = _sort_and_filter_groups(x_labels, geom.sort_mode, geom.smush, y_series=y)
+        n_series = len(all_series)
+        positions: list[float] = []
+        data_vals: list = []
+        series_for_pos: list[str] = []
+
+        for gi, group in enumerate(groups):
+            center = gi + 1
+            for si, sname in enumerate(all_series):
+                mask = (x_labels == group) & (color_vals == sname)
+                subset = y[mask].dropna()
+                if geom.smush and len(subset) == 0:
+                    continue
+                if len(subset) < geom.min_box_n:
+                    continue
+                pos, _ = dodge_positions(center, si, n_series, geom.box_width)
+                positions.append(pos)
+                data_vals.append(subset.values)
+                series_for_pos.append(sname)
+
+        bp = ax.boxplot(
+            data_vals,
+            positions=positions,
+            widths=geom.box_width / n_series * 0.85,
+            patch_artist=True,
+            showfliers=geom.showfliers,
+            showmeans=geom.showmeans,
+            zorder=order,
+        )
+
+        _apply_box_colors(bp, series_for_pos, all_series, alpha_val)
+        _style_box_lines(bp)
+
+        tick_positions = [i + 1 for i in range(len(groups))]
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(groups)
+    else:
+        groups = _sort_and_filter_groups(x_labels, geom.sort_mode, geom.smush, y_series=y)
+        data_vals = [y[x_labels == g].dropna().values for g in groups]
+        data_vals = [d for d in data_vals if len(d) >= geom.min_box_n]
+        if not data_vals:
+            raise ValueError("No data groups with sufficient samples for GeomBox")
+        groups = [g for g, d in zip(groups, data_vals) if len(d) >= geom.min_box_n]
+        positions = list(range(1, len(groups) + 1))
+
+        bp = ax.boxplot(
+            data_vals,
+            positions=positions,
+            widths=geom.box_width * 0.85,
+            patch_artist=True,
+            showfliers=geom.showfliers,
+            showmeans=geom.showmeans,
+            zorder=order,
+        )
+
+        _style_box_lines(bp)
+
+        ax.set_xticks(positions)
+        ax.set_xticklabels(groups)
+
+    # Show n-labels
+    if geom.show_n:
+        for pos, vals in zip(positions, data_vals):
+            n = len(vals)
+            vmax = float(np.nanmax(vals)) if len(vals) > 0 else 0
+            ax.text(pos, vmax, f"n={n}", ha="center", va="bottom", fontsize=7, zorder=order + 1)
+
+
+def _style_box_lines(bp):
+    """Set outline elements of a boxplot to black."""
+    for line_list in (bp["whiskers"], bp["caps"], bp["medians"]):
+        for line in line_list:
+            line.set_color("black")
+            line.set_linewidth(0.8)
+    if bp.get("fliers"):
+        for flier in bp["fliers"]:
+            flier.set_markeredgecolor("black")
+            flier.set_markeredgewidth(0.5)
+    if bp.get("means"):
+        for mean in bp["means"]:
+            mean.set_markeredgecolor("black")
+
+
+def _apply_box_colors(bp, series_for_pos, all_series, alpha_val):
+    """Apply categorical colors to boxplot patches and set black outlines."""
+    import matplotlib.pyplot as plt
+    cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    color_map = {s: cycle[i % len(cycle)] for i, s in enumerate(all_series)}
+    for patch, sname in zip(bp["boxes"], series_for_pos):
+        patch.set_facecolor(color_map[sname])
+        patch.set_edgecolor("black")
+        patch.set_linewidth(0.5)
+        if alpha_val is not None:
+            a = _resolve_constant(alpha_val) if isinstance(alpha_val, pd.Series) else alpha_val
+            if a is not None:
+                patch.set_alpha(float(a))
+
+
+def _style_violin_lines(parts):
+    """Set violin percentile/center lines to black."""
+    for key in ("cbars", "cmins", "cmaxes", "cmedians"):
+        coll = parts.get(key)
+        if coll is not None:
+            coll.set_color("black")
+            coll.set_linewidth(0.5)
+
+
+def _apply_violin_colors(bodies, series_for_pos, all_series, alpha_val):
+    """Apply categorical colors to violin bodies with black outline and alpha=1 default."""
+    import matplotlib.pyplot as plt
+    cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    color_map = {s: cycle[i % len(cycle)] for i, s in enumerate(all_series)}
+    for body, sname in zip(bodies, series_for_pos):
+        body.set_facecolor(color_map[sname])
+        body.set_edgecolor("black")
+        body.set_linewidth(0.5)
+        if alpha_val is not None:
+            a = _resolve_constant(alpha_val) if isinstance(alpha_val, pd.Series) else alpha_val
+            if a is not None:
+                body.set_alpha(float(a))
+        else:
+            body.set_alpha(1.0)
+
+
+def render_violin(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+    x = layer_spec.visual_mapping.get("x")
+    y = layer_spec.visual_mapping.get("y")
+    if x is None or y is None:
+        raise ValueError("GeomViolin requires both x and y channels")
+
+    from geofig_engine.renderers.matplotlib.position import dodge_positions
+
+    geom = layer_spec.geom  # GeomViolin
+    color = layer_spec.visual_mapping.get("color")
+    alpha_val = layer_spec.visual_mapping.get("alpha")
+    x_labels = x.astype(str) if not pd.api.types.is_string_dtype(x) else x
+
+    if color is not None and isinstance(color, pd.Series):
+        color_vals = color.astype(str)
+        all_series = list(color_vals.unique())
+        groups = _sort_and_filter_groups(x_labels, geom.sort_mode, geom.smush, y_series=y)
+        n_series = len(all_series)
+        total_width = 0.8
+        positions: list[float] = []
+        data_vals: list = []
+        series_for_pos: list[str] = []
+
+        for gi, group in enumerate(groups):
+            center = gi + 1
+            for si, sname in enumerate(all_series):
+                mask = (x_labels == group) & (color_vals == sname)
+                subset = y[mask].dropna()
+                if geom.smush and len(subset) == 0:
+                    continue
+                if len(subset) == 0:
+                    continue
+                pos, _ = dodge_positions(center, si, n_series, total_width)
+                positions.append(pos)
+                data_vals.append(subset.values)
+                series_for_pos.append(sname)
+
+        parts = ax.violinplot(
+            data_vals,
+            positions=positions,
+            showmedians=geom.show_medians,
+            widths=total_width / n_series,
+        )
+        _apply_violin_colors(parts.get("bodies", []), series_for_pos, all_series, alpha_val)
+        _style_violin_lines(parts)
+        tick_positions = [i + 1 for i in range(len(groups))]
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(groups)
+    else:
+        groups = _sort_and_filter_groups(x_labels, geom.sort_mode, geom.smush, y_series=y)
+        data_vals = [y[x_labels == g].dropna().values for g in groups]
+        data_vals = [d for d in data_vals if len(d) > 0]
+        groups = [g for g, d in zip(groups, data_vals) if len(d) > 0]
+        positions = list(range(1, len(groups) + 1))
+
+        parts = ax.violinplot(data_vals, positions=positions, showmedians=geom.show_medians)
+        _style_violin_lines(parts)
+
+        ax.set_xticks(positions)
+        ax.set_xticklabels(groups)
+
+    if color is not None and isinstance(color, pd.Series):
+        pass
+    else:
+        for body in parts.get("bodies", []):
+            body.set_edgecolor("black")
+            body.set_linewidth(0.5)
+            if alpha_val is not None:
+                a = _resolve_constant(alpha_val) if isinstance(alpha_val, pd.Series) else alpha_val
+                if a is not None:
+                    body.set_alpha(float(a))
+                else:
+                    body.set_alpha(1.0)
+            else:
+                body.set_alpha(1.0)
+
+
+def render_step_line(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+    x = layer_spec.visual_mapping.get("x")
+    y = layer_spec.visual_mapping.get("y")
+    if x is None or y is None:
+        raise ValueError("GeomStepLine requires both x and y channels")
+
+    geom = layer_spec.geom  # GeomStepLine
+    kwargs: dict[str, Any] = {"zorder": order, "drawstyle": f"steps-{geom.where}", "color": "black"}
+
+    color = layer_spec.visual_mapping.get("color")
+    if color is not None:
+        resolved = resolve_color_series(color)
+        if isinstance(resolved, pd.Series) and resolved.nunique() > 1:
+            _draw_lines_grouped(ax, x, y, resolved, kwargs)
+            return
+        kwargs["color"] = _resolve_constant(resolved) if isinstance(resolved, pd.Series) else resolved
+
+    style = layer_spec.visual_mapping.get("style")
+    if style is not None:
+        kwargs["linestyle"] = _resolve_constant(style) if isinstance(style, pd.Series) else style
+
+    width = layer_spec.visual_mapping.get("width")
+    if width is not None:
+        kwargs["linewidth"] = _resolve_constant(width) if isinstance(width, pd.Series) else width
+
+    alpha = layer_spec.visual_mapping.get("alpha")
+    if alpha is not None:
+        alpha_val = _resolve_constant(alpha) if isinstance(alpha, pd.Series) else alpha
+        if alpha_val is not None:
+            kwargs["alpha"] = float(alpha_val)
+
+    x_vals = x.values if isinstance(x, pd.Series) else x
+    y_vals = y.values if isinstance(y, pd.Series) else y
+    ax.plot(x_vals, y_vals, **kwargs)
+
+
+

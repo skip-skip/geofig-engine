@@ -10,6 +10,9 @@ from geofig_engine.core.geom import (
     GeomRibbon,
     GeomText,
     GeomErrorbar,
+    GeomBox,
+    GeomViolin,
+    GeomStepLine,
     Channel,
 )
 
@@ -38,6 +41,13 @@ class TestGeomPoint:
         assert "y" in g.required_channels
         assert "color" in g.optional_channels
         assert "marker" in g.optional_channels
+        assert g.jitter == 0.0
+        assert g.dodge == 0.0
+
+    def test_custom_params(self):
+        g = GeomPoint(jitter=0.1, dodge=0.8)
+        assert g.jitter == 0.1
+        assert g.dodge == 0.8
 
     def test_is_frozen(self):
         g = GeomPoint()
@@ -106,6 +116,57 @@ class TestGeomErrorbar:
         assert g.name == "errorbar"
         assert "ymin" in g.required_channels
         assert "ymax" in g.required_channels
+
+
+class TestGeomBox:
+    def test_defaults(self):
+        g = GeomBox()
+        assert g.name == "box"
+        assert "x" in g.required_channels
+        assert "y" in g.required_channels
+        assert g.showfliers is True
+        assert g.showmeans is False
+        assert g.show_n is False
+        assert g.box_width == 0.8
+        assert g.sort_mode == "none"
+
+    def test_custom_params(self):
+        g = GeomBox(showfliers=False, showmeans=True, box_width=0.5, sort_mode="forward")
+        assert g.showfliers is False
+        assert g.showmeans is True
+        assert g.box_width == 0.5
+        assert g.sort_mode == "forward"
+
+    def test_is_frozen(self):
+        g = GeomBox()
+        with pytest.raises(AttributeError):
+            g.box_width = 0.5
+
+
+class TestGeomViolin:
+    def test_defaults(self):
+        g = GeomViolin()
+        assert g.name == "violin"
+        assert "x" in g.required_channels
+        assert "y" in g.required_channels
+        assert g.show_medians is True
+        assert g.sort_mode == "none"
+
+    def test_custom_params(self):
+        g = GeomViolin(show_medians=False, sort_mode="reverse")
+        assert g.show_medians is False
+        assert g.sort_mode == "reverse"
+
+
+class TestGeomStepLine:
+    def test_defaults(self):
+        g = GeomStepLine()
+        assert g.name == "step_line"
+        assert g.where == "pre"
+
+    def test_custom_where(self):
+        g = GeomStepLine(where="mid")
+        assert g.where == "mid"
 
 
 class TestChannel:
