@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 
+from geofig_engine.core.coord import CoordPolar
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.renderers.matplotlib.util import resolve_color_series
 
@@ -86,7 +87,7 @@ def render_point(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     ax.scatter(x_vals, y_vals, **kwargs)
 
 
-def _draw_lines_grouped(ax, x, y, color_series, kwargs):
+def _draw_lines_grouped(ax, x, y, color_series, kwargs, polar=False):
     for c_val in color_series.unique():
         if pd.isna(c_val):
             continue
@@ -100,7 +101,16 @@ def _draw_lines_grouped(ax, x, y, color_series, kwargs):
         order = np.argsort(xs.values, kind="stable")
         kw = dict(kwargs)
         kw["color"] = c_val
-        ax.plot(xs.values[order], ys.values[order], **kw)
+        if polar:
+            sorted_xs = xs.values[order]
+            sorted_ys = ys.values[order]
+            ax.plot(
+                np.append(sorted_xs, sorted_xs[0]),
+                np.append(sorted_ys, sorted_ys[0]),
+                **kw,
+            )
+        else:
+            ax.plot(xs.values[order], ys.values[order], **kw)
 
 
 def render_line(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
@@ -128,12 +138,15 @@ def render_line(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     if color is not None:
         resolved = resolve_color_series(color)
         if isinstance(resolved, pd.Series) and resolved.nunique() > 1:
-            _draw_lines_grouped(ax, x, y, resolved, kwargs)
+            _draw_lines_grouped(ax, x, y, resolved, kwargs, polar=isinstance(layer_spec.coord, CoordPolar))
             return
         kwargs["color"] = _resolve_constant(resolved) if isinstance(resolved, pd.Series) else resolved
 
     x_vals = x.values if isinstance(x, pd.Series) else x
     y_vals = y.values if isinstance(y, pd.Series) else y
+    if isinstance(layer_spec.coord, CoordPolar):
+        x_vals = np.append(x_vals, x_vals[0])
+        y_vals = np.append(y_vals, y_vals[0])
     ax.plot(x_vals, y_vals, **kwargs)
 
 
@@ -195,7 +208,13 @@ def _draw_areas_grouped(ax, x, y, color_series, kwargs, polar=False):
         if polar:
             kw["facecolor"] = c_val
             kw.pop("color", None)
-            ax.fill(xs.values[order], ys.values[order], **kw)
+            sorted_xs = xs.values[order]
+            sorted_ys = ys.values[order]
+            ax.fill(
+                np.append(sorted_xs, sorted_xs[0]),
+                np.append(sorted_ys, sorted_ys[0]),
+                **kw,
+            )
         else:
             kw["color"] = c_val
             ax.fill_between(xs.values[order], ys.values[order], 0, **kw)
@@ -219,14 +238,16 @@ def render_area(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     if color is not None:
         resolved = resolve_color_series(color)
         if isinstance(resolved, pd.Series) and resolved.nunique() > 1:
-            _draw_areas_grouped(ax, x, y, resolved, kwargs, polar=(ax.name == "polar"))
+            _draw_areas_grouped(ax, x, y, resolved, kwargs, polar=isinstance(layer_spec.coord, CoordPolar))
             return
         kwargs["color"] = _resolve_constant(resolved) if isinstance(resolved, pd.Series) else resolved
 
-    if ax.name == "polar":
+    if isinstance(layer_spec.coord, CoordPolar):
+        x_vals = np.append(x.values, x.values[0])
+        y_vals = np.append(y.values, y.values[0])
         fill_kw = {"facecolor": kwargs.pop("color", None)} if "color" in kwargs else {}
         fill_kw.update(kwargs)
-        ax.fill(x, y, **fill_kw)
+        ax.fill(x_vals, y_vals, **fill_kw)
     else:
         ax.fill_between(x, y, 0, **kwargs)
 
@@ -336,7 +357,7 @@ def render_text(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
             a = alpha.values[i] if isinstance(alpha, pd.Series) else alpha
             kw["alpha"] = float(a)
 
-        if ax.name == "polar":
+        if isinstance(layer_spec.coord, CoordPolar):
             angle = float(x_vals[i])
             kw["ha"] = "left" if -np.pi / 2 <= angle % (2 * np.pi) <= np.pi / 2 else "right"
             kw["va"] = "center"

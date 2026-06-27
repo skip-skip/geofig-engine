@@ -3,6 +3,7 @@ from typing import Any
 from geofig_engine.core.coord import CoordPolar
 from geofig_engine.core.geom import GeomArea, GeomLine, GeomText
 from geofig_engine.core.layer import Layer
+from geofig_engine.core.scale import ScaleNormalize
 from geofig_engine.core.stat import StatRadar
 from geofig_engine.templates.base import FigureTemplate
 from geofig_engine.utils.typing import SourceType
@@ -41,12 +42,15 @@ def radar(
 
     color_col = str(mapping["color"]) if "color" in mapping else None
 
+    y_scale = ScaleNormalize(range_min=0.0, range_max=1.0)
+
     if fill:
         layers.append(
             Layer(
                 geom=GeomArea(),
                 stat=StatRadar(shared_axes=shared_axes, x_col=str(x_col), y_col=str(y_col), color_col=color_col),
                 mapping={**line_mapping, "alpha": fill_alpha},
+                scales={"y": y_scale},
             ),
         )
 
@@ -55,6 +59,7 @@ def radar(
             geom=GeomLine(),
             stat=StatRadar(shared_axes=shared_axes, x_col=str(x_col), y_col=str(y_col), color_col=color_col),
             mapping=dict(line_mapping),
+            scales={"y": y_scale},
         ),
     )
 

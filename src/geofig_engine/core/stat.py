@@ -296,38 +296,10 @@ class StatRadar(Stat):
             return data
 
         result = data.copy()
-        categories = result[x_col].unique()
-        n = len(categories)
-        angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
-
-        angle_map = dict(zip(categories, angles))
-
-        if color_col is not None and color_col in result.columns and not self.params.get("shared_axes", True):
-            result[y_col] = result.groupby(color_col)[y_col].transform(
-                lambda g: (g - g.min()) / (g.max() - g.min()) if g.max() > g.min() else g * 0
-            )
-        else:
-            y_min, y_max = result[y_col].min(), result[y_col].max()
-            if y_max > y_min:
-                result[y_col] = (result[y_col] - y_min) / (y_max - y_min)
-            else:
-                result[y_col] = 0.0
-
         result["x_label"] = result[x_col]
-        result["x"] = result[x_col].map(angle_map)
+        result["x"] = result[x_col]
         result["y"] = result[y_col]
 
-        closed_rows = []
-        group_col = color_col if color_col is not None and color_col in result.columns else "__all__"
-        if group_col not in result.columns:
-            result[group_col] = "all"
-        for _, group_df in result.groupby(group_col):
-            group_df = group_df.sort_values("x")
-            closed_rows.append(group_df)
-            if n > 0:
-                first = group_df.iloc[:1].copy()
-                first["x"] = group_df.iloc[0]["x"] + 2 * np.pi
-                closed_rows.append(first)
-
-        result = pd.concat(closed_rows, ignore_index=False) if closed_rows else result
+        if color_col is not None and color_col in result.columns:
+            result = result.sort_values(color_col)
         return result

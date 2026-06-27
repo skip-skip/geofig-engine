@@ -6,6 +6,7 @@ This backend draws fully resolved FigureSpec objects using matplotlib.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 
 import numpy as np
@@ -96,6 +97,8 @@ class MatplotlibRenderer(BaseRenderer):
         if not spec.layers:
             raise ValueError("FigureSpec must define at least one layer")
 
+        spec = self._apply_coord_transform(spec)
+
         self._render_axes(ax, spec, spec.data)
 
         self._apply_settings(ax, fig, spec)
@@ -117,6 +120,7 @@ class MatplotlibRenderer(BaseRenderer):
                 stat=layer.stat,
                 visual_mapping={k: _filter_series(v, rows) for k, v in layer.visual_mapping.items()},
                 data_override=layer.data_override,
+                coord=spec.coord,
             )
             self._render_layer(ax, spec, filtered, 10 + data_idx)
             data_idx += 1
@@ -130,6 +134,7 @@ class MatplotlibRenderer(BaseRenderer):
                 geom=layer.geom,
                 stat=layer.stat,
                 visual_mapping={k: _filter_series(v, rows) for k, v in layer.visual_mapping.items() if k != "x"},
+                coord=spec.coord,
             )
             # Keep function lines below data layers (data starts at zorder=10)
             self._render_layer(ax, spec, filtered, 1 + f_idx)
@@ -227,8 +232,7 @@ class MatplotlibRenderer(BaseRenderer):
             labels = layer.visual_mapping.get("label")
             if x is not None and labels is not None and isinstance(labels, pd.Series):
                 df = pd.DataFrame({"x": x.values, "label": labels.values})
-                mask = df["x"] < 2 * np.pi - 1e-9
-                unique = df[mask].drop_duplicates(subset="x").sort_values("x")
+                unique = df.drop_duplicates(subset="x").sort_values("x")
                 ax.set_xticks(unique["x"].values)
                 ax.set_xticklabels(unique["label"].values)
                 return
@@ -238,6 +242,7 @@ class MatplotlibRenderer(BaseRenderer):
     # ------------------------------------------------------------------
 
     def _render_faceted(self, spec: FigureSpec):
+        spec = self._apply_coord_transform(spec)
         figsize = spec.settings.get("figsize", (10, 6))
         facet = spec.facet
         data = spec.data
@@ -371,6 +376,24 @@ class MatplotlibRenderer(BaseRenderer):
 
     def render_legend(self, legend_data: LegendAccumulator) -> plt.Figure:
         return render_legend_figure(legend_data)
+
+    def _apply_coord_transform(self, spec: FigureSpec) -> FigureSpec:
+        """Apply coordinate transform to all layers' visual mappings."""
+        if not spec.layers:
+            return spec
+        trans_layers = []
+        for layer in spec.layers:
+            vm = spec.coord.transform_visual_mapping(dict(layer.visual_mapping), layer.geom)
+            trans_layers.append(
+                LayerSpec(
+                    geom=layer.geom,
+                    stat=layer.stat,
+                    visual_mapping=vm,
+                    data_override=layer.data_override,
+                    coord=spec.coord,
+                )
+            )
+        return dataclasses.replace(spec, layers=trans_layers)
 
     def _render_layer(self, ax, spec, layer, order):
         handler = _GEOM_HANDLERS.get(layer.geom.name)

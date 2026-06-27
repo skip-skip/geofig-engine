@@ -45,6 +45,7 @@ from geofig_engine.core.scale import (
     ScaleConstant,
     ScaleContinuous,
     ScaleDateTime,
+    ScaleNormalize,
     ScaleOrdinal,
 )
 from geofig_engine.core.stat import (
@@ -287,6 +288,11 @@ def scale_from_dict(data: dict) -> Scale:
             fmt=params.get("format", "%Y-%m-%d"),
             domain=domain,
             range=range_,
+        )
+    elif name == "normalize":
+        return ScaleNormalize(
+            range_min=params.get("range_min", 0.0),
+            range_max=params.get("range_max", 1.0),
         )
     else:
         raise ValueError(f"Unknown scale type: {name}")

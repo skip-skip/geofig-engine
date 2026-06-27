@@ -129,20 +129,13 @@ class TestStatRadar:
         result = s.compute(df)
         assert "x" in result.columns
         assert "y" in result.columns
-        assert len(result) > 3
+        assert len(result) == 3
 
-    def test_radar_closes_polygon(self):
-        df = pd.DataFrame({"x": ["A", "B", "C"], "y": [1, 2, 3]})
-        s = StatRadar()
-        result = s.compute(df)
-        assert result["x"].iloc[-1] == result["x"].iloc[0] + 2 * np.pi
-
-    def test_normalises_to_zero_one(self):
+    def test_preserves_raw_values(self):
         df = pd.DataFrame({"x": ["A", "B"], "y": [10, 20]})
         s = StatRadar()
         result = s.compute(df)
-        assert result["y"].max() <= 1.0
-        assert result["y"].min() >= 0.0
+        assert list(result["y"]) == [10, 20]
 
     def test_missing_column_returns_data(self):
         df = pd.DataFrame({"a": [1, 2]})

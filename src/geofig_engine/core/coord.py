@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 
@@ -27,6 +28,14 @@ class Coord:
 
     def aspect_ratio(self) -> float | None:
         return None
+
+    def transform_visual_mapping(self, visual_mapping: dict, geom: Any) -> dict:
+        """Transform visual mapping values according to this coordinate system.
+
+        Called after filtering but before rendering. The default is a no-op;
+        subclasses override to convert channel values (e.g. categories to angles).
+        """
+        return visual_mapping
 
 
 @dataclass(frozen=True)
@@ -57,6 +66,17 @@ class CoordPolar(Coord):
 
     def aspect_ratio(self) -> float | None:
         return 1.0
+
+    def transform_visual_mapping(self, visual_mapping: dict, geom: Any) -> dict:
+        """Convert categorical x values to angular positions on [0, 2π)."""
+        vm = dict(visual_mapping)
+        x = vm.get("x")
+        if x is not None and isinstance(x, pd.Series) and not pd.api.types.is_numeric_dtype(x):
+            categories = x.unique()
+            angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False)
+            angle_map = dict(zip(categories, angles))
+            vm["x"] = x.map(angle_map).astype(float)
+        return vm
 
 
 @dataclass(frozen=True)

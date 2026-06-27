@@ -149,3 +149,37 @@ class ScaleDateTime(Scale):
 
     def invert(self, values: pd.Series) -> pd.Series:
         return values
+
+
+@dataclass(frozen=True)
+class ScaleNormalize(Scale):
+    """Normalize numeric values to a target range (default [0, 1])."""
+
+    def __init__(
+        self,
+        range_min: float = 0.0,
+        range_max: float = 1.0,
+    ) -> None:
+        if range_min >= range_max:
+            raise ValueError(f"range_min ({range_min}) must be less than range_max ({range_max})")
+        super().__init__(
+            name="normalize",
+            params={"range_min": range_min, "range_max": range_max},
+        )
+
+    def transform(self, values: pd.Series) -> pd.Series:
+        range_min = self.params["range_min"]
+        range_max = self.params["range_max"]
+        clean = values.dropna()
+        if len(clean) == 0:
+            return pd.Series([range_min] * len(values), index=values.index)
+        data_min, data_max = float(clean.min()), float(clean.max())
+        if data_max > data_min:
+            result = (values - data_min) / (data_max - data_min)
+            result = result * (range_max - range_min) + range_min
+        else:
+            result = pd.Series([range_min] * len(values), index=values.index)
+        return result
+
+    def invert(self, values: pd.Series) -> pd.Series:
+        return values

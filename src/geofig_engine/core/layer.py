@@ -47,3 +47,4 @@ class LayerSpec:
     stat: Stat
     visual_mapping: dict[str, Any]
     data_override: str | None = None
+    coord: Any = None

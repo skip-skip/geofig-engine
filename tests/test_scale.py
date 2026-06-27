@@ -7,6 +7,7 @@ from geofig_engine.core.scale import (
     ScaleOrdinal,
     ScaleConstant,
     ScaleDateTime,
+    ScaleNormalize,
 )
 
 
@@ -106,3 +107,49 @@ class TestScaleDateTime:
         values = pd.Series([1, 2])
         result = s.transform(values)
         assert list(result) == [1, 2]
+
+
+class TestScaleNormalize:
+    def test_default_range_zero_to_one(self):
+        s = ScaleNormalize()
+        assert s.params["range_min"] == 0.0
+        assert s.params["range_max"] == 1.0
+
+    def test_custom_range(self):
+        s = ScaleNormalize(range_min=-1.0, range_max=1.0)
+        assert s.params["range_min"] == -1.0
+        assert s.params["range_max"] == 1.0
+
+    def test_invalid_range_raises(self):
+        with pytest.raises(ValueError, match="range_min"):
+            ScaleNormalize(range_min=1.0, range_max=0.0)
+
+    def test_normalizes_to_zero_one(self):
+        s = ScaleNormalize()
+        values = pd.Series([10.0, 20.0])
+        result = s.transform(values)
+        assert list(result) == pytest.approx([0.0, 1.0])
+
+    def test_normalizes_to_custom_range(self):
+        s = ScaleNormalize(range_min=-1.0, range_max=1.0)
+        values = pd.Series([0.0, 10.0])
+        result = s.transform(values)
+        assert list(result) == pytest.approx([-1.0, 1.0])
+
+    def test_constant_values_map_to_min(self):
+        s = ScaleNormalize()
+        values = pd.Series([5.0, 5.0, 5.0])
+        result = s.transform(values)
+        assert list(result) == [0.0, 0.0, 0.0]
+
+    def test_empty_after_dropna(self):
+        s = ScaleNormalize()
+        values = pd.Series([float("nan"), float("nan")])
+        result = s.transform(values)
+        assert list(result) == [0.0, 0.0]
+
+    def test_invert_returns_identity(self):
+        s = ScaleNormalize()
+        values = pd.Series([0.2, 0.8])
+        result = s.invert(values)
+        assert list(result) == [0.2, 0.8]
