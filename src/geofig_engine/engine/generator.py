@@ -215,6 +215,7 @@ class FigureEngine:
                 stat=layer.stat,
                 visual_mapping=visual_mapping,
                 data_override=layer.data_override,
+                zorder=layer.zorder,
             ))
 
         return layer_specs
@@ -228,7 +229,7 @@ class FigureEngine:
         summary: dict[str, Any] = {}
         for spec in layer_specs:
             for channel, value in spec.visual_mapping.items():
-                if channel not in summary:
+                if channel not in summary and not isinstance(value, dict):
                     summary[channel] = value
         return summary
 

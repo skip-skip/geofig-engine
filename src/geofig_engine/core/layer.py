@@ -25,6 +25,7 @@ class Layer:
     mapping: dict[str, SourceType] = field(default_factory=dict)
     scales: dict[str, Scale] | None = None
     data_override: str | None = None
+    zorder: int | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.geom, Geom):
@@ -40,6 +41,9 @@ class Layer:
         if self.data_override is not None and not isinstance(self.data_override, str):
             raise TypeError("data_override must be a string or None")
 
+        if self.zorder is not None and not isinstance(self.zorder, int):
+            raise TypeError("zorder must be an int or None")
+
 
 @dataclass(frozen=True)
 class LayerSpec:
@@ -48,3 +52,4 @@ class LayerSpec:
     visual_mapping: dict[str, Any]
     data_override: str | None = None
     coord: Any = None
+    zorder: int | None = None

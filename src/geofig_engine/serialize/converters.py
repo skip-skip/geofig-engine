@@ -15,17 +15,21 @@ import pandas as pd
 
 from geofig_engine.core.geom import (
     Geom,
+    GeomAbline,
     GeomArea,
     GeomBar,
     GeomBox,
     GeomErrorbar,
     GeomFunctionLine,
+    GeomHSpan,
     GeomLine,
     GeomPoint,
+    GeomRect,
     GeomRibbon,
     GeomStepLine,
     GeomText,
     GeomViolin,
+    GeomVSpan,
 )
 from geofig_engine.core.coord import (
     Coord,
@@ -114,7 +118,16 @@ def _dataframe_from_dict(data: dict) -> pd.DataFrame:
 
 def geom_to_dict(geom: Geom) -> dict:
     base: dict[str, Any] = {"type": geom.name}
-    if isinstance(geom, GeomFunctionLine):
+    if isinstance(geom, GeomAbline):
+        if geom.slope is not None:
+            base["slope"] = geom.slope
+            base["intercept"] = geom.intercept
+        else:
+            base["x1"] = geom.x1
+            base["y1"] = geom.y1
+            base["x2"] = geom.x2
+            base["y2"] = geom.y2
+    elif isinstance(geom, GeomFunctionLine):
         base["func"] = geom.func
         base["label"] = geom.label
     elif isinstance(geom, GeomBox):
@@ -188,6 +201,23 @@ def geom_from_dict(data: dict) -> Geom:
         return GeomStepLine(
             where=data.get("where", "pre"),
         )
+    elif geom_type == "abline":
+        if "slope" in data:
+            return GeomAbline(
+                slope=data["slope"],
+                intercept=data.get("intercept", 0.0),
+            )
+        else:
+            return GeomAbline(
+                x1=data["x1"], y1=data["y1"],
+                x2=data["x2"], y2=data["y2"],
+            )
+    elif geom_type == "hspan":
+        return GeomHSpan()
+    elif geom_type == "vspan":
+        return GeomVSpan()
+    elif geom_type == "rect":
+        return GeomRect()
     else:
         raise ValueError(f"Unknown geom type: {geom_type}")
 
@@ -335,12 +365,15 @@ def stat_from_dict(data: dict) -> Stat:
 # ---------------------------------------------------------------------------
 
 def layer_spec_to_dict(layer: LayerSpec) -> dict:
-    return {
+    result = {
         "geom": geom_to_dict(layer.geom),
         "stat": stat_to_dict(layer.stat),
         "visual_mapping": _visual_mapping_to_dict(layer.visual_mapping),
         "data_override": layer.data_override,
     }
+    if layer.zorder is not None:
+        result["zorder"] = layer.zorder
+    return result
 
 
 def layer_spec_from_dict(data: dict) -> LayerSpec:
@@ -349,6 +382,7 @@ def layer_spec_from_dict(data: dict) -> LayerSpec:
         stat=stat_from_dict(data["stat"]),
         visual_mapping=_visual_mapping_from_dict(data["visual_mapping"]),
         data_override=data.get("data_override"),
+        zorder=data.get("zorder"),
     )
 
 

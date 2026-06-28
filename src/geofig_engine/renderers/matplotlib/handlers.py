@@ -330,6 +330,17 @@ def render_function_line(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     ax.plot(x_plot, y_plot, **kwargs)
 
 
+def _measure_text_px(text: str, fontsize: float, rotation: float = 0) -> tuple[float, float]:
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(1, 1))
+    t = ax.text(0, 0, text, fontsize=fontsize, rotation=rotation)
+    fig.canvas.draw()
+    bb = t.get_window_extent(fig.canvas.renderer)
+    plt.close(fig)
+    return bb.width, bb.height
+
+
 def render_text(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     x = layer_spec.visual_mapping.get("x")
     y = layer_spec.visual_mapping.get("y")
@@ -340,6 +351,8 @@ def render_text(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     color = layer_spec.visual_mapping.get("color")
     size = layer_spec.visual_mapping.get("size")
     alpha = layer_spec.visual_mapping.get("alpha")
+    angle = layer_spec.visual_mapping.get("angle")
+    bbox = layer_spec.visual_mapping.get("bbox")
 
     x_vals = x.values if isinstance(x, pd.Series) else [x]
     y_vals = y.values if isinstance(y, pd.Series) else [y]
@@ -356,10 +369,16 @@ def render_text(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
         if alpha is not None:
             a = alpha.values[i] if isinstance(alpha, pd.Series) else alpha
             kw["alpha"] = float(a)
+        if angle is not None:
+            a = angle.values[i] if isinstance(angle, pd.Series) else angle
+            kw["rotation"] = float(a)
+        if bbox is not None:
+            b = bbox.values[i] if isinstance(bbox, pd.Series) else bbox
+            kw["bbox"] = b
 
         if isinstance(layer_spec.coord, CoordPolar):
-            angle = float(x_vals[i])
-            kw["ha"] = "left" if -np.pi / 2 <= angle % (2 * np.pi) <= np.pi / 2 else "right"
+            angle_rad = float(x_vals[i])
+            kw["ha"] = "left" if -np.pi / 2 <= angle_rad % (2 * np.pi) <= np.pi / 2 else "right"
             kw["va"] = "center"
 
         ax.text(x_vals[i], y_vals[i], str(labels[i]), **kw)
@@ -662,6 +681,113 @@ def render_violin(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
                     body.set_alpha(1.0)
             else:
                 body.set_alpha(1.0)
+
+
+def render_abline(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+    geom = layer_spec.geom
+    kwargs: dict[str, Any] = {"zorder": order}
+
+    color = layer_spec.visual_mapping.get("color")
+    if color is not None:
+        resolved = resolve_color_series(color)
+        kwargs["color"] = _resolve_constant(resolved) if isinstance(resolved, pd.Series) else resolved
+    style = layer_spec.visual_mapping.get("style")
+    if style is not None:
+        kwargs["linestyle"] = _resolve_constant(style) if isinstance(style, pd.Series) else style
+    width = layer_spec.visual_mapping.get("width")
+    if width is not None:
+        kwargs["linewidth"] = _resolve_constant(width) if isinstance(width, pd.Series) else width
+    alpha = layer_spec.visual_mapping.get("alpha")
+    if alpha is not None:
+        alpha_val = _resolve_constant(alpha) if isinstance(alpha, pd.Series) else alpha
+        if alpha_val is not None:
+            kwargs["alpha"] = float(alpha_val)
+
+    if geom.slope is not None:
+        ax.axline(xy1=(0, geom.intercept), slope=geom.slope, **kwargs)
+    else:
+        ax.axline(xy1=(geom.x1, geom.y1), xy2=(geom.x2, geom.y2), **kwargs)
+
+
+def render_hspan(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+    ymin = layer_spec.visual_mapping.get("ymin")
+    ymax = layer_spec.visual_mapping.get("ymax")
+    if ymin is None or ymax is None:
+        raise ValueError("GeomHSpan requires ymin and ymax channels")
+
+    ymin_val = _resolve_constant(ymin) if isinstance(ymin, pd.Series) else ymin
+    ymax_val = _resolve_constant(ymax) if isinstance(ymax, pd.Series) else ymax
+
+    kwargs: dict[str, Any] = {"zorder": order}
+    color = layer_spec.visual_mapping.get("color")
+    if color is not None:
+        resolved = resolve_color_series(color)
+        kwargs["color"] = _resolve_constant(resolved) if isinstance(resolved, pd.Series) else resolved
+    alpha = layer_spec.visual_mapping.get("alpha")
+    if alpha is not None:
+        alpha_val = _resolve_constant(alpha) if isinstance(alpha, pd.Series) else alpha
+        if alpha_val is not None:
+            kwargs["alpha"] = float(alpha_val)
+
+    ax.axhspan(ymin_val, ymax_val, **kwargs)
+
+
+def render_vspan(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+    xmin = layer_spec.visual_mapping.get("xmin")
+    xmax = layer_spec.visual_mapping.get("xmax")
+    if xmin is None or xmax is None:
+        raise ValueError("GeomVSpan requires xmin and xmax channels")
+
+    xmin_val = _resolve_constant(xmin) if isinstance(xmin, pd.Series) else xmin
+    xmax_val = _resolve_constant(xmax) if isinstance(xmax, pd.Series) else xmax
+
+    kwargs: dict[str, Any] = {"zorder": order}
+    color = layer_spec.visual_mapping.get("color")
+    if color is not None:
+        resolved = resolve_color_series(color)
+        kwargs["color"] = _resolve_constant(resolved) if isinstance(resolved, pd.Series) else resolved
+    alpha = layer_spec.visual_mapping.get("alpha")
+    if alpha is not None:
+        alpha_val = _resolve_constant(alpha) if isinstance(alpha, pd.Series) else alpha
+        if alpha_val is not None:
+            kwargs["alpha"] = float(alpha_val)
+
+    ax.axvspan(xmin_val, xmax_val, **kwargs)
+
+
+def render_rect(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+    xmin = layer_spec.visual_mapping.get("xmin")
+    xmax = layer_spec.visual_mapping.get("xmax")
+    ymin = layer_spec.visual_mapping.get("ymin")
+    ymax = layer_spec.visual_mapping.get("ymax")
+    if xmin is None or xmax is None or ymin is None or ymax is None:
+        raise ValueError("GeomRect requires xmin, xmax, ymin, and ymax channels")
+
+    xmin_val = _resolve_constant(xmin) if isinstance(xmin, pd.Series) else xmin
+    xmax_val = _resolve_constant(xmax) if isinstance(xmax, pd.Series) else xmax
+    ymin_val = _resolve_constant(ymin) if isinstance(ymin, pd.Series) else ymin
+    ymax_val = _resolve_constant(ymax) if isinstance(ymax, pd.Series) else ymax
+
+    from matplotlib.patches import Rectangle
+
+    kwargs: dict[str, Any] = {"zorder": order}
+    color = layer_spec.visual_mapping.get("color")
+    if color is not None:
+        resolved = resolve_color_series(color)
+        kwargs["facecolor"] = _resolve_constant(resolved) if isinstance(resolved, pd.Series) else resolved
+    alpha = layer_spec.visual_mapping.get("alpha")
+    if alpha is not None:
+        alpha_val = _resolve_constant(alpha) if isinstance(alpha, pd.Series) else alpha
+        if alpha_val is not None:
+            kwargs["alpha"] = float(alpha_val)
+
+    rect = Rectangle(
+        (xmin_val, ymin_val),
+        xmax_val - xmin_val,
+        ymax_val - ymin_val,
+        **kwargs,
+    )
+    ax.add_patch(rect)
 
 
 def render_step_line(ax: Axes, layer_spec: LayerSpec, order: int) -> None:

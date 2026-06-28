@@ -27,6 +27,10 @@ class Channel(Enum):
     FUNC = "func"
     YMIN = "ymin"
     YMAX = "ymax"
+    XMIN = "xmin"
+    XMAX = "xmax"
+    ANGLE = "angle"
+    BBOX = "bbox"
 
 
 @dataclass(frozen=True)
@@ -130,7 +134,7 @@ class GeomText(Geom):
         super().__init__(
             name="text",
             required_channels=("x", "y", "label"),
-            optional_channels=("color", "size", "alpha"),
+            optional_channels=("color", "size", "alpha", "angle", "bbox"),
         )
 
 
@@ -213,4 +217,71 @@ class GeomStepLine(Geom):
             name="step_line",
             required_channels=("x", "y"),
             optional_channels=("color", "style", "width", "alpha"),
+        )
+
+
+@dataclass(frozen=True)
+class GeomAbline(Geom):
+    slope: float | None = None
+    intercept: float = 0.0
+    x1: float | None = None
+    y1: float | None = None
+    x2: float | None = None
+    y2: float | None = None
+
+    def __init__(
+        self,
+        slope: float | None = None,
+        intercept: float = 0.0,
+        x1: float | None = None,
+        y1: float | None = None,
+        x2: float | None = None,
+        y2: float | None = None,
+    ) -> None:
+        slope_provided = slope is not None
+        two_point_provided = all(v is not None for v in (x1, y1, x2, y2))
+        if slope_provided and two_point_provided:
+            raise ValueError("GeomAbline: provide slope+intercept OR two-point, not both")
+        if not slope_provided and not two_point_provided:
+            raise ValueError("GeomAbline: provide either slope+intercept or x1/y1/x2/y2")
+        object.__setattr__(self, "slope", slope)
+        object.__setattr__(self, "intercept", intercept)
+        object.__setattr__(self, "x1", x1)
+        object.__setattr__(self, "y1", y1)
+        object.__setattr__(self, "x2", x2)
+        object.__setattr__(self, "y2", y2)
+        super().__init__(
+            name="abline",
+            required_channels=(),
+            optional_channels=("color", "style", "width", "alpha"),
+        )
+
+
+@dataclass(frozen=True)
+class GeomHSpan(Geom):
+    def __init__(self) -> None:
+        super().__init__(
+            name="hspan",
+            required_channels=("ymin", "ymax"),
+            optional_channels=("color", "alpha"),
+        )
+
+
+@dataclass(frozen=True)
+class GeomVSpan(Geom):
+    def __init__(self) -> None:
+        super().__init__(
+            name="vspan",
+            required_channels=("xmin", "xmax"),
+            optional_channels=("color", "alpha"),
+        )
+
+
+@dataclass(frozen=True)
+class GeomRect(Geom):
+    def __init__(self) -> None:
+        super().__init__(
+            name="rect",
+            required_channels=("xmin", "xmax", "ymin", "ymax"),
+            optional_channels=("color", "alpha"),
         )

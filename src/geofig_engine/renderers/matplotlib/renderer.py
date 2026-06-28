@@ -20,17 +20,21 @@ from geofig_engine.core.layer import LayerSpec
 from geofig_engine.core.spec import FigureSpec
 from geofig_engine.renderers.base import BaseRenderer
 from geofig_engine.renderers.matplotlib.handlers import (
+    render_abline,
     render_area,
     render_bar,
     render_box,
     render_errorbar,
     render_function_line,
+    render_hspan,
     render_line,
     render_point,
+    render_rect,
     render_ribbon,
     render_step_line,
     render_text,
     render_violin,
+    render_vspan,
 )
 from geofig_engine.renderers.matplotlib.legend import LegendAccumulator, render_legend_figure
 from geofig_engine.renderers.matplotlib.util import IMPLEMENTED
@@ -47,6 +51,10 @@ _GEOM_HANDLERS = {
     "box": render_box,
     "violin": render_violin,
     "step_line": render_step_line,
+    "hspan": render_hspan,
+    "vspan": render_vspan,
+    "rect": render_rect,
+    "abline": render_abline,
 }
 
 
@@ -115,14 +123,16 @@ class MatplotlibRenderer(BaseRenderer):
             if layer.geom.name == "function_line":
                 func_layers.append((i, layer))
                 continue
+            order = layer.zorder if layer.zorder is not None else (10 + data_idx)
             filtered = LayerSpec(
                 geom=layer.geom,
                 stat=layer.stat,
                 visual_mapping={k: _filter_series(v, rows) for k, v in layer.visual_mapping.items()},
                 data_override=layer.data_override,
                 coord=spec.coord,
+                zorder=layer.zorder,
             )
-            self._render_layer(ax, spec, filtered, 10 + data_idx)
+            self._render_layer(ax, spec, filtered, order)
             data_idx += 1
 
         xlim_data = ax.get_xlim()
@@ -130,14 +140,16 @@ class MatplotlibRenderer(BaseRenderer):
         ax.autoscale(False)
 
         for f_idx, (_, layer) in enumerate(func_layers):
+            order = layer.zorder if layer.zorder is not None else (1 + f_idx)
             filtered = LayerSpec(
                 geom=layer.geom,
                 stat=layer.stat,
                 visual_mapping={k: _filter_series(v, rows) for k, v in layer.visual_mapping.items() if k != "x"},
                 coord=spec.coord,
+                zorder=layer.zorder,
             )
             # Keep function lines below data layers (data starts at zorder=10)
-            self._render_layer(ax, spec, filtered, 1 + f_idx)
+            self._render_layer(ax, spec, filtered, order)
 
         ax.set_xlim(xlim_data)
         ax.set_ylim(ylim_data)
@@ -391,6 +403,7 @@ class MatplotlibRenderer(BaseRenderer):
                     visual_mapping=vm,
                     data_override=layer.data_override,
                     coord=spec.coord,
+                    zorder=layer.zorder,
                 )
             )
         return dataclasses.replace(spec, layers=trans_layers)
