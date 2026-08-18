@@ -216,6 +216,9 @@ class FigureEngine:
                 visual_mapping=visual_mapping,
                 data_override=layer.data_override,
                 zorder=layer.zorder,
+                subplot=layer.subplot,
+                xlim=layer.xlim,
+                ylim=layer.ylim,
             ))
 
         return layer_specs

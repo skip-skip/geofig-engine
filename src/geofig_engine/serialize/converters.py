@@ -37,6 +37,8 @@ from geofig_engine.core.coord import (
     CoordFlipped,
     CoordFixed,
     CoordPolar,
+    PiperCoord,
+    StiffCoord,
 )
 from geofig_engine.core.facet import (
     Facet,
@@ -241,6 +243,21 @@ def coord_from_dict(data: dict) -> Coord:
         return CoordPolar(**params)
     elif name == "fixed":
         return CoordFixed(**params)
+    elif name == "piper":
+        return PiperCoord(
+            left_tri=tuple(params.get("left_tri", params.get("cation_cols", ["Ca", "Mg", "Na+K"]))),
+            right_tri=tuple(params.get("right_tri", params.get("anion_cols", ["HCO3", "SO4", "Cl"]))),
+        )
+    elif name == "stiff":
+        return StiffCoord(
+            ca=params.get("ca", 0.0),
+            mg=params.get("mg", 0.0),
+            na_k=params.get("na_k", 0.0),
+            cl=params.get("cl", 0.0),
+            hco3=params.get("hco3", 0.0),
+            so4=params.get("so4", 0.0),
+            sample_title=params.get("sample_title", ""),
+        )
     else:
         raise ValueError(f"Unknown coord type: {name}")
 
@@ -373,16 +390,27 @@ def layer_spec_to_dict(layer: LayerSpec) -> dict:
     }
     if layer.zorder is not None:
         result["zorder"] = layer.zorder
+    if layer.subplot is not None:
+        result["subplot"] = layer.subplot
+    if layer.xlim is not None:
+        result["xlim"] = list(layer.xlim)
+    if layer.ylim is not None:
+        result["ylim"] = list(layer.ylim)
     return result
 
 
 def layer_spec_from_dict(data: dict) -> LayerSpec:
+    xlim = data.get("xlim")
+    ylim = data.get("ylim")
     return LayerSpec(
         geom=geom_from_dict(data["geom"]),
         stat=stat_from_dict(data["stat"]),
         visual_mapping=_visual_mapping_from_dict(data["visual_mapping"]),
         data_override=data.get("data_override"),
         zorder=data.get("zorder"),
+        subplot=data.get("subplot"),
+        xlim=tuple(xlim) if xlim is not None else None,
+        ylim=tuple(ylim) if ylim is not None else None,
     )
 
 

@@ -33,35 +33,37 @@ Extend existing `GeomBar` and `GeomArea` handlers and the visual-mapping / stat 
 
 ---
 
-## 📋 Phase 12 — Circular / pie / spider geoms
-
-- `GeomPie` — aggregated pie chart. Supports subseries color families (HSL lightness ramps). Smart label alignment for 360°.
-- `GeomSpider` — radar / spider chart. Per-axis normalization and max_value. Smart label alignment. Aggregation via stat.
-
----
-
-## 📋 Phase 13 — Annotation / reference layer system
-Needed for geochem classification plots (NPR/NNP, ANP/AGP, NAGpH).
-
-- `GeomRect` / `GeomHSpan` / `GeomVSpan` — shaded rectangular regions (axvspan/axhspan)
-- `GeomAbline` — reference line defined by slope + intercept (or two-point), with optional dashed style
-- `GeomText` improvements — auto pixel-based placement (`_measure_text_px`), bounding-box backgrounds, angle rotation
-- Layer `zorder` control via spec settings (already have basic zorder, make it user-configurable per layer)
+## ✅ Phase 12 — Circular / pie / spider geoms
+Implemented via GoG composition:
+- `StatSum` + `GeomBar` + `CoordPolar` → pie chart (`templates/pie.py`)
+- `StatRadar` + `GeomArea` / `GeomLine` + `CoordPolar` → spider/radar (`templates/radar.py`)
+- `GeomBar.position` for stacking/fill; `StatSum` supports `show_percent`/`show_count`/`show_name`
+- **Phase A–D**: closing, normalisation, angle mapping moved from `StatRadar` → handlers / `ScaleNormalize` / `CoordPolar.transform_visual_mapping()`
 
 ---
 
-## 📋 Phase 14 — Specialized coord systems
+## ✅ Phase 13 — Annotation / reference layer system
+- `GeomHSpan` / `GeomVSpan` / `GeomRect` — shaded region annotations in data coordinates
+- `GeomAbline` — slope-intercept + two-point reference lines via `ax.axline()`
+- `GeomText` — `angle` channel for rotation, `bbox` channel for bounding boxes, `_measure_text_px()` helper
+- Per-layer `zorder` control — optional field on `Layer`/`LayerSpec`; overrides auto-increment in `_render_axes()`
+- ✅ **526 tests pass**
+
+---
+
+## ✅ Phase 14 — Specialized coord systems
 Complex multi-element diagrams that don't fit a single Coord + Geom.
 
 - **PiperCoord** — ternary cation/anion triangles + diamond projection. Front-end handles mg/L→meq/L conversion, temperature-dependent pKa for alkalinity speciation, combined Na+K / HCO3+CO3.
-  - `build_piper_specs()` → factory function creating a FigureTemplate with one Geom layer per subplot region
+  - `build_piper_specs()` → factory function creating a FigureSpec with PiperCoord (renderer creates 3-panel GridSpec)
   - Optional overlay API via `piper_overlay_diamond()`
 - **StiffCoord** — 6-axis polygon per sample. Single-sample function, not a general-purpose geom.
-  - Standalone function `plot_stiff(ca, mg, na, k, hco3, so4, cl, ...)` returning a FigureSpec
+  - Standalone function `plot_stiff(ca, mg, na_k, cl, hco3, so4, ...)` returning a FigureSpec
 - **Classification plot templates** (composition over inheritance — reuse GeomPoint + annotation layers):
-  - `npr_nnp(mapping={"x": npr_col, "y": nnp_col})` template adding shaded bands + quadrant labels
-  - `anp_agp(mapping={"x": agp_col, "y": anp_col})` template adding reference slope lines + region labels
-  - `nagph_nag(mapping={"x": nagph_col, "y": nag_col})` template adding threshold lines + auto-placed labels
+  - `npr_nnp(mapping)` template adding shaded bands + quadrant labels (GeomRect + GeomAbline + GeomText)
+  - `anp_agp(mapping)` template adding reference slope lines + region labels (GeomAbline + GeomText)
+  - `nagph_nag(mapping)` template adding threshold lines + auto-placed labels (GeomVSpan + GeomAbline + GeomText)
+- **585 tests pass** (526 existing + 59 new)
 
 ---
 

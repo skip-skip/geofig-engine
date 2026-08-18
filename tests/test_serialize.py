@@ -387,6 +387,21 @@ class TestLayerSpecSerialize:
         restored = layer_spec_from_dict(layer_spec_to_dict(layer))
         assert restored.visual_mapping["x"].name is None
 
+    def test_layer_spec_xlim_roundtrip(self):
+        layer = LayerSpec(
+            geom=GeomPoint(), stat=StatIdentity(), visual_mapping={},
+            xlim=(0, 10), ylim=(-5, 5),
+        )
+        restored = layer_spec_from_dict(layer_spec_to_dict(layer))
+        assert restored.xlim == (0, 10)
+        assert restored.ylim == (-5, 5)
+
+    def test_layer_spec_xlim_none_omitted(self):
+        layer = LayerSpec(geom=GeomPoint(), stat=StatIdentity(), visual_mapping={})
+        d = layer_spec_to_dict(layer)
+        assert "xlim" not in d
+        assert "ylim" not in d
+
 
 # ---------------------------------------------------------------------------
 # FigureSpec round-trip

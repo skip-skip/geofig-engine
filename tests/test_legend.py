@@ -14,6 +14,11 @@ from geofig_engine.renderers.matplotlib.legend import (
     LegendEntry,
     LegendGroup,
     render_legend_figure,
+    build_dimension_legend,
+    gen_markers,
+    gen_markers_series,
+    DEFAULT_MARKERS,
+    DEFAULT_PALETTE,
     VISUAL_CHANNELS,
 )
 
@@ -473,3 +478,150 @@ class TestLegendIntegration:
 
         assert len(engine._legend_accumulator.groups) == 1
         assert len(engine._legend_accumulator.groups[0].entries) == 2
+
+
+class TestGenMarkers:
+    def test_returns_dict(self):
+        result = gen_markers(["A", "B", "C"])
+        assert isinstance(result, dict)
+        assert set(result.keys()) == {"A", "B", "C"}
+
+    def test_each_entry_has_marker_and_color(self):
+        result = gen_markers(["A", "B"])
+        for v in ("A", "B"):
+            assert "marker" in result[v]
+            assert "color" in result[v]
+
+    def test_cycles_through_markers_and_palette(self):
+        values = [f"v{i}" for i in range(5)]
+        result = gen_markers(values, markers=("o", "s"), palette=("#a", "#b"))
+        combos = [result[f"v{i}"] for i in range(4)]
+        assert combos == [
+            {"marker": "o", "color": "#a"},
+            {"marker": "o", "color": "#b"},
+            {"marker": "s", "color": "#a"},
+            {"marker": "s", "color": "#b"},
+        ]
+
+    def test_limited_values(self):
+        result = gen_markers(["only"])
+        assert len(result) == 1
+
+
+class TestGenMarkersSeries:
+    def test_returns_series_with_same_name(self):
+        s = pd.Series(["A", "B", "A"], name="group")
+        result = gen_markers_series(s)
+        assert isinstance(result, pd.Series)
+        assert result.name == "group"
+
+    def test_unique_values_mapped(self):
+        s = pd.Series(["A", "B", "C"], name="g")
+        result = gen_markers_series(s)
+        assert len(result) == 3
+        assert isinstance(result["A"], str)
+
+
+class TestBuildDimensionLegend:
+    def test_color_col_creates_group(self):
+        data = pd.DataFrame({"x": [1, 2], "color_group": ["A", "B"]})
+        groups = build_dimension_legend(data, color_col="color_group")
+        assert len(groups) == 1
+        assert groups[0].column == "color_group"
+        assert len(groups[0].entries) == 2
+
+    def test_multiple_cols_create_multiple_groups(self):
+        data = pd.DataFrame({
+            "c": ["A", "B"], "m": ["X", "Y"], "s": ["1", "2"],
+        })
+        groups = build_dimension_legend(data, color_col="c", marker_col="m", linetype_col="s")
+        assert len(groups) == 3
+        assert [g.column for g in groups] == ["c", "m", "s"]
+
+    def test_subgroup_col_adds_subgroup_to_entries(self):
+        data = pd.DataFrame({
+            "color_group": ["A", "B", "C"],
+            "category": ["surface", "surface", "groundwater"],
+        })
+        groups = build_dimension_legend(data, color_col="color_group", subgroup_col="category")
+        assert len(groups) == 1
+        subgroups = {e.subgroup for e in groups[0].entries if e.subgroup}
+        assert subgroups == {"surface", "groundwater"}
+
+    def test_nonexistent_col_returns_empty(self):
+        data = pd.DataFrame({"x": [1]})
+        groups = build_dimension_legend(data, color_col="missing")
+        assert len(groups) == 0
+
+
+class TestLegendGroupOrdering:
+    def test_set_order(self):
+        entries = [LegendEntry("B"), LegendEntry("A"), LegendEntry("C")]
+        group = LegendGroup(column="g", entries=entries)
+        reordered = group.set_order(["A", "B", "C"])
+        assert [e.label for e in reordered.entries] == ["A", "B", "C"]
+
+    def test_set_order_partial(self):
+        entries = [LegendEntry("B"), LegendEntry("A"), LegendEntry("C")]
+        group = LegendGroup(column="g", entries=entries)
+        reordered = group.set_order(["C"])
+        assert reordered.entries[0].label == "C"
+        assert reordered.entries[0].label == "C"
+
+    def test_filter_entries_keep(self):
+        entries = [LegendEntry("A"), LegendEntry("B"), LegendEntry("C")]
+        group = LegendGroup(column="g", entries=entries)
+        filtered = group.filter_entries(keep_labels={"A", "C"})
+        assert {e.label for e in filtered.entries} == {"A", "C"}
+
+    def test_filter_entries_drop(self):
+        entries = [LegendEntry("A"), LegendEntry("B"), LegendEntry("C")]
+        group = LegendGroup(column="g", entries=entries)
+        filtered = group.filter_entries(drop_labels={"B"})
+        assert {e.label for e in filtered.entries} == {"A", "C"}
+
+    def test_filter_entries_keep_wins_over_drop(self):
+        entries = [LegendEntry("A"), LegendEntry("B")]
+        group = LegendGroup(column="g", entries=entries)
+        filtered = group.filter_entries(keep_labels={"A"}, drop_labels={"A"})
+        assert len(filtered.entries) == 0
+
+
+class TestLegendEntrySubgroup:
+    def test_default_subgroup_is_none(self):
+        entry = LegendEntry(label="A")
+        assert entry.subgroup is None
+
+    def test_custom_subgroup(self):
+        entry = LegendEntry(label="A", subgroup="surface")
+        assert entry.subgroup == "surface"
+
+
+class TestLegendAccumulatorSubgroup:
+    def test_subgroup_visual_mapping(self):
+        data = pd.DataFrame({
+            "x": [1, 2], "y": [3, 4],
+            "loc": ["A", "B"],
+            "cat": ["surface", "groundwater"],
+        })
+        accumulator = LegendAccumulator()
+        spec = FigureSpec(
+            data=data, mappings={}, settings={}, context={}, template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomPoint(), stat=StatIdentity(),
+                    visual_mapping={
+                        "x": data["x"], "y": data["y"],
+                        "color": pd.Series(["red", "blue"], name="loc"),
+                        "subgroup": data["cat"],
+                    },
+                ),
+            ],
+        )
+        accumulator.add_from_spec(spec)
+        groups = accumulator.groups
+        assert len(groups) == 1
+        entry_a = next(e for e in groups[0].entries if e.label == "A")
+        assert entry_a.subgroup == "surface"
+        entry_b = next(e for e in groups[0].entries if e.label == "B")
+        assert entry_b.subgroup == "groundwater"

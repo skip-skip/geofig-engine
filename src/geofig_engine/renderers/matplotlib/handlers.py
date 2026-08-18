@@ -8,9 +8,9 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 
-from geofig_engine.core.coord import CoordPolar
+from geofig_engine.core.coord import CoordPolar, StiffCoord
 from geofig_engine.core.layer import LayerSpec
-from geofig_engine.renderers.matplotlib.util import resolve_color_series
+from geofig_engine.renderers.matplotlib.util import resolve_color_series, resolve_marker_series
 
 
 def _resolve_constant(series: pd.Series) -> Any:
@@ -34,28 +34,32 @@ def render_point(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     from geofig_engine.renderers.matplotlib.position import dodge_positions
 
     geom = layer_spec.geom  # GeomPoint
-    kwargs: dict[str, Any] = {"zorder": order, "s": 20, "edgecolors": "black", "linewidths": 0.5}
 
     color = layer_spec.visual_mapping.get("color")
-    if color is not None:
-        kwargs["c"] = resolve_color_series(color)
-
     size = layer_spec.visual_mapping.get("size")
-    if size is not None:
-        kwargs["s"] = size.values if isinstance(size, pd.Series) else size
-
     marker = layer_spec.visual_mapping.get("marker")
-    if marker is not None:
-        kwargs["marker"] = marker.values if isinstance(marker, pd.Series) else marker
-
     alpha = layer_spec.visual_mapping.get("alpha")
-    if alpha is not None:
-        alpha_val = _resolve_constant(alpha) if isinstance(alpha, pd.Series) else alpha
-        if alpha_val is not None:
-            kwargs["alpha"] = float(alpha_val)
 
     x_vals = x.values if isinstance(x, pd.Series) else np.asarray(x)
     y_vals = y.values if isinstance(y, pd.Series) else np.asarray(y)
+
+    # Resolve color to per-point values
+    resolved_color = resolve_color_series(color) if color is not None else None
+
+    # Resolve marker to per-point marker style strings
+    resolved_marker = resolve_marker_series(marker) if marker is not None else None
+
+    # Resolve size to per-point numeric values
+    resolved_size = None
+    if size is not None:
+        resolved_size = size.values if isinstance(size, pd.Series) else size
+
+    # Resolve alpha to scalar
+    resolved_alpha = None
+    if alpha is not None:
+        resolved_alpha = _resolve_constant(alpha) if isinstance(alpha, pd.Series) else alpha
+        if resolved_alpha is not None:
+            resolved_alpha = float(resolved_alpha)
 
     # Dodge positions when color grouping is active
     if geom.dodge > 0 and color is not None and isinstance(color, pd.Series):
@@ -84,7 +88,32 @@ def render_point(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
         rng = np.random.default_rng(42)
         x_vals = x_vals + rng.uniform(-geom.jitter, geom.jitter, len(x_vals))
 
-    ax.scatter(x_vals, y_vals, **kwargs)
+    # When markers vary per point, scatter each marker group separately
+    if resolved_marker is not None and isinstance(resolved_marker, pd.Series) and resolved_marker.nunique() > 1:
+        for mkr in resolved_marker.unique():
+            mask = resolved_marker == mkr
+            kwargs: dict[str, Any] = {"zorder": order, "s": 20, "edgecolors": "black", "linewidths": 0.5, "marker": mkr}
+            if resolved_color is not None:
+                c_vals = resolved_color[mask] if isinstance(resolved_color, pd.Series) else resolved_color
+                kwargs["c"] = c_vals.values if isinstance(c_vals, pd.Series) else c_vals
+            if resolved_size is not None:
+                s_vals = resolved_size[mask] if isinstance(resolved_size, (pd.Series, np.ndarray)) else resolved_size
+                kwargs["s"] = s_vals.values if isinstance(s_vals, pd.Series) else s_vals
+            if resolved_alpha is not None:
+                kwargs["alpha"] = resolved_alpha
+            ax.scatter(x_vals[mask.values], y_vals[mask.values], **kwargs)
+    else:
+        kwargs: dict[str, Any] = {"zorder": order, "s": 20, "edgecolors": "black", "linewidths": 0.5}
+        if resolved_color is not None:
+            kwargs["c"] = resolved_color.values if isinstance(resolved_color, pd.Series) else resolved_color
+        if resolved_size is not None:
+            kwargs["s"] = resolved_size
+        if resolved_marker is not None:
+            m = resolved_marker.iloc[0] if isinstance(resolved_marker, pd.Series) else resolved_marker
+            kwargs["marker"] = m
+        if resolved_alpha is not None:
+            kwargs["alpha"] = resolved_alpha
+        ax.scatter(x_vals, y_vals, **kwargs)
 
 
 def _draw_lines_grouped(ax, x, y, color_series, kwargs, polar=False):
@@ -192,7 +221,7 @@ def render_bar(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     ax.bar(x, y, **kwargs)
 
 
-def _draw_areas_grouped(ax, x, y, color_series, kwargs, polar=False):
+def _draw_areas_grouped(ax, x, y, color_series, kwargs, polar=False, stiff=False):
     for c_val in color_series.unique():
         if pd.isna(c_val):
             continue
@@ -205,7 +234,11 @@ def _draw_areas_grouped(ax, x, y, color_series, kwargs, polar=False):
             continue
         order = np.argsort(xs.values, kind="stable")
         kw = dict(kwargs)
-        if polar:
+        if stiff:
+            kw["facecolor"] = c_val
+            kw.pop("color", None)
+            ax.fill(xs.values, ys.values, **kw)
+        elif polar:
             kw["facecolor"] = c_val
             kw.pop("color", None)
             sorted_xs = xs.values[order]
@@ -238,11 +271,19 @@ def render_area(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     if color is not None:
         resolved = resolve_color_series(color)
         if isinstance(resolved, pd.Series) and resolved.nunique() > 1:
-            _draw_areas_grouped(ax, x, y, resolved, kwargs, polar=isinstance(layer_spec.coord, CoordPolar))
+            _draw_areas_grouped(ax, x, y, resolved, kwargs,
+                                polar=isinstance(layer_spec.coord, CoordPolar),
+                                stiff=isinstance(layer_spec.coord, StiffCoord))
             return
         kwargs["color"] = _resolve_constant(resolved) if isinstance(resolved, pd.Series) else resolved
 
-    if isinstance(layer_spec.coord, CoordPolar):
+    if isinstance(layer_spec.coord, StiffCoord):
+        fill_kw = {"facecolor": kwargs.pop("color", None)} if "color" in kwargs else {}
+        fill_kw.update(kwargs)
+        fill_kw.setdefault("edgecolor", "black")
+        fill_kw.setdefault("linewidth", 1.5)
+        ax.fill(x, y, **fill_kw)
+    elif isinstance(layer_spec.coord, CoordPolar):
         x_vals = np.append(x.values, x.values[0])
         y_vals = np.append(y.values, y.values[0])
         fill_kw = {"facecolor": kwargs.pop("color", None)} if "color" in kwargs else {}

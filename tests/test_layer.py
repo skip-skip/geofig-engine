@@ -74,3 +74,39 @@ class TestLayerSpec:
             data_override="other",
         )
         assert spec.data_override == "other"
+
+
+class TestLayerAxisLimits:
+    def test_layer_defaults(self):
+        layer = Layer(geom=GeomPoint())
+        assert layer.xlim is None
+        assert layer.ylim is None
+
+    def test_layer_with_limits(self):
+        layer = Layer(geom=GeomPoint(), xlim=(0, 10), ylim=(-5, 5))
+        assert layer.xlim == (0, 10)
+        assert layer.ylim == (-5, 5)
+
+    def test_layer_invalid_xlim(self):
+        with pytest.raises(TypeError, match="xlim must be a tuple"):
+            Layer(geom=GeomPoint(), xlim=[0, 10])
+
+    def test_layer_invalid_ylim(self):
+        with pytest.raises(TypeError, match="ylim must be a tuple"):
+            Layer(geom=GeomPoint(), ylim=(0,))
+
+    def test_layer_spec_limits(self):
+        spec = LayerSpec(
+            geom=GeomPoint(),
+            stat=StatIdentity(),
+            visual_mapping={},
+            xlim=(0, 100),
+            ylim=(-10, 10),
+        )
+        assert spec.xlim == (0, 100)
+        assert spec.ylim == (-10, 10)
+
+    def test_layer_spec_defaults(self):
+        spec = LayerSpec(geom=GeomPoint(), stat=StatIdentity(), visual_mapping={})
+        assert spec.xlim is None
+        assert spec.ylim is None
