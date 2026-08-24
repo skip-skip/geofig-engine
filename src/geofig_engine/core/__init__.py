@@ -42,6 +42,12 @@ from .spec import (
     extract_data_for_mapping,
 )
 
+# Linked secondary axes
+from .link import (
+    AxisLink,
+    LinkTransform,
+)
+
 __all__ = [
     # Dataset
     "Dataset",
@@ -63,4 +69,7 @@ __all__ = [
     "validate_figure_spec",
     "build_spec",
     "extract_data_for_mapping",
+    # Linked axes
+    "AxisLink",
+    "LinkTransform",
 ]

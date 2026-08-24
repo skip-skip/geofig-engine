@@ -10,7 +10,7 @@ Foundation of the linked-axes system (ROADMAP Phase 14.5). Introduce declarative
 
 Key semantics locked during design:
 - World-anchored (flat matrix stacks): link translates are declared in world units ("lower-left of the visible diamond"); no scene-graph nesting
-- `matrix()` is built as a pure-numpy 3×3 homogeneous composition `M = T·R·S` in core (matplotlib-free), because fluent `Affine2D` call-order ≠ point-application order — conventions must be pinned by known-corner unit tests (incl. the diamond's rotate-then-squish)
+- `matrix()` is built as a pure-numpy 3×3 homogeneous composition `M = T·S·R` in core (matplotlib-free): points experience **rotate → scale → translate**, with scale acting along world axes after rotation (required for the diamond's "rotate then squish"); conventions must be pinned by known-corner unit tests, since fluent `Affine2D` call-order ≠ point-application order
 
 ## Files to modify
 
@@ -21,11 +21,11 @@ Key semantics locked during design:
 
 ## Acceptance criteria
 
-- [ ] `LinkTransform` frozen dataclass; identity by default; rejects bools/non-numerics
-- [ ] `matrix()` returns 3×3 numpy array composing `M = T·R·S`, no matplotlib import in `core/link.py`
-- [ ] Unit tests pin point-application order (points experience scale → rotate → translate for declared T,R,S), including "rotate 45° then squash y" corner coordinates
-- [ ] `transform_point()` maps local anchors into world space correctly for composed transforms
-- [ ] `AxisLink` validates non-empty unique name, Coord instance, LinkTransform instance
-- [ ] `FigureSpec.links` accepted by `build_spec()`; duplicate link names raise; unresolved `subplot` raises
-- [ ] Layers without subplot routing still validate when links exist (main-axis layers)
-- [ ] `link_to_dict`/`link_from_dict` round-trips losslessly; serialized FigureSpec including links round-trips
+- [x] `LinkTransform` frozen dataclass; identity by default; rejects bools/non-numerics
+- [x] `matrix()` returns 3×3 numpy array composing `M = T·S·R` (points experience rotate → scale → translate), no matplotlib import in `core/link.py`
+- [x] Unit tests pin point-application order, including the "rotate 45° then squash y" corner coordinates (scale-first would give different corners)
+- [x] `transform_point()` maps local anchors into world space correctly for composed transforms
+- [x] `AxisLink` validates non-empty unique name, Coord instance, LinkTransform instance
+- [x] `FigureSpec.links` accepted by `build_spec()`; duplicate link names raise; unresolved `subplot` raises
+- [x] Layers without subplot routing still validate when links exist (main-axis layers)
+- [x] `link_to_dict`/`link_from_dict` round-trips losslessly; serialized FigureSpec including links round-trips

@@ -80,8 +80,8 @@ A figure has one **main axis** plus zero or more **links**: named secondary axes
 - **`LinkTransform`** (frozen dataclass) — ordered affine parameters:
   - `translate: tuple[float, float]` — offset in world units (post-transform main-axis space)
   - `rotate: float` — degrees about the link's local origin
-  - `scale: tuple[float, float]` — squash/stretch of the link's local [0,1]² space
-  - `matrix() -> np.ndarray` — pure-numpy 3×3 homogeneous composition `M = T·R·S` built in core (matplotlib-free); convention pinned by known-corner unit tests, since fluent Affine2D call-order ≠ point-application order
+  - `scale: tuple[float, float]` — squash/stretch applied along world x/y axes, after rotation
+  - `matrix() -> np.ndarray` — pure-numpy 3×3 homogeneous composition `M = T·S·R` built in core (matplotlib-free): points experience **rotate → scale → translate** (scale after rotation is what makes the diamond's "rotate 45°, then squash y" expressible); convention pinned by known-corner unit tests, since fluent Affine2D call-order ≠ point-application order
   - `transform_point(xy)` — maps local anchors into world space (used for label placement)
 - **`AxisLink`** (frozen dataclass) — `name: str`, `coord: Coord` (e.g., new `TernaryCoord`), `transform: LinkTransform`, optional `frame` styling
 - **Layer routing** — reuse the existing `LayerSpec.subplot: str | None` field: a layer with `subplot="cation"` renders through that link's transform+coord; unrouted layers stay on the main axis

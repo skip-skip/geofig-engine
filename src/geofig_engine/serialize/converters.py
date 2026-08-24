@@ -46,6 +46,7 @@ from geofig_engine.core.facet import (
     FacetNull,
     FacetWrap,
 )
+from geofig_engine.core.link import AxisLink, LinkTransform
 from geofig_engine.core.scale import (
     Scale,
     ScaleConstant,
@@ -263,6 +264,32 @@ def coord_from_dict(data: dict) -> Coord:
 
 
 # ---------------------------------------------------------------------------
+# Link converters
+# ---------------------------------------------------------------------------
+
+def link_to_dict(link: AxisLink) -> dict:
+    """Convert an AxisLink to a JSON-compatible dict."""
+    result = {
+        "name": link.name,
+        "coord": coord_to_dict(link.coord),
+        "transform": link.transform.to_dict(),
+    }
+    if link.frame is not None:
+        result["frame"] = link.frame
+    return result
+
+
+def link_from_dict(data: dict) -> AxisLink:
+    """Reconstruct an AxisLink from its dict representation."""
+    return AxisLink(
+        name=data["name"],
+        coord=coord_from_dict(data["coord"]),
+        transform=LinkTransform.from_dict(data.get("transform", {})),
+        frame=data.get("frame"),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Facet converters
 # ---------------------------------------------------------------------------
 
@@ -430,6 +457,7 @@ def figure_spec_to_dict(spec: FigureSpec) -> dict:
         "context": spec.context,
         "mappings": _visual_mapping_to_dict(spec.mappings),
         "data": _dataframe_to_dict(spec.data),
+        "links": [link_to_dict(link) for link in spec.links],
     }
 
 
@@ -447,6 +475,7 @@ def figure_spec_from_dict(data: dict) -> FigureSpec:
         layers=layers,
         coord=coord_from_dict(data["coord"]),
         facet=facet_from_dict(data["facet"]),
+        links=tuple(link_from_dict(link) for link in data.get("links", [])),
     )
 
 

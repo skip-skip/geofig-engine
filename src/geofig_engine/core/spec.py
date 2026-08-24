@@ -13,6 +13,7 @@ import pandas as pd
 from geofig_engine.core.coord import Coord, CoordCartesian
 from geofig_engine.core.facet import Facet, FacetNull
 from geofig_engine.core.layer import LayerSpec
+from geofig_engine.core.link import AxisLink
 
 from geofig_engine.utils.validation import (
     validate_columns_exist,
@@ -43,6 +44,8 @@ class FigureSpec:
         layers: List of LayerSpec (resolved layers with visual mapping).
         coord: Coordinate system for the figure.
         facet: Facet specification for subplot splitting.
+        links: Named secondary axes sharing the canvas; LayerSpec.subplot
+               routes layers to a link by name.
     """
 
     data: pd.DataFrame
@@ -54,6 +57,7 @@ class FigureSpec:
     layers: list[LayerSpec] = field(default_factory=list)
     coord: Coord = field(default_factory=CoordCartesian)
     facet: Facet = field(default_factory=FacetNull)
+    links: tuple[AxisLink, ...] = ()
     
     def __post_init__(self) -> None:
         """Validate spec on creation."""
@@ -89,6 +93,26 @@ def validate_figure_spec(spec: FigureSpec) -> None:
     validate_string(spec.template_name, "template_name", allow_empty=False)
     validate_tuple(spec.iterator_key, "iterator_key", str, allow_empty=True)
 
+    link_names: set[str] = set()
+    for link in spec.links:
+        if not isinstance(link, AxisLink):
+            raise TypeError(
+                f"links must contain AxisLink instances, got {type(link).__name__}"
+            )
+        if link.name in link_names:
+            raise ValueError(f"duplicate link name: {link.name!r}")
+        link_names.add(link.name)
+
+    # Subplot routing is only enforced for linked specs; legacy per-diagram
+    # subplot values (pre-14.5 Piper/Stiff) are validated by their own paths.
+    if spec.links:
+        for layer in spec.layers:
+            if layer.subplot is not None and layer.subplot not in link_names:
+                raise ValueError(
+                    f"layer subplot {layer.subplot!r} does not match any link "
+                    f"(available: {sorted(link_names)})"
+                )
+
 
 def build_spec(
     data: pd.DataFrame,
@@ -100,6 +124,7 @@ def build_spec(
     layers: list[LayerSpec] | None = None,
     coord: Coord | None = None,
     facet: Facet | None = None,
+    links: tuple[AxisLink, ...] | None = None,
 ) -> FigureSpec:
     """
     Factory function to create and validate a FigureSpec.
@@ -114,6 +139,7 @@ def build_spec(
         layers: List of resolved LayerSpec objects.
         coord: Coordinate system for the figure.
         facet: Facet specification for subplot splitting.
+        links: Named secondary axes sharing the canvas.
 
     Returns:
         A validated FigureSpec instance.
@@ -132,6 +158,7 @@ def build_spec(
         layers=layers or [],
         coord=coord or CoordCartesian(),
         facet=facet or FacetNull(),
+        links=links or (),
     )
 
 
