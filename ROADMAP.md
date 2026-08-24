@@ -67,6 +67,62 @@ Complex multi-element diagrams that don't fit a single Coord + Geom.
 
 ---
 
+## 📋 Phase 14.5 — Linked axes (planned)
+
+Generalize multi-panel diagrams (Piper, later Stiff/Durov) from renderer-hardcoded GridSpec layouts into a declarative **linked axes** system. Today `_render_piper()` (renderers/matplotlib/renderer.py) manually builds a 3-panel layout that the spec cannot express — a violation of the Data→Spec→Render separation. Linked axes move composition into the spec.
+
+### Concept
+
+A figure has one **main axis** plus zero or more **links**: named secondary axes that share the same dataset and together form a *single full axis space*. Each link is positioned by an ordered transform chain — **translate → rotate → scale** — anchored on the main axis position/extents. Links are grouped axes, not facets: all layers render into one shared canvas.
+
+### Core model (`core/link.py`, new)
+
+- **`LinkTransform`** (frozen dataclass) — ordered affine parameters applied around the main axis anchor:
+  - `translate: tuple[float, float]` — offset in main-axis data coordinates
+  - `rotate: float` — degrees about the translated origin
+  - `scale: tuple[float, float]` — squash/stretch of the link's local [0,1]² space
+  - Composition order fixed: translate, then rotate, then scale (matches diamond "rotate then squish" semantics)
+- **`AxisLink`** (frozen dataclass) — `name: str`, `coord: Coord` (e.g., new `TernaryCoord`), `transform: LinkTransform`, optional `frame` styling
+- **Layer routing** — reuse the existing `LayerSpec.subplot: str | None` field: a layer with `subplot="cation"` renders through that link's transform+coord; unrouted layers stay on the main axis
+- **FigureSpec** gains `links: tuple[AxisLink, ...] = ()`; validation: unique names, every layer `subplot` must resolve to a defined link or None
+- Serialization: `link_to_dict()` / `link_from_dict()` in `serialize/converters.py`
+
+### New projection: `TernaryCoord` (`core/coord.py`)
+
+- Maps three fractions summing to 1 into a right-triangle local space ([0,1]²), configurable vertex order and handedness (left/right facing)
+- Implements `transform_visual_mapping()` so geoms stay projection-agnostic (same pattern as CoordPolar)
+- Generic — reusable for Durov/Ternary plots beyond Piper
+
+### Renderer changes (matplotlib backend)
+
+- Replace per-diagram special cases with one generic path: a single matplotlib Axes spans the whole figure; each link draws its layers through a precomposed `Affine2D` (translate→rotate→scale) built from its `LinkTransform` and the main axes' data limits
+- Per-link frames/ticks/grids drawn in local space, then transformed (generalizes today's `_draw_ternary_frame`)
+- Delete `_render_piper()`, `"piper_layout"` / `"piper_overlay"` setting branches, and the PiperCoord isinstance dispatch at renderer.py:103
+- Legends/facets operate on the single shared axes unchanged
+
+### Stats layer
+
+- **`StatIonFractions`** (new, `core/stat.py`) — performs the chemistry before visualization:
+  - mg/L → meq/L conversion using the existing ion weight/charge tables from `geofig_engine.io`
+  - Concentration addition: Na+K, HCO3+CO3 grouping
+  - Percent normalization per sample → emits fraction columns (cation_x/y, anion_x/y, diamond_x/y)
+  - Replaces the conversion/percentage math currently embedded in the piper template front-end
+
+### Piper re-expression (proof of concept)
+
+- **Main axis**: standard cartesian square showing the diamond — rotated 45°, y-scaled ~0.5 via the main coord's own transform
+- **Two links**: cation triangle (`TernaryCoord`, left-handed, translate lower-left) and anion triangle (`TernaryCoord`, right-handed, translate lower-right)
+- `build_piper_specs()` rewritten as pure spec construction (no renderer knowledge); `piper_overlay_diamond()` becomes ordinary cross-link layer routing
+- Old `PiperCoord` deprecated after visual parity is confirmed
+
+### Verification
+
+- Visual parity harness comparing linked-axis piper output against current implementation output
+- Unit tests: LinkTransform composition math, TernaryCoord mapping round-trips, layer routing validation, serialization round-trip
+- Stiff/Durov identified as follow-up beneficiaries (not in scope)
+
+---
+
 ## 📋 Phase 15 — Enhanced legend features
 
 - **Multi-level grouped legends** — `subseries_col` pattern with section headers and aligned columns (from geochemplot's grouped-legend pattern)
@@ -103,3 +159,18 @@ Port and generalize geochemplot's data-handling utilities.
 - **Data preprocessing pipeline** — assign new columns / groups / aggregates before spec building
 - **Multi-page figure output** — render multiple specs onto pages (e.g., PDF with one plot per page)
 - **Axis limit overrides per layer** — expose xlim/ylim per layer, not just globally
+
+---
+
+## ✅ Phase 18 — Categorized geom preset database
+Replaced the function-registry JSON catalog (`data/functions.json`) with a data-only, categorized preset database in `src/geofig_engine/data/geom_presets/`. Adding a preset now requires only a JSON entry — no code changes.
+
+- **`GeomPreset` / `GeomPresetItem` models** — frozen dataclasses: id, category, tags, items, reference/description/valid_domain/geospatial metadata; items carry validated geom params + constant visual mapping + optional zorder
+- **Six annotation geom kinds** — `function_line`, `abline` (slope-intercept or two-point), `hspan`, `vspan`, `rect`, `text`; per-kind validation table (required/allowed mapping keys, bound ordering, scalar-only values)
+- **Expression safety preserved** — function_line expressions route through the existing `FunctionValidator` (AST-based) at load time
+- **Per-category JSON storage** — bundled `water_isotope.json` (15 migrated entries); loader globs the package directory so adding a file adds a category; errors annotated with file/index/id
+- **`GeomPresetRegistry`** — queries by id/category/tags/state, metadata stats, `layers_for(ids)` + `auto_layers(category, geom_kinds)` hydration to standard Layers, lazy global singleton with reset hook
+- **User extensibility** — `merge_path(path, overwrite=False)` merges external preset files into a registry at runtime (duplicate-id conflict raises unless overwrite)
+- **Legacy shim** — `FunctionLoader.load()` / `get_function_registry()` rebuilt as MathFunction views over function_line presets (func_type retained per-item for lossless round-trip); existing tests pass unmodified
+- **Isotope template switched** — `_load_functions()` now sources from `get_geom_preset_registry()`; public API unchanged
+- **691 tests pass**

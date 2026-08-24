@@ -6,7 +6,7 @@ import pandas as pd
 from geofig_engine.core.dataset import Dataset
 from geofig_engine.engine import render_template
 from geofig_engine.templates import isotope
-from geofig_engine.data import get_function_registry
+from geofig_engine.data.geom_presets import get_geom_preset_registry
 
 output_dir = Path(__file__).resolve().parent / "outputs" / "iso_output"
 
@@ -16,14 +16,14 @@ df = pd.read_excel(input_path)
 color_column = "Location"
 dataset = Dataset(dataframe=df, key_column="Sample ID", dimensions={})
 
-registry = get_function_registry()
-gmwl_func = registry.get("GMWL")
-idaho_funcs = registry.get_by_state("ID")
-selected_function_ids = ["GMWL"] + [f.id for f in idaho_funcs if f.id != "GMWL"]
+registry = get_geom_preset_registry()
+gmwl = registry.get("GMWL")
+idaho_presets = [p for p in registry.filter(state="ID") if p.id != gmwl.id]
+selected_function_ids = ["GMWL"] + [p.id for p in idaho_presets]
 
 print(f"Selected functions: {selected_function_ids}")
 print(f"  - Global: GMWL")
-print(f"  - Idaho lines: {[f.id for f in idaho_funcs if f.id != 'GMWL']}")
+print(f"  - Idaho lines: {[p.id for p in idaho_presets]}")
 
 template = isotope(functions=selected_function_ids, mapping={"x": "Oxygen 18", "y": "Deuterium", "color": color_column})
 

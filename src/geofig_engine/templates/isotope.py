@@ -2,22 +2,19 @@
 Isotope figure template for FigEngine.
 
 Defines the contract for two-dimensional isotope plots with optional
-color and marker encodings. Uses the function registry for water isotope
-reference lines (GMWL, LMWL, etc.).
+color and marker encodings. Uses the geom preset registry for water
+isotope reference lines (GMWL, LMWL, etc.).
 """
 
 from collections.abc import Sequence
 from typing import Any
 
-from geofig_engine.core.geom import GeomFunctionLine, GeomPoint
+from geofig_engine.core.geom import GeomPoint
 from geofig_engine.core.layer import Layer
 from geofig_engine.core.scale import Scale
 from geofig_engine.core.stat import StatIdentity
-from geofig_engine.data import (
-    get_function_registry,
-    FunctionCategory,
-    FunctionType,
-)
+from geofig_engine.data.geom_presets import get_geom_preset_registry
+from geofig_engine.data.validator import FunctionValidator
 from geofig_engine.templates.base import FigureTemplate
 from geofig_engine.utils.typing import SourceType
 
@@ -29,56 +26,53 @@ ISOTOPE_DEFAULTS: dict[str, Any] = {
     "grid": True,
 }
 
-ACCEPTED_CATEGORIES = [FunctionCategory.WATER_ISOTOPE]
-ACCEPTED_TYPES = [FunctionType.LINEAR]
-REQUIRED_VARIABLES = ("x",)
+ACCEPTED_CATEGORIES: list[str] = ["water_isotope"]
+ACCEPTED_GEOM_KINDS: tuple[str, ...] = ("function_line",)
+REQUIRED_VARIABLES: tuple[str, ...] = ("x",)
+
+
+def _validate_preset_for_isotope(preset_id: str, preset) -> None:
+    """Raise ValueError if a preset is not renderable by the isotope template."""
+    if preset.category not in ACCEPTED_CATEGORIES:
+        raise ValueError(
+            f"Function '{preset_id}' category '{preset.category}' "
+            f"not accepted. Requires: {ACCEPTED_CATEGORIES}"
+        )
+
+    unsupported = preset.geom_kinds - set(ACCEPTED_GEOM_KINDS)
+    if unsupported:
+        raise ValueError(
+            f"Function '{preset_id}' geom kinds {sorted(unsupported)} "
+            f"not accepted. Requires: {list(ACCEPTED_GEOM_KINDS)}"
+        )
+
+    for item in preset.items:
+        if item.geom_type != "function_line":
+            continue
+        variables = FunctionValidator.extract_variables(item.params["func"])
+        if not all(v in variables for v in REQUIRED_VARIABLES):
+            raise ValueError(
+                f"Function '{preset_id}' missing required variables: "
+                f"{REQUIRED_VARIABLES}"
+            )
 
 
 def _load_functions(
     functions: Sequence[str] | None = None,
     auto_filter: bool = True,
 ) -> list[Layer]:
-    registry = get_function_registry()
+    registry = get_geom_preset_registry()
 
     if functions is None and auto_filter:
-        selected = registry.filter(
-            category=FunctionCategory.WATER_ISOTOPE,
-            func_type=FunctionType.LINEAR,
+        return registry.auto_layers(
+            category="water_isotope", geom_kinds=ACCEPTED_GEOM_KINDS
         )
     elif functions is not None:
-        selected = []
-        for func_id in functions:
-            math_func = registry.get(func_id)
-            if math_func.category not in ACCEPTED_CATEGORIES:
-                raise ValueError(
-                    f"Function '{func_id}' category '{math_func.category.value}' "
-                    f"not accepted. Requires: {[c.value for c in ACCEPTED_CATEGORIES]}"
-                )
-            if math_func.func_type not in ACCEPTED_TYPES:
-                raise ValueError(
-                    f"Function '{func_id}' type '{math_func.func_type.value}' "
-                    f"not accepted. Requires: {[t.value for t in ACCEPTED_TYPES]}"
-                )
-            if not all(v in math_func.variables for v in REQUIRED_VARIABLES):
-                raise ValueError(
-                    f"Function '{func_id}' missing required variables: {REQUIRED_VARIABLES}"
-                )
-            selected.append(math_func)
+        for preset_id in functions:
+            _validate_preset_for_isotope(preset_id, registry.get(preset_id))
+        return registry.layers_for(functions)
     else:
-        selected = []
-
-    return [
-        Layer(
-            geom=GeomFunctionLine(func=m.expression, label=m.label),
-            stat=StatIdentity(),
-            mapping={
-                "color": m.color,
-                "style": m.linestyle,
-                "label": m.label,
-            },
-        )
-        for m in selected
-    ]
+        return []
 
 
 def isotope(

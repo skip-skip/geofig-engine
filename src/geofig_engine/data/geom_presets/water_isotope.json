@@ -1,0 +1,349 @@
+{
+  "presets": [
+    {
+      "id": "GMWL",
+      "category": "water_isotope",
+      "tags": ["meteoric", "global"],
+      "items": [
+        {
+          "geom": {"type": "function_line", "func": "8*x + 10"},
+          "mapping": {"color": "black", "style": "--", "label": "GMWL"},
+          "func_type": "linear"
+        }
+      ],
+      "metadata": {
+        "reference": "Craig, 1961",
+        "description": "Global Meteoric Water Line - the standard reference line for meteoric precipitation worldwide",
+        "geospatial": {
+          "region": null,
+          "state": null,
+          "city": null,
+          "water_body": null,
+          "water_type": "meteoric"
+        }
+      }
+    },
+    {
+      "id": "ID_FALLS",
+      "category": "water_isotope",
+      "tags": ["meteoric", "local"],
+      "items": [
+        {
+          "geom": {"type": "function_line", "func": "7.5*x + 5"},
+          "mapping": {"color": "blue", "style": ":", "label": "Idaho Falls LMWL"},
+          "func_type": "linear"
+        }
+      ],
+      "metadata": {
+        "reference": "Rightmire and Lewis, 1987",
+        "description": "Local Meteoric Water Line for Idaho Falls area",
+        "geospatial": {
+          "region": "Eastern Idaho",
+          "state": "ID",
+          "city": "Idaho Falls",
+          "water_body": null,
+          "water_type": "meteoric"
+        }
+      }
+    },
+    {
+      "id": "ID_SOUTHEAST",
+      "category": "water_isotope",
+      "tags": ["meteoric", "local"],
+      "items": [
+        {
+          "geom": {"type": "function_line", "func": "7.4*x - 2.17"},
+          "mapping": {"color": "green", "style": ":", "label": "SE Idaho LMWL"},
+          "func_type": "linear"
+        }
+      ],
+      "metadata": {
+        "reference": "Tappa et al., 2016",
+        "description": "Local Meteoric Water Line for southeastern Idaho",
+        "geospatial": {
+          "region": "Southeastern Idaho",
+          "state": "ID",
+          "city": null,
+          "water_body": null,
+          "water_type": "meteoric"
+        }
+      }
+    },
+    {
+      "id": "ID_SNAKERIVER",
+      "category": "water_isotope",
+      "tags": ["meteoric", "local", "basin"],
+      "items": [
+        {
+          "geom": {"type": "function_line", "func": "6.4*x - 21"},
+          "mapping": {"color": "red", "style": ":", "label": "Snake River Basin LMWL"},
+          "func_type": "linear"
+        }
+      ],
+      "metadata": {
+        "reference": "Wood and Low, 1986",
+        "description": "Local Meteoric Water Line for the Snake River Basin",
+        "geospatial": {
+          "region": "Idaho",
+          "state": "ID",
+          "city": null,
+          "water_body": "Snake River",
+          "water_type": "meteoric"
+        }
+      }
+    },
+    {
+      "id": "REGIONAL_PNW",
+      "category": "water_isotope",
+      "tags": ["meteoric", "regional"],
+      "items": [
+        {
+          "geom": {"type": "function_line", "func": "7.42*x + 0.88"},
+          "mapping": {"color": "purple", "style": "-.", "label": "PNW LMWL"},
+          "func_type": "linear"
+        }
+      ],
+      "metadata": {
+        "reference": "Sánchez-Murillo et al., 2015",
+        "description": "Local Meteoric Water Line for the Pacific Northwest region",
+        "geospatial": {
+          "region": "Pacific Northwest",
+          "state": null,
+          "city": null,
+          "water_body": null,
+          "water_type": "meteoric"
+        }
+      }
+    },
+    {
+      "id": "ID_MOSCOW",
+      "category": "water_isotope",
+      "tags": ["meteoric", "local"],
+      "items": [
+        {
+          "geom": {"type": "function_line", "func": "7.5*x + 2.5"},
+          "mapping": {"color": "orange", "style": "-.", "label": "Moscow Sub-basin LMWL"},
+          "func_type": "linear"
+        }
+      ],
+      "metadata": {
+        "reference": "Candel et al., 2016",
+        "description": "Local Meteoric Water Line for Moscow Sub-basin in Idaho",
+        "geospatial": {
+          "region": "Idaho",
+          "state": "ID",
+          "city": "Moscow",
+          "water_body": null,
+          "water_type": "meteoric"
+        }
+      }
+    },
+    {
+      "id": "WA_PULLMAN",
+      "category": "water_isotope",
+      "tags": ["meteoric", "local", "surface_water"],
+      "items": [
+        {
+          "geom": {"type": "function_line", "func": "4.52*x - 44.5"},
+          "mapping": {"color": "brown", "style": "-.", "label": "SF Palouse River (Pullman, WA) LMWL"},
+          "func_type": "linear"
+        }
+      ],
+      "metadata": {
+        "reference": "Sánchez-Murillo et al., 2015",
+        "description": "Local Meteoric Water Line for South Fork Palouse River at Pullman, Washington",
+        "geospatial": {
+          "region": "Pacific Northwest",
+          "state": "WA",
+          "city": "Pullman",
+          "water_body": "Palouse River",
+          "water_type": "meteoric"
+        }
+      }
+    },
+    {
+      "id": "ID_CRUMARINE",
+      "category": "water_isotope",
+      "tags": ["meteoric", "local", "surface_water"],
+      "items": [
+        {
+          "geom": {"type": "function_line", "func": "5.34*x - 29.3"},
+          "mapping": {"color": "gray", "style": "-.", "label": "Crumarine Creek (Moscow, ID) LMWL"},
+          "func_type": "linear"
+        }
+      ],
+      "metadata": {
+        "reference": "Sánchez-Murillo et al., 2015",
+        "description": "Local Meteoric Water Line for Crumarine Creek near Moscow, Idaho",
+        "geospatial": {
+          "region": "Idaho",
+          "state": "ID",
+          "city": "Moscow",
+          "water_body": "Crumarine Creek",
+          "water_type": "meteoric"
+        }
+      }
+    },
+    {
+      "id": "WA_PALOUSE",
+      "category": "water_isotope",
+      "tags": ["meteoric", "local", "surface_water"],
+      "items": [
+        {
+          "geom": {"type": "function_line", "func": "4.47*x - 45.2"},
+          "mapping": {"color": "black", "style": "-.", "label": "Palouse River (Hooper, WA) LMWL"},
+          "func_type": "linear"
+        }
+      ],
+      "metadata": {
+        "reference": "Sánchez-Murillo et al., 2015",
+        "description": "Local Meteoric Water Line for Palouse River at Hooper, Washington",
+        "geospatial": {
+          "region": "Pacific Northwest",
+          "state": "WA",
+          "city": "Hooper",
+          "water_body": "Palouse River",
+          "water_type": "meteoric"
+        }
+      }
+    },
+    {
+      "id": "WA_PALOUSE_SF",
+      "category": "water_isotope",
+      "tags": ["meteoric", "local", "surface_water"],
+      "items": [
+        {
+          "geom": {"type": "function_line", "func": "5.02*x - 38.1"},
+          "mapping": {"color": "black", "style": "-.", "label": "SF Palouse River (Colfax, WA) LMWL"},
+          "func_type": "linear"
+        }
+      ],
+      "metadata": {
+        "reference": "Sánchez-Murillo et al., 2015",
+        "description": "Local Meteoric Water Line for South Fork Palouse River at Colfax, Washington",
+        "geospatial": {
+          "region": "Pacific Northwest",
+          "state": "WA",
+          "city": "Colfax",
+          "water_body": "Palouse River",
+          "water_type": "meteoric"
+        }
+      }
+    },
+    {
+      "id": "WA_NF_PALOUSE",
+      "category": "water_isotope",
+      "tags": ["meteoric", "local", "surface_water"],
+      "items": [
+        {
+          "geom": {"type": "function_line", "func": "4.88*x - 38.2"},
+          "mapping": {"color": "black", "style": "-.", "label": "NF Palouse River (Colfax, WA)"},
+          "func_type": "linear"
+        }
+      ],
+      "metadata": {
+        "reference": "Sánchez-Murillo et al., 2015",
+        "description": "Local Meteoric Water Line for North Fork Palouse River at Colfax, Washington",
+        "geospatial": {
+          "region": "Pacific Northwest",
+          "state": "WA",
+          "city": "Colfax",
+          "water_body": "Palouse River",
+          "water_type": "meteoric"
+        }
+      }
+    },
+    {
+      "id": "ID_CANYON",
+      "category": "water_isotope",
+      "tags": ["meteoric", "local", "surface_water"],
+      "items": [
+        {
+          "geom": {"type": "function_line", "func": "4.15*x - 49.4"},
+          "mapping": {"color": "black", "style": "-.", "label": "Canyon Creek (Wallace, ID)"},
+          "func_type": "linear"
+        }
+      ],
+      "metadata": {
+        "reference": "Sánchez-Murillo et al., 2015",
+        "description": "Local Meteoric Water Line for Canyon Creek near Wallace, Idaho",
+        "geospatial": {
+          "region": "Idaho",
+          "state": "ID",
+          "city": "Wallace",
+          "water_body": "Canyon Creek",
+          "water_type": "meteoric"
+        }
+      }
+    },
+    {
+      "id": "ID_PINE",
+      "category": "water_isotope",
+      "tags": ["meteoric", "local", "surface_water"],
+      "items": [
+        {
+          "geom": {"type": "function_line", "func": "3.99*x - 50.1"},
+          "mapping": {"color": "black", "style": "-.", "label": "Pine Creek (Pinehurst, ID) LMWL"},
+          "func_type": "linear"
+        }
+      ],
+      "metadata": {
+        "reference": "Sánchez-Murillo et al., 2015",
+        "description": "Local Meteoric Water Line for Pine Creek near Pinehurst, Idaho",
+        "geospatial": {
+          "region": "Idaho",
+          "state": "ID",
+          "city": "Pinehurst",
+          "water_body": "Pine Creek",
+          "water_type": "meteoric"
+        }
+      }
+    },
+    {
+      "id": "ID_PRIESTRIVER_BENTONCREEK",
+      "category": "water_isotope",
+      "tags": ["meteoric", "local", "surface_water"],
+      "items": [
+        {
+          "geom": {"type": "function_line", "func": "6.09*x - 18.02"},
+          "mapping": {"color": "black", "style": "-.", "label": "Benton Creek (Priest River, ID) LMWL"},
+          "func_type": "linear"
+        }
+      ],
+      "metadata": {
+        "reference": "Sánchez-Murillo et al., 2015",
+        "description": "Local Meteoric Water Line for Benton Creek near Priest River, Idaho",
+        "geospatial": {
+          "region": "Idaho",
+          "state": "ID",
+          "city": "Priest River",
+          "water_body": "Benton Creek",
+          "water_type": "meteoric"
+        }
+      }
+    },
+    {
+      "id": "ID_PRIESTRIVER",
+      "category": "water_isotope",
+      "tags": ["meteoric", "local", "surface_water"],
+      "items": [
+        {
+          "geom": {"type": "function_line", "func": "4.57*x - 44.5"},
+          "mapping": {"color": "black", "style": "-.", "label": "Priest River (Priest River, ID)"},
+          "func_type": "linear"
+        }
+      ],
+      "metadata": {
+        "reference": "Sánchez-Murillo et al., 2015",
+        "description": "Local Meteoric Water Line for Priest River at Priest River, Idaho",
+        "geospatial": {
+          "region": "Idaho",
+          "state": "ID",
+          "city": "Priest River",
+          "water_body": "Priest River",
+          "water_type": "meteoric"
+        }
+      }
+    }
+  ]
+}

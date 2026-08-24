@@ -1,13 +1,12 @@
 """
-Function registry and loader.
+Function registry and loader (legacy API).
 
-Loads mathematical functions from JSON, validates them,
-and provides querying and filtering capabilities.
+DEPRECATED as a data source: the underlying catalog now lives in the
+geom_presets package (data/geom_presets/*.json). This module adapts
+function_line-type presets into legacy MathFunction views so existing
+call sites keep working. New code should use
+geofig_engine.data.geom_presets.get_geom_preset_registry() directly.
 """
-
-import json
-from pathlib import Path
-from typing import ClassVar
 
 from geofig_engine.data.functions import (
     FunctionType,
@@ -16,47 +15,51 @@ from geofig_engine.data.functions import (
     GeospatialMetadata,
 )
 from geofig_engine.data.validator import FunctionValidator
+from geofig_engine.data.geom_presets.models import GeomPreset
+from geofig_engine.data.geom_presets.registry import get_geom_preset_registry
 
 
 class FunctionLoadError(Exception):
-    """Raised when function JSON loading or validation fails."""
+    """Raised when function loading or validation fails."""
 
     pass
 
 
 class FunctionLoader:
-    """Load and validate functions from JSON file."""
+    """Load functions from the geom preset registry (legacy view)."""
 
-    _cache: ClassVar[list[MathFunction] | None] = None
+    _cache: list[MathFunction] | None = None
 
     @classmethod
     def load(cls) -> list[MathFunction]:
         """
-        Load all functions from JSON file.
+        Load all function-line presets as legacy MathFunction instances.
+
+        Presets whose items are not exclusively function_line geoms are
+        skipped (they have no MathFunction representation).
 
         Returns:
             List of validated MathFunction instances
 
         Raises:
-            FunctionLoadError: If loading or validation fails
+            FunctionLoadError: If preset loading or conversion fails
         """
         if cls._cache is not None:
             return cls._cache
 
         try:
-            json_data = cls._load_json()
-            cls._validate_schema(json_data)
+            presets = get_geom_preset_registry().get_all()
 
-            functions = []
-            for idx, item in enumerate(json_data.get("functions", [])):
+            functions: list[MathFunction] = []
+            for preset in presets:
+                if preset.geom_kinds != {"function_line"} or len(preset.items) != 1:
+                    continue
                 try:
-                    func = cls._hydrate_function(item)
-                    functions.append(func)
+                    functions.append(cls._preset_to_function(preset))
                 except Exception as e:
                     raise FunctionLoadError(
-                        f"Failed to load function at index {idx} "
-                        f"(id: {item.get('id', 'unknown')}): {str(e)}"
-                    )
+                        f"Failed to adapt preset '{preset.id}' to MathFunction: {e}"
+                    ) from e
 
             cls._cache = functions
             return functions
@@ -64,135 +67,46 @@ class FunctionLoader:
         except FunctionLoadError:
             raise
         except Exception as e:
-            raise FunctionLoadError(f"Failed to load functions: {str(e)}")
+            raise FunctionLoadError(f"Failed to load functions: {e}")
 
-    @classmethod
-    def _load_json(cls) -> dict:
+    @staticmethod
+    def _preset_to_function(preset: GeomPreset) -> MathFunction:
         """
-        Load JSON file from disk.
-
-        Returns:
-            Parsed JSON data
-
-        Raises:
-            FunctionLoadError: If file not found or JSON invalid
-        """
-        json_path = cls._get_json_path()
-
-        if not json_path.exists():
-            raise FunctionLoadError(f"Functions JSON file not found: {json_path}")
-
-        try:
-            with open(json_path, encoding='utf-8') as f:
-                return json.load(f)
-        except json.JSONDecodeError as e:
-            raise FunctionLoadError(f"Invalid JSON in {json_path}: {str(e)}")
-
-    @classmethod
-    def _get_json_path(cls) -> Path:
-        """
-        Get path to functions.json file.
-
-        Returns:
-            Path to functions.json relative to this module
-        """
-        # functions.json is in the same directory as this module
-        module_dir = Path(__file__).parent
-        return module_dir / "functions.json"
-
-    @classmethod
-    def _validate_schema(cls, data: dict) -> None:
-        """
-        Validate JSON schema structure.
+        Convert a single-item function_line preset into a MathFunction.
 
         Args:
-            data: Parsed JSON data
-
-        Raises:
-            FunctionLoadError: If schema is invalid
-        """
-        if not isinstance(data, dict):
-            raise FunctionLoadError("Root element must be a dictionary")
-
-        if "functions" not in data:
-            raise FunctionLoadError("Missing 'functions' key in root")
-
-        if not isinstance(data["functions"], list):
-            raise FunctionLoadError("'functions' must be an array")
-
-        required_keys = {"id", "category", "type", "expression", "variables", "color", "linestyle", "label"}
-        for idx, item in enumerate(data["functions"]):
-            if not isinstance(item, dict):
-                raise FunctionLoadError(f"Function at index {idx} is not a dictionary")
-
-            missing = required_keys - set(item.keys())
-            if missing:
-                raise FunctionLoadError(
-                    f"Function at index {idx} missing required keys: {missing}"
-                )
-
-    @classmethod
-    def _hydrate_function(cls, item: dict) -> MathFunction:
-        """
-        Convert JSON item to MathFunction instance with validation.
-
-        Args:
-            item: Dictionary from JSON
+            preset: GeomPreset with exactly one function_line item
 
         Returns:
-            Validated MathFunction instance
-
-        Raises:
-            FunctionLoadError: If validation fails
+            MathFunction instance
         """
-        # Validate expression
-        variables_list = item.get("variables", [])
-        if not isinstance(variables_list, list):
-            raise ValueError("'variables' must be a list")
+        item = preset.items[0]
+        expression = item.params["func"]
 
-        variables = tuple(variables_list)
+        extracted = FunctionValidator.extract_variables(expression) - {"pi", "e"}
+        variables = tuple(sorted(extracted)) if extracted else ("x",)
 
-        is_valid, error = FunctionValidator.validate_expression(
-            expression=item["expression"],
-            variables=variables,
-            func_type=FunctionType(item["type"]),
-        )
-        if not is_valid:
-            raise ValueError(f"Invalid expression: {error}")
+        func_type_str = item.func_type or "linear"
 
-        # Validate variables
-        is_valid, error = FunctionValidator.validate_variables(variables)
-        if not is_valid:
-            raise ValueError(f"Invalid variables: {error}")
-
-        # Build geospatial metadata
-        geo_data = item.get("geospatial", {})
-        if not isinstance(geo_data, dict):
-            geo_data = {}
-
-        geospatial = GeospatialMetadata(
-            region=geo_data.get("region"),
-            state=geo_data.get("state"),
-            city=geo_data.get("city"),
-            water_body=geo_data.get("water_body"),
-            water_type=geo_data.get("water_type"),
-        )
-
-        # Create MathFunction
         return MathFunction(
-            id=item["id"],
-            category=FunctionCategory(item["category"]),
-            func_type=FunctionType(item["type"]),
-            expression=item["expression"],
+            id=preset.id,
+            category=FunctionCategory(preset.category),
+            func_type=FunctionType(func_type_str),
+            expression=expression,
             variables=variables,
-            color=item["color"],
-            linestyle=item["linestyle"],
-            label=item["label"],
-            reference=item.get("reference"),
-            description=item.get("description"),
-            valid_domain=item.get("valid_domain"),
-            geospatial=geospatial,
-            custom_metadata=item.get("custom_metadata", {}),
+            color=item.mapping["color"],
+            linestyle=item.mapping["style"],
+            label=item.mapping["label"],
+            reference=preset.reference,
+            description=preset.description,
+            valid_domain=preset.valid_domain,
+            geospatial=GeospatialMetadata(
+                region=preset.geospatial.get("region"),
+                state=preset.geospatial.get("state"),
+                city=preset.geospatial.get("city"),
+                water_body=preset.geospatial.get("water_body"),
+                water_type=preset.geospatial.get("water_type"),
+            ),
         )
 
 
@@ -424,6 +338,8 @@ _REGISTRY: FunctionRegistry | None = None
 def get_function_registry() -> FunctionRegistry:
     """
     Get or create the global function registry (lazy-loaded).
+
+    Legacy view over the geom preset catalog.
 
     Returns:
         FunctionRegistry instance
