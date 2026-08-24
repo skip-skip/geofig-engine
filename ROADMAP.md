@@ -109,7 +109,7 @@ A figure has one **main axis** plus zero or more **links**: named secondary axes
   - Percent normalization per sample → fixed-slot fraction columns (`cation_f0/f1/f2`, `anion_f0/f1/f2`) plus derived diamond coordinates (`diamond_x/y`)
   - Follows the `Stat.compute(data) -> DataFrame` contract; one configured instance shared by all piper layers, mapping strings resolved via existing stat_data routing
   - Replaces the coordinate math currently embedded in the piper template front-end
-- **mg/L → meq/L conversion lives upstream**, not in the stat: a Phase 17 `PipelineStep` in `io/preprocess.py` applies the existing ion weight/charge tables — keeps `core.stat` free of chemistry tables and preserves Data→Spec layering
+- **mg/L → meq/L conversion is out of scope**: layers consume pre-converted meq/L columns; unit conversion will be handled by an external data system at a later time. This keeps `core.stat` free of chemistry tables and preserves Data→Spec layering
 
 ### Piper re-expression (proof of concept)
 
@@ -145,7 +145,7 @@ Port and generalize geochemplot's data-handling utilities.
 - **Unit utilities**:
   - `equisflat_normalize_units()` — normalize SI prefixes (nano→milli→kilo) within analyte groups
   - `fill_bicarbonate_as_hco3()` — compute HCO3+CO3 from alkalinity + pH + temperature
-  - Ion weight / charge tables for mg/L → meq/L conversion
+  - Note: mg/L → meq/L conversion is intentionally excluded — deferred to an external data system
 - **Column utilities**:
   - `ecesis_to_sample_df()` — parse Ecesis-style column names with embedded units
   - `create_bins()` — create categorical bins from numeric/datetime columns (range or quantile)

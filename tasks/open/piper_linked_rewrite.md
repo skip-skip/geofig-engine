@@ -2,7 +2,7 @@
 
 **Status**: open
 **Phase**: 14.5
-**Dependencies**: `link_model`, `ternary_coord`, `stat_ion_fractions`, `meq_pipeline_step`, `linked_axes_renderer`
+**Dependencies**: `link_model`, `ternary_coord`, `stat_ion_fractions`, `linked_axes_renderer`
 
 ## Description
 
@@ -10,7 +10,7 @@ Rewrite the Piper diagram (ROADMAP Phase 14.5 proof of concept) from renderer-ha
 
 - **Main axis**: cartesian square with a root transform — rotate 45° then squash y (~0.5) declared as `M_main`; no dedicated DiamondCoord class
 - **Two links**: cation triangle (`TernaryCoord` left-handed, world-unit translate lower-left) and anion triangle (`TernaryCoord` right-handed, translate lower-right)
-- **Stats**: one shared `StatIonFractions` instance attached to all three layers; layers reference fixed-slot columns; optional `unit_convert=True` sugar wraps input through the meq/L PipelineStep
+- **Stats**: one shared `StatIonFractions` instance attached to all three layers; layers reference fixed-slot columns. Inputs must arrive as meq/L — no unit conversion in FigEngine (deferred to an external data system)
 - Template math helpers (`_cat_fracs`, `_ternary_x/y`, `_diamond_xy`) and the eager Series-injection mapping plumbing are deleted; `piper_overlay_diamond()` becomes an ordinary layer append
 
 Old `PiperCoord` deprecated after visual parity is confirmed.

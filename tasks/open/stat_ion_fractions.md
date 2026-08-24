@@ -9,7 +9,7 @@
 Chemistry-to-geometry stat for Piper-style diagrams (ROADMAP Phase 14.5). Consumes meq/L ion columns, performs concentration addition (Na+K, HCO3+CO3 grouping) and percent normalization, and emits fixed-slot fraction columns plus derived diamond coordinates. Replaces the coordinate math currently embedded in `templates/piper.py` (`_cat_fracs`/`_ternary_x`/`_ternary_y`/`_diamond_xy`, lines 16–37).
 
 Design decisions locked during planning:
-- Operates on **meq/L inputs only** — unit conversion lives upstream (see `meq_pipeline_step`)
+- Operates on **meq/L inputs only** — mg/L → meq/L conversion is out of scope for FigEngine; layers consume pre-converted columns supplied by an external data system
 - Fixed-slot output naming (`cation_f0/f1/f2`, `anion_f0/f1/f2`, `diamond_x/y`) avoids identifier problems with names like "Na+K"
 - One configured instance is shared by all piper layers; each layer's mapping references the slots it needs; resolution flows through the existing stat_data routing in `engine/generator.py` (StatBin/StatRadar precedent)
 
