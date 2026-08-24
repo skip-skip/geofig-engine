@@ -39,6 +39,7 @@ from geofig_engine.core.coord import (
     CoordPolar,
     PiperCoord,
     StiffCoord,
+    TernaryCoord,
 )
 from geofig_engine.core.facet import (
     Facet,
@@ -244,6 +245,11 @@ def coord_from_dict(data: dict) -> Coord:
         return CoordPolar(**params)
     elif name == "fixed":
         return CoordFixed(**params)
+    elif name == "ternary":
+        return TernaryCoord(
+            channels=tuple(params.get("channels", ("a", "b", "c"))),
+            handedness=params.get("handedness", "left"),
+        )
     elif name == "piper":
         return PiperCoord(
             left_tri=tuple(params.get("left_tri", params.get("cation_cols", ["Ca", "Mg", "Na+K"]))),
