@@ -513,13 +513,13 @@ class MatplotlibRenderer(BaseRenderer):
 
     @staticmethod
     def _linked_world_limits(spec, main_matrix, link_by_name):
-        """World-space bounding box: unrouted data through M_main + link extents."""
+        """World-space bounding box: all layer data through link transforms + link extents."""
         xs: list[np.ndarray] = []
         ys: list[np.ndarray] = []
 
         rows = spec.data.index
         for layer in spec.layers:
-            if layer.subplot is not None or layer.geom.name == "function_line":
+            if layer.geom.name == "function_line":
                 continue
             x = _filter_series(layer.visual_mapping.get("x"), rows)
             y = _filter_series(layer.visual_mapping.get("y"), rows)
@@ -531,7 +531,9 @@ class MatplotlibRenderer(BaseRenderer):
             if n == 0:
                 continue
             pts = np.column_stack([x.to_numpy()[:n], y.to_numpy()[:n]])
-            world = _apply_matrix_pts(main_matrix, pts)
+            link = link_by_name.get(layer.subplot) if layer.subplot else None
+            matrix = link.transform.matrix() if link is not None else main_matrix
+            world = _apply_matrix_pts(matrix, pts)
             xs.append(world[:, 0])
             ys.append(world[:, 1])
 
