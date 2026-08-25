@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.dates import DateFormatter
 import matplotlib.pyplot as plt
+import matplotlib.text
 
 from matplotlib.transforms import Affine2D
 
@@ -140,12 +141,13 @@ def _box_frame(ax, link_matrix, label_policy="upright"):
     """Reference provider: unit-square outline with labeled corners.
 
     Generalizes the ternary/diamond frame pattern; real chemistry frames
-    arrive with WP5. The outline deforms with the link; corner labels stay
-    upright by default or run parallel to their edge under 'parallel'.
+    arrive with WP5.  Line geometry is drawn in local space and stamped
+    by the renderer; corner labels stay upright by default or run
+    parallel to their edge under 'parallel'.
     """
     corners_local = [(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]
-    outline = _apply_matrix_pts(link_matrix, corners_local)
-    ax.plot(outline[:, 0], outline[:, 1], color="black", linewidth=1.0, zorder=2)
+    outline_arr = np.array(corners_local, dtype=float)
+    ax.plot(outline_arr[:, 0], outline_arr[:, 1], color="black", linewidth=1.0, zorder=2)
 
     # Corner anchors with a small outward offset, plus each corner's
     # tangent direction for the 'parallel' policy.
@@ -171,25 +173,30 @@ def _piper_ternary_frame(ax, link_matrix, label_policy="upright",
                          rev_right=False, title=""):
     """Piper ternary frame: triangle outline, internal grid, tick labels.
 
+    Line geometry is drawn in local space ([0,1]²).  The renderer stamps
+    these line artists with the link affine so they deform identically to
+    data.  Text labels and arrows are placed world-side via
+    ``_apply_matrix_pts`` so they remain upright.
+
     Ions = [top, left, right] ion names for edge labels. Reversal flags
     invert tick numerals on each edge (20↔80) matching Piper convention.
     """
-    # -- triangle outline --
+    # -- triangle outline (local space) --
     tri_local = [(0, 0), (1, 0), (0.5, SQRT3_2), (0, 0)]
-    tri_world = _apply_matrix_pts(link_matrix, tri_local)
-    ax.plot(tri_world[:, 0], tri_world[:, 1], color="black", linewidth=1.0, zorder=2)
+    tri_arr = np.array(tri_local, dtype=float)
+    ax.plot(tri_arr[:, 0], tri_arr[:, 1], color="black", linewidth=1.0, zorder=2)
 
-    # -- internal grid at 20/40/60/80% --
+    # -- internal grid at 20/40/60/80% (local space) --
     for t in [0.2, 0.4, 0.6, 0.8]:
         family1 = [(t, 0), (t * 0.5, t * SQRT3_2)]
         family2 = [(t, 0), ((1 + t) / 2, (1 - t) * SQRT3_2)]
         family3 = [(t * 0.5, t * SQRT3_2), (1 - t * 0.5, t * SQRT3_2)]
         for fam in (family1, family2, family3):
-            w = _apply_matrix_pts(link_matrix, fam)
-            ax.plot(w[:, 0], w[:, 1], color="gray", linewidth=0.3,
+            fam_arr = np.array(fam, dtype=float)
+            ax.plot(fam_arr[:, 0], fam_arr[:, 1], color="gray", linewidth=0.3,
                     linestyle=":", zorder=1)
 
-    # -- tick labels at 20/40/60/80% --
+    # -- tick labels at 20/40/60/80% (world-side text) --
     for tick_val in [0.2, 0.4, 0.6, 0.8]:
         tick_str = str(int(tick_val * 100))
         inv = str(100 - int(tick_str))
@@ -222,13 +229,13 @@ def _piper_ternary_frame(ax, link_matrix, label_policy="upright",
                     (-0.5, SQRT3_2), link_matrix, policy=label_policy),
                 clip_on=False)
 
-    # -- edge title --
+    # -- edge title (world-side text) --
     if title:
         wt = _apply_matrix_pts(link_matrix, [(0.5, SQRT3_2 + 0.12)])[0]
         ax.text(wt[0], wt[1], title, ha="center", va="bottom", fontsize=7,
                 fontweight="bold", clip_on=False)
 
-    # -- ion edge labels with arrows --
+    # -- ion edge labels with arrows (world-side annotations) --
     if ions and len(ions) == 3:
         offset = 0.12
         cos30 = SQRT3_2
@@ -264,50 +271,54 @@ def _piper_diamond_frame(ax, link_matrix, label_policy="upright",
                          ions=None, title=""):
     """Piper diamond frame: outline, internal grid, tick labels.
 
+    Line geometry is drawn in local space ([0,100]² percentage space).
+    The renderer stamps these line artists with the link affine so they
+    deform identically to data.  Text labels are placed world-side via
+    ``_apply_matrix_pts`` so they remain upright.
+
     Ions = [cation_top, cation_left, anion_top, anion_right] for edge labels.
     """
-    # -- outline --
-    h = SQRT3_2
-    dia_local = [(0, h), (0.5, 0), (0, -h), (-0.5, 0), (0, h)]
-    dia_world = _apply_matrix_pts(link_matrix, dia_local)
-    ax.plot(dia_world[:, 0], dia_world[:, 1], color="black", linewidth=1.0, zorder=2)
+    # -- outline (local [0,100]²) --
+    dia_local = [(0, 0), (100, 0), (100, 100), (0, 100), (0, 0)]
+    dia_arr = np.array(dia_local, dtype=float)
+    ax.plot(dia_arr[:, 0], dia_arr[:, 1], color="black", linewidth=1.0, zorder=2)
 
-    # -- internal grid --
-    for t in [0.2, 0.4, 0.6, 0.8]:
-        # Family 1: upper-right edge → lower-left edge
-        f1 = [(t / 2, h * (1 - t)), (-(1 - t) / 2, -t * h)]
-        w1 = _apply_matrix_pts(link_matrix, f1)
-        ax.plot(w1[:, 0], w1[:, 1], color="gray", linewidth=0.3,
+    # -- internal grid at 20/40/60/80% (local space) --
+    for t in [20, 40, 60, 80]:
+        # Family 1: bottom edge → top edge (vertical lines)
+        f1 = [(t, 0), (t, 100)]
+        f1_arr = np.array(f1, dtype=float)
+        ax.plot(f1_arr[:, 0], f1_arr[:, 1], color="gray", linewidth=0.3,
                 linestyle=":", zorder=1)
-        # Family 2: upper-left edge → lower-right edge
-        f2 = [(-(1 - t) / 2, t * h), (t / 2, -h * (1 - t))]
-        w2 = _apply_matrix_pts(link_matrix, f2)
-        ax.plot(w2[:, 0], w2[:, 1], color="gray", linewidth=0.3,
+        # Family 2: left edge → right edge (horizontal lines)
+        f2 = [(0, t), (100, t)]
+        f2_arr = np.array(f2, dtype=float)
+        ax.plot(f2_arr[:, 0], f2_arr[:, 1], color="gray", linewidth=0.3,
                 linestyle=":", zorder=1)
 
-    # -- tick labels on upper-right edge (cation) --
-    for t in [0.2, 0.4, 0.6, 0.8]:
-        label = f"{t * 100:.0f}"
-        d = 0.03
-        w = _apply_matrix_pts(link_matrix, [(t / 2 + d, h * (1 - t) + d * 0.4)])[0]
-        ax.text(w[0], w[1], label, ha="center", va="bottom", fontsize=5,
+    # -- tick labels on bottom edge (cation %) (world-side text) --
+    for t in [20, 40, 60, 80]:
+        label = f"{t}"
+        d = 3
+        w = _apply_matrix_pts(link_matrix, [(t, -d)])[0]
+        ax.text(w[0], w[1], label, ha="center", va="top", fontsize=5,
                 rotation=label_rotation(
-                    (0.5, -h), link_matrix, policy=label_policy),
+                    (1, 0), link_matrix, policy=label_policy),
                 clip_on=False)
 
-    # -- tick labels on upper-left edge (anion) --
-    for t in [0.2, 0.4, 0.6, 0.8]:
-        label = f"{t * 100:.0f}"
-        d = 0.03
-        w = _apply_matrix_pts(link_matrix, [(-(1 - t) / 2 - d, t * h + d * 0.4)])[0]
-        ax.text(w[0], w[1], label, ha="center", va="bottom", fontsize=5,
+    # -- tick labels on left edge (anion %) (world-side text) --
+    for t in [20, 40, 60, 80]:
+        label = f"{t}"
+        d = 3
+        w = _apply_matrix_pts(link_matrix, [(-d, t)])[0]
+        ax.text(w[0], w[1], label, ha="right", va="center", fontsize=5,
                 rotation=label_rotation(
-                    (0.5, h), link_matrix, policy=label_policy),
+                    (0, 1), link_matrix, policy=label_policy),
                 clip_on=False)
 
-    # -- edge title --
+    # -- edge title (world-side text) --
     if title:
-        wt = _apply_matrix_pts(link_matrix, [(0, h + 0.12)])[0]
+        wt = _apply_matrix_pts(link_matrix, [(50, 112)])[0]
         ax.text(wt[0], wt[1], title, ha="center", va="bottom", fontsize=7,
                 fontweight="bold", clip_on=False)
 
@@ -449,6 +460,7 @@ class MatplotlibRenderer(BaseRenderer):
 
         figsize = spec.settings.get("figsize", (10, 6))
         fig, ax = plt.subplots(figsize=figsize)
+        ax.set_facecolor("none")
         if not spec.layers:
             raise ValueError("FigureSpec must define at least one layer")
 
@@ -464,14 +476,21 @@ class MatplotlibRenderer(BaseRenderer):
             matrix = link.transform.matrix() if link is not None else main_matrix
             return _affine_from_matrix(matrix)
 
-        # Frames first (below data): providers deform with their link,
-        # labels are placed world-side per label policy.
+        # Frames first (below data): providers draw line geometry in local
+        # coordinate space.  The renderer stamps those lines with the link
+        # affine so they deform identically to data.  Text labels placed
+        # world-side remain upright (not stamped).
         for link in spec.links:
             frame = link.frame or {}
             provider = _FRAME_PROVIDERS.get(frame.get("provider"))
             if provider is not None:
+                snapshot = self._snapshot_artists(ax)
                 provider(ax, link.transform.matrix(),
                          frame.get("label_policy", "upright"))
+                affine = _affine_from_matrix(link.transform.matrix())
+                for artist in self._new_artists(ax, snapshot):
+                    if not isinstance(artist, matplotlib.text.Text):
+                        artist.set_transform(affine + ax.transData)
 
         xlim, ylim = self._linked_world_limits(spec, main_matrix, link_by_name)
         ax.set_xlim(xlim)
