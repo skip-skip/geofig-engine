@@ -407,18 +407,15 @@ class StatIonFractions(Stat):
         cat_f = _slots(cat_groups)  # (f0=left, f1=apex, f2=right)
         an_f = _slots(an_groups)
 
-        h = np.sqrt(3.0) / 2.0
-
-        def _ternary(fracs):
-            x = fracs[2].to_numpy() + 0.5 * fracs[1].to_numpy()
-            y = h * fracs[1].to_numpy()
-            return x, y
-
-        cat_x, cat_y = _ternary(cat_f)
-        an_x, an_y = _ternary(an_f)
-
-        dx = an_y / (4 * h) + 0.5 * an_x - cat_y / (4 * h) + 0.5 * cat_x - 0.5
-        dy = 0.5 * an_y + h * an_x + 0.5 * cat_y - h * cat_x
+        # Percentage data for diamond axes: [0,100]²
+        # Cation %: (Ca+Mg) / (Ca+Mg+Na+K) * 100
+        cat_total = cat_f[0] + cat_f[1] + cat_f[2]
+        dia_cation_pct = (cat_f[0] + cat_f[1]) / cat_total.replace(0.0, np.nan) * 100
+        dia_cation_pct = dia_cation_pct.fillna(0.0)
+        # Anion %: (SO4+Cl) / (HCO3+SO4+Cl) * 100
+        an_total = an_f[0] + an_f[1] + an_f[2]
+        dia_anion_pct = (an_f[1] + an_f[2]) / an_total.replace(0.0, np.nan) * 100
+        dia_anion_pct = dia_anion_pct.fillna(0.0)
 
         out = pd.DataFrame(index=data.index)
         out["cation_f0"] = cat_f[0].to_numpy()
@@ -427,6 +424,6 @@ class StatIonFractions(Stat):
         out["anion_f0"] = an_f[0].to_numpy()
         out["anion_f1"] = an_f[1].to_numpy()
         out["anion_f2"] = an_f[2].to_numpy()
-        out["diamond_x"] = np.nan_to_num(dx)
-        out["diamond_y"] = np.nan_to_num(dy)
+        out["dia_anion_pct"] = dia_anion_pct.to_numpy()
+        out["dia_cation_pct"] = dia_cation_pct.to_numpy()
         return out

@@ -26,30 +26,6 @@ from geofig_engine.utils.typing import SourceType
 _SQRT3_2 = math.sqrt(3) / 2.0
 
 
-def _compute_diamond_xy(
-    cat_x: np.ndarray, cat_y: np.ndarray,
-    an_x: np.ndarray, an_y: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Derive diamond-space (x, y) from ternary-projected cation/anion coords."""
-    h = _SQRT3_2
-    dx = an_y / (4 * h) + 0.5 * an_x - cat_y / (4 * h) + 0.5 * cat_x - 0.5
-    dy = 0.5 * an_y + h * an_x + 0.5 * cat_y - h * cat_x
-    return np.nan_to_num(dx), np.nan_to_num(dy)
-
-
-def _ternary_xy(frac_a: pd.Series, frac_b: pd.Series,
-                frac_c: pd.Series, handedness: str = "left"):
-    """Project three fraction series into local ternary (x, y)."""
-    a = frac_a.to_numpy(dtype=float)
-    b = frac_b.to_numpy(dtype=float)
-    c = frac_c.to_numpy(dtype=float)
-    x = 0.5 * a + c
-    y = _SQRT3_2 * a
-    if handedness == "right":
-        x = 1.0 - x
-    return x, y
-
-
 def build_piper_specs(
     data: pd.DataFrame,
     left_tri: tuple[str, str, str] = ("Ca", "Mg", "Na+K"),
@@ -73,21 +49,15 @@ def build_piper_specs(
             f"available: {sorted(data.columns)}"
         )
 
-    # -- ternary fractions (cations: f0=Ca, f1=Mg, f2=Na+K) --
-    def _fracs(cols):
-        total = data[list(cols)].sum(axis=1)
-        return [data[c] / total.replace(0.0, np.nan) for c in cols]
-
-    cat_fracs = _fracs(left_tri)   # [Ca_f, Mg_f, Nak_f]
-    an_fracs = _fracs(right_tri)   # [HCO3_f, SO4_f, Cl_f]
-
-    # local ternary projections
-    cat_x, cat_y = _ternary_xy(cat_fracs[1], cat_fracs[0], cat_fracs[2])
-    an_x, an_y = _ternary_xy(an_fracs[1], an_fracs[2], an_fracs[0],
-                              handedness="right")
-
-    # diamond world coordinates
-    dia_x, dia_y = _compute_diamond_xy(cat_x, cat_y, an_x, an_y)
+    # -- diamond percentage data --
+    cat_total = data[list(left_tri)].sum(axis=1)
+    an_total = data[list(right_tri)].sum(axis=1)
+    # Cation %: (Ca+Mg) / (Ca+Mg+Na+K) * 100
+    dia_cation_pct = (data[left_tri[0]] + data[left_tri[1]]) / cat_total.replace(0.0, np.nan) * 100
+    dia_cation_pct = dia_cation_pct.fillna(0.0)
+    # Anion %: (SO4+Cl) / (HCO3+SO4+Cl) * 100
+    dia_anion_pct = (data[right_tri[1]] + data[right_tri[2]]) / an_total.replace(0.0, np.nan) * 100
+    dia_anion_pct = dia_anion_pct.fillna(0.0)
 
     # -- visual mapping for color/marker/etc. passthrough --
     visuals: dict[str, pd.Series] = {}
@@ -100,8 +70,8 @@ def build_piper_specs(
 
     # -- data augmentation: inject diamond coords --
     aug = data.copy()
-    aug["_dia_x"] = dia_x
-    aug["_dia_y"] = dia_y
+    aug["_dia_anion_pct"] = dia_anion_pct
+    aug["_dia_cation_pct"] = dia_cation_pct
 
     # -- links --
     # TernaryCoord channels = (apex, bottom-left, bottom-right)
@@ -133,9 +103,16 @@ def build_piper_specs(
             "title": "RIGHT TRIANGLE",
         },
     )
+    dia_pct = _SQRT3_2 / 100.0
+    _SQRT2 = math.sqrt(2)
     diamond_link = AxisLink(
         name="diamond",
         coord=CoordCartesian(),
+        transform=LinkTransform(
+            translate=(0.5, 0.0),
+            rotate=45.0,
+            scale=(_SQRT2 / 400.0, dia_pct * _SQRT2 / 2.0),
+        ),
         frame={"provider": "piper_diamond_frame"},
     )
 
@@ -156,9 +133,9 @@ def build_piper_specs(
     _ternary_layer(left_tri, "left_tri")
     _ternary_layer(right_tri, "right_tri")
 
-    # diamond layer: pre-computed world coords
-    dia_vm: dict = {"x": pd.Series(dia_x, index=aug.index),
-                    "y": pd.Series(dia_y, index=aug.index)}
+    # diamond layer: percentage data in [0,100]²
+    dia_vm: dict = {"x": aug["_dia_anion_pct"],
+                    "y": aug["_dia_cation_pct"]}
     dia_vm.update(visuals)
     layers.append(LayerSpec(
         geom=GeomPoint(),
@@ -198,16 +175,12 @@ def piper_overlay_diamond(
         for link in spec.links if link.name == "right_tri"
     )[0]
 
-    def _fracs(cols):
-        total = data[list(cols)].sum(axis=1)
-        return [data[c] / total.replace(0.0, np.nan) for c in cols]
-
-    cat_fracs = _fracs(left_tri)
-    an_fracs = _fracs(right_tri)
-    cat_x, cat_y = _ternary_xy(cat_fracs[1], cat_fracs[0], cat_fracs[2])
-    an_x, an_y = _ternary_xy(an_fracs[1], an_fracs[2], an_fracs[0],
-                              handedness="right")
-    dia_x, dia_y = _compute_diamond_xy(cat_x, cat_y, an_x, an_y)
+    cat_total = data[list(left_tri)].sum(axis=1)
+    an_total = data[list(right_tri)].sum(axis=1)
+    dia_cation_pct = (data[left_tri[0]] + data[left_tri[1]]) / cat_total.replace(0.0, np.nan) * 100
+    dia_cation_pct = dia_cation_pct.fillna(0.0)
+    dia_anion_pct = (data[right_tri[1]] + data[right_tri[2]]) / an_total.replace(0.0, np.nan) * 100
+    dia_anion_pct = dia_anion_pct.fillna(0.0)
 
     visuals: dict[str, pd.Series] = {}
     if mapping:
@@ -217,8 +190,7 @@ def piper_overlay_diamond(
             elif isinstance(source, pd.Series):
                 visuals[channel] = source
 
-    vm: dict = {"x": pd.Series(dia_x, index=data.index),
-                "y": pd.Series(dia_y, index=data.index)}
+    vm: dict = {"x": dia_anion_pct, "y": dia_cation_pct}
     vm.update(visuals)
 
     overlay_layer = LayerSpec(

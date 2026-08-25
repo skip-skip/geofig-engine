@@ -58,12 +58,14 @@ class TestHandComputed:
         assert out["anion_f2"].iloc[0] == pytest.approx(0.25)
 
     def test_diamond_center_for_balanced_sample(self):
-        # With cat_x = f2 + f1/2 = .625, an_x = .375, equal heights,
-        # the diamond formulas give exactly (0, 0) for sample 0.
+        # With equal cation fractions and equal anion fractions, both
+        # percentages should be 50%.
         df = _sample_df().iloc[[0]].reset_index(drop=True)
         out = _default_stat().compute(df)
-        assert out["diamond_x"].iloc[0] == pytest.approx(0.0, abs=1e-12)
-        assert out["diamond_y"].iloc[0] == pytest.approx(0.0, abs=1e-12)
+        # cation: Ca=1, Mg=1, Na+K=2 -> (Ca+Mg)/total = 2/4 = 50%
+        assert out["dia_cation_pct"].iloc[0] == pytest.approx(50.0)
+        # anion: HCO3+CO3=2, SO4=1, Cl=1 -> (SO4+Cl)/total = 2/4 = 50%
+        assert out["dia_anion_pct"].iloc[0] == pytest.approx(50.0)
 
     def test_single_ion_columns(self):
         # Pre-combined columns passed as plain strings.
@@ -117,10 +119,9 @@ class TestDegenerateRows:
         for col in ("cation_f0", "cation_f1", "cation_f2",
                     "anion_f0", "anion_f1", "anion_f2"):
             assert zero_row[col] == 0.0
-        # Diamond position mirrors the legacy pipeline exactly: all-zero
-        # fractions leave dx = ... - 0.5, i.e. the diamond's left vertex.
-        assert zero_row["diamond_x"] == pytest.approx(-0.5)
-        assert zero_row["diamond_y"] == pytest.approx(0.0)
+        # Zero-total rows produce 0/0 = NaN -> fillna(0) -> 0%
+        assert zero_row["dia_anion_pct"] == pytest.approx(0.0)
+        assert zero_row["dia_cation_pct"] == pytest.approx(0.0)
 
     def test_missing_ion_treated_as_zero(self):
         # Row 3 has Mg=NaN, CO3=NaN; remaining ions still fraction correctly.
@@ -147,51 +148,37 @@ class TestDegenerateRows:
 
 class TestLegacyParity:
     def test_matches_piper_template_math(self):
-        """StatIonFractions output matches the legacy piper math (now inlined)."""
-        import math
-
+        """StatIonFractions percentage output matches expected computation."""
         df = _sample_df()
         df = df.copy()
         df["NaK"] = df["Na"] + df["K"]
 
-        def _cat_fracs(data, cols):
-            total = data[list(cols)].sum(axis=1)
-            return [data[c] / total for c in cols]
-
-        def _ternary_x(f1, f0):
-            return f1.fillna(0).values * 1.0 + f0.fillna(0).values * 0.5
-
-        def _ternary_y(f0):
-            sx = math.sqrt(3) / 2.0
-            return f0.fillna(0).values * sx
-
-        def _diamond_xy(cat_x, cat_y, an_x, an_y):
-            h = 0.5 * math.sqrt(3)
-            dx = an_y / (4 * h) + 0.5 * an_x - cat_y / (4 * h) + 0.5 * cat_x - 0.5
-            dy = 0.5 * an_y + h * an_x + 0.5 * cat_y - h * cat_x
-            return np.nan_to_num(dx), np.nan_to_num(dy)
-
-        ca_f, mg_f, nak_f = _cat_fracs(df, ("Ca", "Mg", "NaK"))
-        hco3_f, so4_f, cl_f = _cat_fracs(df, ("HCO3", "SO4", "Cl"))
-        cat_x = _ternary_x(nak_f, mg_f)
-        cat_y = _ternary_y(mg_f)
-        an_x = _ternary_x(cl_f, so4_f)
-        an_y = _ternary_y(so4_f)
-        exp_dx, exp_dy = _diamond_xy(cat_x, cat_y, an_x, an_y)
-
+        # Expected: stat computes percentages from fractions (NaN->0 via _slots)
         out = StatIonFractions(
             cations=("Ca", "Mg", "NaK"),
             anions=("HCO3", "SO4", "Cl"),
         ).compute(df)
 
-        np.testing.assert_allclose(out["diamond_x"], exp_dx, atol=1e-12)
-        np.testing.assert_allclose(out["diamond_y"], exp_dy, atol=1e-12)
-        # Ternary positions reconstructible from slots with same convention
+        # Recompute fractions the same way _slots does
+        def _fracs(data, groups):
+            sums = [data[list(g)].sum(axis=1) for g in groups]
+            total = sums[0].add(sums[1]).add(sums[2])
+            return [s / total.replace(0.0, np.nan) for s in sums]
+
+        cat_f = _fracs(df, [("Ca",), ("Mg",), ("Na", "K")])
+        an_f = _fracs(df, [("HCO3",), ("SO4",), ("Cl",)])
+
+        cat_total = cat_f[0] + cat_f[1] + cat_f[2]
+        exp_cation_pct = ((cat_f[0] + cat_f[1]) / cat_total.replace(0.0, np.nan) * 100).fillna(0.0)
+        an_total = an_f[0] + an_f[1] + an_f[2]
+        exp_anion_pct = ((an_f[1] + an_f[2]) / an_total.replace(0.0, np.nan) * 100).fillna(0.0)
+
+        np.testing.assert_allclose(out["dia_anion_pct"], exp_anion_pct, atol=1e-12)
+        np.testing.assert_allclose(out["dia_cation_pct"], exp_cation_pct, atol=1e-12)
+        # Ternary fractions are still verifiable
         np.testing.assert_allclose(
-            out["cation_f2"] + 0.5 * out["cation_f1"], cat_x, atol=1e-12
-        )
-        np.testing.assert_allclose(
-            (np.sqrt(3) / 2) * out["cation_f1"], cat_y, atol=1e-12
+            out["cation_f2"] + 0.5 * out["cation_f1"],
+            cat_f[2].fillna(0).values + 0.5 * cat_f[1].fillna(0).values, atol=1e-12
         )
 
     def test_legacy_column_defaults_align(self):
@@ -286,7 +273,7 @@ class TestSharedInstanceRouting:
             Layer(geom=GeomPoint(), stat=stat,
                   mapping={"x": "anion_f0", "y": "anion_f2"}),
             Layer(geom=GeomPoint(), stat=stat,
-                  mapping={"x": "diamond_x", "y": "diamond_y"}),
+                  mapping={"x": "dia_anion_pct", "y": "dia_cation_pct"}),
         ]
         df = _sample_df()
         engine = FigureEngine()
@@ -305,8 +292,8 @@ class TestSharedInstanceRouting:
         vm0, vm1, vm2 = (l.visual_mapping for l in spec.layers)
         pd.testing.assert_series_equal(vm0["x"], expected["cation_f0"])
         pd.testing.assert_series_equal(vm1["y"], expected["anion_f2"])
-        pd.testing.assert_series_equal(vm2["x"], expected["diamond_x"])
-        pd.testing.assert_series_equal(vm2["y"], expected["diamond_y"])
+        pd.testing.assert_series_equal(vm2["x"], expected["dia_anion_pct"])
+        pd.testing.assert_series_equal(vm2["y"], expected["dia_cation_pct"])
 
     def test_non_stat_columns_fall_back_to_original_data(self):
         from geofig_engine.core.dataset import Dataset
@@ -314,7 +301,7 @@ class TestSharedInstanceRouting:
 
         stat = _default_stat()
         layer = Layer(geom=GeomPoint(), stat=stat,
-                      mapping={"x": "diamond_x", "y": "diamond_y", "color": "Ca"})
+                      mapping={"x": "dia_anion_pct", "y": "dia_cation_pct", "color": "Ca"})
         specs = FigureEngine().build_specs_from_layers(
             Dataset(dataframe=_sample_df(), key_column="Ca"), [layer]
         )

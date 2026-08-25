@@ -105,6 +105,8 @@ class TestBuildPiperSpecs:
         specs = build_piper_specs(_DATA)
         dia = specs[0].links[2]
         assert isinstance(dia.coord, CoordCartesian)
+        assert dia.transform.rotate == 45.0
+        assert dia.transform.translate == (0.5, 0.0)
 
     def test_layers_have_subplot_tags(self):
         specs = build_piper_specs(_DATA)
@@ -315,7 +317,7 @@ class TestPiperParity:
         np.testing.assert_allclose(y_new, legacy_y, atol=1e-12)
 
     def test_diamond_positions_match_legacy(self):
-        """Diamond coordinates match legacy _diamond_xy formula."""
+        """Diamond percentage data + LinkTransform maps [0,100]² to correct diamond vertices."""
         h = np.sqrt(3) / 2.0
         specs = build_piper_specs(_DATA)
         spec = specs[0]
@@ -325,25 +327,31 @@ class TestPiperParity:
         x_new = vm["x"].to_numpy()
         y_new = vm["y"].to_numpy()
 
-        # Legacy full computation
+        # Verify data is percentage values [0,100]
         def _fracs(cols):
             total = _DATA[list(cols)].sum(axis=1)
             return [_DATA[c] / total for c in cols]
 
         cat_f = _fracs(("Ca", "Mg", "Na+K"))
         an_f = _fracs(("HCO3", "SO4", "Cl"))
-        cat_x = cat_f[2].to_numpy() + 0.5 * cat_f[1].to_numpy()
-        cat_y = h * cat_f[1].to_numpy()
-        an_x = an_f[2].to_numpy() + 0.5 * an_f[1].to_numpy()
-        an_y = h * an_f[1].to_numpy()
+        expected_cation_pct = (cat_f[0] + cat_f[1]).to_numpy() * 100
+        expected_anion_pct = (an_f[1] + an_f[2]).to_numpy() * 100
 
-        dx = an_y / (4 * h) + 0.5 * an_x - cat_y / (4 * h) + 0.5 * cat_x - 0.5
-        dy = 0.5 * an_y + h * an_x + 0.5 * cat_y - h * cat_x
-        dx = np.nan_to_num(dx)
-        dy = np.nan_to_num(dy)
+        np.testing.assert_allclose(x_new, expected_anion_pct, atol=1e-12)
+        np.testing.assert_allclose(y_new, expected_cation_pct, atol=1e-12)
 
-        np.testing.assert_allclose(x_new, dx, atol=1e-12)
-        np.testing.assert_allclose(y_new, dy, atol=1e-12)
+        # Verify LinkTransform maps corners to correct diamond vertices
+        dia_link = [l for l in spec.links if l.name == "diamond"][0]
+        corners_pct = np.array([[0, 0], [100, 0], [100, 100], [0, 100]], dtype=float)
+        corners_world = dia_link.transform.transform_points(corners_pct)
+
+        expected_world = np.array([
+            [0.5, 0.0],          # bottom vertex
+            [0.75, h / 2.0],     # right vertex (≈0.433)
+            [0.5, h],            # top vertex (≈0.866)
+            [0.25, h / 2.0],     # left vertex (≈0.433)
+        ])
+        np.testing.assert_allclose(corners_world, expected_world, atol=1e-10)
 
     def test_right_triangle_positions_match_legacy(self):
         """Right triangle ternary projection matches legacy _ternary_x/y."""
