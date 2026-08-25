@@ -1,6 +1,6 @@
 # Fix `_linked_world_limits` to include routed layer data
 
-**Status**: open
+**Status**: closed
 **Phase**: 14.5
 **Depends on**: (none — first step)
 
