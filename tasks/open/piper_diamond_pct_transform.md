@@ -1,6 +1,6 @@
 # Diamond: percentage data + LinkTransform (rotate 45°, scale, translate)
 
-**Status**: open
+**Status**: closed
 **Phase**: 14.5
 **Depends on**: `piper_frame_local_space`
 
