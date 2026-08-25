@@ -14,12 +14,9 @@ import pandas as pd
 from matplotlib.dates import DateFormatter
 import matplotlib.pyplot as plt
 
-from matplotlib.gridspec import GridSpec
 from matplotlib.transforms import Affine2D
 
-from matplotlib.patches import Polygon
-
-from geofig_engine.core.coord import CoordFlipped, CoordFixed, CoordPolar, PiperCoord, StiffCoord
+from geofig_engine.core.coord import CoordFlipped, CoordFixed, CoordPolar, StiffCoord
 from geofig_engine.core.facet import FacetGrid, FacetNull, FacetWrap
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.core.link import LinkTransform, label_rotation
@@ -327,8 +324,6 @@ class MatplotlibRenderer(BaseRenderer):
 
         if spec.links:
             return self._render_linked(spec)
-        if isinstance(spec.coord, PiperCoord):
-            return self._render_piper(spec)
         if isinstance(spec.coord, StiffCoord):
             return self._render_stiff(spec)
         if not isinstance(spec.facet, FacetNull):
@@ -655,179 +650,6 @@ class MatplotlibRenderer(BaseRenderer):
                 return
 
     # ------------------------------------------------------------------
-    # Piper diagram (3-panel: left triangle, right triangle, diamond)
-    #
-    # Frame decorations (boundaries, grid lines, labels) are drawn
-    # directly. Data layers are dispatched by subplot through _render_axes
-    # using standard GoG geometries (GeomPoint, GeomText, GeomAbline,
-    # GeomRect, etc.) — all compatible with the Piper coordinate space.
-    # ------------------------------------------------------------------
-
-    def _render_piper(self, spec: FigureSpec):
-        coord = spec.coord
-        params = coord.params
-        left_tri = params["left_tri"]
-        right_tri = params["right_tri"]
-        figsize = spec.settings.get("figsize", (10, 8))
-
-        fig = plt.figure(figsize=figsize)
-        # [left, bottom, width, height] in figure coordinates
-        ax_dia = fig.add_axes([0.2, 0.28, 0.6, 0.6], zorder=2)
-        ax_cat = fig.add_axes([0.07, -0.05, 0.525, 0.7875], zorder=1)
-        ax_an = fig.add_axes([0.4, -0.05, 0.525, 0.7875], zorder=1)
-
-        self._draw_ternary_frame(ax_cat, left_tri[1], left_tri[2], left_tri[0], "LEFT TRIANGLE", reverse_bottom=True, reverse_right=True)
-        self._draw_ternary_frame(ax_an, right_tri[1], right_tri[2], right_tri[0], "RIGHT TRIANGLE", reverse_left=True)
-        self._draw_diamond_frame(ax_dia)
-
-        sx = math.sqrt(3) / 2.0
-        self._draw_ternary_edge_labels(ax_cat, left_tri[1], left_tri[0], left_tri[2],
-                                        rev_right=True)
-        self._draw_ternary_edge_labels(ax_an, right_tri[0], right_tri[2], right_tri[1],
-                                        rev_left=False, rev_base=True)
-        fig.text(0.5, 0.01, "% meq/kg", ha="center", va="bottom", fontsize=12)
-
-        axes_map = {"left_tri": ax_cat, "right_tri": ax_an, "diamond": ax_dia}
-        for subplot_name, ax in axes_map.items():
-            sub_layers = [l for l in spec.layers if l.subplot == subplot_name]
-            if sub_layers:
-                sub_spec = dataclasses.replace(spec, layers=sub_layers)
-                rows = spec.data.index
-                for layer in sub_layers:
-                    order = layer.zorder if layer.zorder is not None else 10
-                    filtered = LayerSpec(
-                        geom=layer.geom,
-                        stat=layer.stat,
-                        visual_mapping={k: _filter_series(v, rows) for k, v in layer.visual_mapping.items()},
-                        coord=spec.coord,
-                        zorder=layer.zorder,
-                    )
-                    self._render_layer(ax, sub_spec, filtered, order)
-
-        title = spec.settings.get("title", "Piper Diagram")
-        fig.suptitle(title, fontsize=14, y=0.98)
-
-        plt.close(fig)
-        return fig
-
-    @staticmethod
-    def _draw_ternary_frame(ax, label_top, label_right, label_left, title, reverse_bottom=False, reverse_left=False, reverse_right=False):
-        sx = math.sqrt(3) / 2.0
-        tri = Polygon([(0, 0), (1, 0), (0.5, sx)], fill=False, edgecolor="black", linewidth=1.0)
-        ax.add_patch(tri)
-
-        for tick_val in [0.2, 0.4, 0.6, 0.8]:
-            pts = [(tick_val, 0), (tick_val * 0.5, tick_val * sx)]
-            ax.plot([p[0] for p in pts], [p[1] for p in pts], color="gray", linewidth=0.3, linestyle=":")
-            pts = [(tick_val, 0), ((1 + tick_val) / 2, (1 - tick_val) * sx)]
-            ax.plot([p[0] for p in pts], [p[1] for p in pts], color="gray", linewidth=0.3, linestyle=":")
-            pts = [(tick_val * 0.5, tick_val * sx), (1 - tick_val * 0.5, tick_val * sx)]
-            ax.plot([p[0] for p in pts], [p[1] for p in pts], color="gray", linewidth=0.3, linestyle=":")
-
-        for tick_val, tick_label in [(0.2, "20"), (0.4, "40"), (0.6, "60"), (0.8, "80")]:
-            bottom_label = str(100 - int(tick_label)) if reverse_bottom else tick_label
-            left_label = str(100 - int(tick_label)) if reverse_left else tick_label
-            right_label = str(100 - int(tick_label)) if reverse_right else tick_label
-            ax.text(tick_val, -0.03, bottom_label, ha="center", va="top", fontsize=5)
-            ax.text(tick_val * 0.5 - 0.026, tick_val * sx + 0.015, left_label,
-                    ha="center", va="center", fontsize=5, rotation=60)
-            ax.text(1 - tick_val * 0.5 + 0.026, tick_val * sx + 0.015, right_label,
-                    ha="center", va="center", fontsize=5, rotation=-60)
-
-
-        ax.set_xlim(-0.5, 1.5)
-        ax.set_ylim(-0.5, 1.332)
-        ax.set_aspect("equal")
-        ax.axis("off")
-
-    @staticmethod
-    def _draw_ternary_edge_labels(ax, label_left, label_base, label_right,
-                                    rev_left=True, rev_base=False, rev_right=False):
-        sx = math.sqrt(3) / 2.0
-        offset = 0.12
-        cos30 = math.sqrt(3) / 2.0
-        mid_left = (0.25 - offset * cos30, sx / 2.0 + offset * 0.5)
-        mid_base = (0.5, -offset)
-        mid_right = (0.75 + offset * cos30, sx / 2.0 + offset * 0.5)
-
-        def _arrow(x, y, text, rotation=0, reverse=False):
-            length = 0.5
-            angle_rad = math.radians(rotation)
-            dx = (length / 2) * math.cos(angle_rad)
-            dy = (length / 2) * math.sin(angle_rad)
-            style = '-|>' if reverse else '<|-'
-            ax.annotate('', xy=(x + dx, y + dy), xytext=(x - dx, y - dy),
-                        arrowprops=dict(arrowstyle=style, color='black', lw=1.0),
-                        annotation_clip=False)
-            ax.text(x, y, text, ha='center', va='center', rotation=rotation,
-                    fontsize=7, bbox=dict(facecolor='white', edgecolor='none', pad=1))
-
-        _arrow(*mid_left, label_left, rotation=60, reverse=rev_left)
-        _arrow(*mid_base, label_base, rotation=0, reverse=rev_base)
-        _arrow(*mid_right, label_right, rotation=-60, reverse=rev_right)
-
-    @staticmethod
-    def _draw_diamond_frame(ax):
-        sx = math.sqrt(3) / 2.0
-        dia = Polygon([(0, sx), (0.5, 0), (0, -sx), (-0.5, 0)], fill=False,
-                      edgecolor="black", linewidth=1.0)
-        ax.add_patch(dia)
-
-        for t in [0.2, 0.4, 0.6, 0.8]:
-            # Family 1: upper-right edge → lower-left edge
-            x1 = t / 2.0
-            y1 = sx * (1 - t)
-            x2 = -(1 - t) / 2.0
-            y2 = -t * sx
-            ax.plot([x1, x2], [y1, y2], color="gray", linewidth=0.3, linestyle=":")
-
-            # Family 2: upper-left edge → lower-right edge
-            x3 = -(1 - t) / 2.0
-            y3 = t * sx
-            x4 = t / 2.0
-            y4 = -sx * (1 - t)
-            ax.plot([x3, x4], [y3, y4], color="gray", linewidth=0.3, linestyle=":")
-
-        for t in [0.2, 0.4, 0.6, 0.8]:
-            label = f"{t * 100:.0f}"
-            rlabel = f"{(1 - t) * 100:.0f}"
-            d = 0.03
-            # Family 1: upper-right edge → lower-left edge
-            ax.text(t / 2.0 + d, sx * (1 - t) + d * 0.4, rlabel,
-                    ha="center", va="bottom", fontsize=5, rotation=-60)
-            ax.text(-(1 - t) / 2.0 - d, -t * sx - d * 0.4, label,
-                    ha="center", va="top", fontsize=5, rotation=-60)
-            # Family 2: upper-left edge → lower-right edge
-            ax.text(-(1 - t) / 2.0 - d, t * sx + d * 0.4, label,
-                    ha="center", va="bottom", fontsize=5, rotation=60)
-            ax.text(t / 2.0 + d, -sx * (1 - t) - d * 0.4, rlabel,
-                    ha="center", va="top", fontsize=5, rotation=60)
-
-        def _arrow(x, y, text, rotation=0, reverse=False):
-            length = 0.4
-            angle_rad = math.radians(rotation)
-            dx = (length / 2) * math.cos(angle_rad)
-            dy = (length / 2) * math.sin(angle_rad)
-            style = '-|>' if reverse else '<|-'
-            ax.annotate('', xy=(x + dx, y + dy), xytext=(x - dx, y - dy),
-                        arrowprops=dict(arrowstyle=style, color='black', lw=1.0),
-                        annotation_clip=False)
-            ax.text(x, y, text, ha='center', va='center', rotation=rotation,
-                    fontsize=7, bbox=dict(facecolor='white', edgecolor='none', pad=1))
-
-        offset = 0.12
-        cos30 = math.sqrt(3) / 2.0
-        _arrow(-0.25 - offset * cos30, sx / 2.0 + offset * 0.5,
-               "SO\u2084\u00b2\u207b+Cl\u207b", rotation=60, reverse=True)
-        _arrow(0.25 + offset * cos30, sx / 2.0 + offset * 0.5,
-               "Ca\u00b2\u207a+Mg\u00b2\u207a", rotation=-60)
-
-        ax.set_xlim(-0.55, 0.55)
-        ax.set_ylim(-sx - 0.05, sx + 0.05)
-        ax.set_aspect("equal")
-        ax.axis("off")
-
-    # ------------------------------------------------------------------
     # Stiff diagram (single-sample 6-axis polygon)
     # ------------------------------------------------------------------
 
@@ -1026,7 +848,7 @@ class MatplotlibRenderer(BaseRenderer):
     # ------------------------------------------------------------------
 
     def supports(self, spec: FigureSpec) -> bool:
-        if isinstance(spec.coord, (PiperCoord, StiffCoord)):
+        if isinstance(spec.coord, StiffCoord):
             return True
         if spec.template_name in IMPLEMENTED:
             return True

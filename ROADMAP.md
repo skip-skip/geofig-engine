@@ -67,61 +67,24 @@ Complex multi-element diagrams that don't fit a single Coord + Geom.
 
 ---
 
-## 📋 Phase 14.5 — Linked axes (planned)
+## ✅ Phase 14.5 — Linked axes (818 tests)
 
-Generalize multi-panel diagrams (Piper, later Stiff/Durov) from renderer-hardcoded GridSpec layouts into a declarative **linked axes** system. Today `_render_piper()` (renderers/matplotlib/renderer.py) manually builds a 3-panel layout that the spec cannot express — a violation of the Data→Spec→Render separation. Linked axes move composition into the spec.
+Generalize multi-panel diagrams (Piper, later Stiff/Durov) from renderer-hardcoded GridSpec layouts into a declarative **linked axes** system. A figure has one **main axis** plus zero or more **links** — named secondary axes that share the same dataset and together form a *single full axis space*. Links are positioned by an ordered `LinkTransform` chain (translate → rotate → scale) declared in world units; one flat `Affine2D` per artist group stacked on the same `ax.transData`. `FigureSpec.root_transform` optionally composes a global transform on the main axis.
 
-### Concept
+### Shipped
 
-A figure has one **main axis** plus zero or more **links**: named secondary axes that share the same dataset and together form a *single full axis space*. The main axis owns an optional **root transform** (`M_main`, e.g. the diamond's rotate-then-squish); **world space is defined as the main axis's post-transform data space**. Each link is positioned by an ordered transform chain — **translate → rotate → scale** — with translate declared in world units, so template declarations read visually ("lower-left of the visible diamond"). Matrices stay flat: one `Affine2D` per artist group stacked on the same `ax.transData` (no scene-graph nesting). Links are grouped axes, not facets: all layers render into one shared canvas.
-
-### Core model (`core/link.py`, new)
-
-- **`LinkTransform`** (frozen dataclass) — ordered affine parameters:
-  - `translate: tuple[float, float]` — offset in world units (post-transform main-axis space)
-  - `rotate: float` — degrees about the link's local origin
-  - `scale: tuple[float, float]` — squash/stretch applied along world x/y axes, after rotation
-  - `matrix() -> np.ndarray` — pure-numpy 3×3 homogeneous composition `M = T·S·R` built in core (matplotlib-free): points experience **rotate → scale → translate** (scale after rotation is what makes the diamond's "rotate 45°, then squash y" expressible); convention pinned by known-corner unit tests, since fluent Affine2D call-order ≠ point-application order
-  - `transform_point(xy)` — maps local anchors into world space (used for label placement)
-- **`AxisLink`** (frozen dataclass) — `name: str`, `coord: Coord` (e.g., new `TernaryCoord`), `transform: LinkTransform`, optional `frame` styling
-- **Layer routing** — reuse the existing `LayerSpec.subplot: str | None` field: a layer with `subplot="cation"` renders through that link's transform+coord; unrouted layers stay on the main axis
-- **FigureSpec** gains `links: tuple[AxisLink, ...] = ()`; validation: unique names, every layer `subplot` must resolve to a defined link or None
-- Serialization: `link_to_dict()` / `link_from_dict()` in `serialize/converters.py`
-
-### New projection: `TernaryCoord` (`core/coord.py`)
-
-- Maps three fractions summing to 1 into a right-triangle local space ([0,1]²), configurable vertex order and handedness (left/right facing)
-- Implements `transform_visual_mapping()` so geoms stay projection-agnostic (same pattern as CoordPolar)
-- Generic — reusable for Durov/Ternary plots beyond Piper
-
-### Renderer changes (matplotlib backend)
-
-- Replace per-diagram special cases with one generic path: a single matplotlib Axes spans the whole figure (world = post-transform main-axis data space); the main axis draws through `M_main + transData`, each link through its own `Affine2D.from_values(M_link) + transData`
-- **Frame providers** — pluggable callables with signature `(link_matrix, parent_axes, label_policy)` that draw frames/grids/tick-marks in local space through the transform stack (generalizes today's `_draw_ternary_frame` / `_draw_diamond_frame`)
-- **Label policy** — text never inherits transforms: tick numerals/vertex names/edge labels are drawn world-side at `transform_point()` anchors; policies `upright` (default, rotation=0) and `parallel` (rotation from transformed edge tangent, squash-aware). Data, frames, grids, tick marks deform with the axis; annotations do not
-- Delete `_render_piper()`, `"piper_layout"` / `"piper_overlay"` setting branches, and the PiperCoord isinstance dispatch at renderer.py:103
-- Legends/facets operate on the single shared axes unchanged
-
-### Stats layer
-
-- **`StatIonFractions`** (new, `core/stat.py`) — performs the chemistry before visualization, on meq/L inputs only:
-  - Concentration addition: Na+K, HCO3+CO3 grouping
-  - Percent normalization per sample → fixed-slot fraction columns (`cation_f0/f1/f2`, `anion_f0/f1/f2`) plus derived diamond coordinates (`diamond_x/y`)
-  - Follows the `Stat.compute(data) -> DataFrame` contract; one configured instance shared by all piper layers, mapping strings resolved via existing stat_data routing
-  - Replaces the coordinate math currently embedded in the piper template front-end
-- **mg/L → meq/L conversion is out of scope**: layers consume pre-converted meq/L columns; unit conversion will be handled by an external data system at a later time. This keeps `core.stat` free of chemistry tables and preserves Data→Spec layering
-
-### Piper re-expression (proof of concept)
-
-- **Main axis**: cartesian square with a **root transform** — rotate 45° then squash y (~0.5) declared as `M_main`; no dedicated DiamondCoord class needed
-- **Two links**: cation triangle (`TernaryCoord`, left-handed, world-anchored translate lower-left) and anion triangle (`TernaryCoord`, right-handed, translate lower-right)
-- `build_piper_specs()` rewritten as pure spec construction (no renderer knowledge); `piper_overlay_diamond()` becomes ordinary layer routing
-- Old `PiperCoord` deprecated after visual parity is confirmed
+- ✅ **`LinkTransform` / `AxisLink` / `FigureSpec.links`** — `core/link.py` with ordered affine composition, `matrix()`, `transform_point()`, serialization
+- ✅ **`TernaryCoord`** — projects three fractions summing to 1 into a right-triangle local space; generic, reusable for Durov/Ternary plots beyond Piper
+- ✅ **`StatIonFractions`** — performs the chemistry before visualization (concentration addition, percent normalization, diamond coordinates); follows `Stat.compute(data) -> DataFrame` contract
+- ✅ **Generic linked-axes render path** — single shared matplotlib Axes, `_render_linked`, `_stamp_new_artists`, `_linked_world_limits`, box frame provider, 18 unit tests
+- ✅ **Piper re-expressed as linked-axes spec** — `build_piper_specs()` returns `FigureSpec` with 3 `AxisLink`s (left/right triangles + diamond), no template-side math. `piper_overlay_diamond()` is plain layer routing
+- ✅ **PiperCoord deprecated** — still importable/serializable with `DeprecationWarning`; old `_render_piper` renderer path deleted
+- ✅ **Legacy piper parity verified** — ternary/diamond positions match legacy math to 1e-12
 
 ### Verification
 
-- Visual parity harness comparing linked-axis piper output against current implementation output
-- Unit tests: `LinkTransform.matrix()` composition conventions (incl. rotate-then-squish corner pinning), `transform_point` anchor mapping, TernaryCoord mapping round-trips, layer routing validation, serialization round-trip
+- Unit tests: `LinkTransform.matrix()` composition, `transform_point` anchors, `TernaryCoord` round-trips, layer routing, serialization round-trip
+- 29 Piper tests (structure, rendering, geom compat, legacy parity)
 - Stiff/Durov identified as follow-up beneficiaries (not in scope)
 
 ---
