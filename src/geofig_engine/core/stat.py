@@ -303,3 +303,130 @@ class StatRadar(Stat):
         if color_col is not None and color_col in result.columns:
             result = result.sort_values(color_col)
         return result
+
+
+# ---------------------------------------------------------------------------
+# Ion-fraction stat (Phase 14.5) — chemistry-to-geometry for Piper diagrams
+# ---------------------------------------------------------------------------
+
+_ION_SLOT_DEFAULTS = {
+    "cations": (("Ca",), ("Mg",), ("Na", "K")),
+    "anions": (("HCO3", "CO3"), ("SO4",), ("Cl",)),
+}
+
+
+def _normalize_ion_slots(value, label: str) -> tuple[tuple[str, ...], ...]:
+    """Normalize 3 slots of ``str | Sequence[str]`` into tuples of name-tuples."""
+    if isinstance(value, str) or not isinstance(value, (tuple, list)):
+        raise TypeError(f"{label} must be a sequence of three slots")
+    if len(value) != 3:
+        raise ValueError(f"{label} must contain exactly three slots, got {value!r}")
+    slots = []
+    for slot in value:
+        if isinstance(slot, str):
+            names = (slot,)
+        elif isinstance(slot, (tuple, list)) and slot and all(
+            isinstance(n, str) and n.strip() for n in slot
+        ):
+            names = tuple(slot)
+        else:
+            raise ValueError(
+                f"{label} slots must be a column name or a sequence of "
+                f"column names to sum, got {slot!r}"
+            )
+        slots.append(names)
+    return tuple(slots)
+
+
+@dataclass(frozen=True)
+class StatIonFractions(Stat):
+    """
+    Concentration addition + percent normalization for Piper-style diagrams.
+
+    Consumes meq/L ion columns and emits fixed-slot fraction columns plus
+    derived diamond coordinates. Unit conversion (mg/L → meq/L) is out of
+    scope: inputs must arrive pre-converted.
+
+    Slot semantics (matching the legacy piper template math): each side has
+    three fraction slots ``f0/f1/f2`` where **f0 = bottom-left**,
+    **f1 = apex**, **f2 = bottom-right** of the ternary triangle.
+
+    Each slot is a single column name or a sequence of column names whose
+    values are summed per row (concentration addition, e.g. Na+K or
+    HCO3+CO3 grouping).
+
+    Missing values behave as zeros (pandas skipna sums). Rows whose total
+    is zero produce all-zero fractions — mirroring the legacy template's
+    ``fillna(0)``/``nan_to_num`` behavior, so degenerate samples land at a
+    deterministic position instead of propagating NaN.
+    """
+
+    def __init__(
+        self,
+        cations=_ION_SLOT_DEFAULTS["cations"],
+        anions=_ION_SLOT_DEFAULTS["anions"],
+    ) -> None:
+        cats = _normalize_ion_slots(cations, "cations")
+        anions_norm = _normalize_ion_slots(anions, "anions")
+        super().__init__(
+            name="ion_fractions",
+            params={
+                # JSON-safe: lists of lists; each inner list sums into one slot
+                "cations": [list(g) for g in cats],
+                "anions": [list(g) for g in anions_norm],
+            },
+        )
+
+    @property
+    def cation_groups(self) -> tuple[tuple[str, ...], ...]:
+        return tuple(tuple(g) for g in self.params["cations"])
+
+    @property
+    def anion_groups(self) -> tuple[tuple[str, ...], ...]:
+        return tuple(tuple(g) for g in self.params["anions"])
+
+    def compute(self, data: pd.DataFrame) -> pd.DataFrame:
+        cat_groups = self.cation_groups
+        an_groups = self.anion_groups
+
+        required = [c for g in (*cat_groups, *an_groups) for c in g]
+        missing = [c for c in dict.fromkeys(required) if c not in data.columns]
+        if missing:
+            raise ValueError(f"StatIonFractions requires missing columns: {missing}")
+
+        def _slots(groups):
+            sums = [data[list(g)].sum(axis=1) for g in groups]
+            total = sums[0].add(sums[1]).add(sums[2])
+            fracs = []
+            for s in sums:
+                with np.errstate(invalid="ignore", divide="ignore"):
+                    f = s / total.replace(0.0, np.nan)
+                fracs.append(f.fillna(0.0))
+            return fracs
+
+        cat_f = _slots(cat_groups)  # (f0=left, f1=apex, f2=right)
+        an_f = _slots(an_groups)
+
+        h = np.sqrt(3.0) / 2.0
+
+        def _ternary(fracs):
+            x = fracs[2].to_numpy() + 0.5 * fracs[1].to_numpy()
+            y = h * fracs[1].to_numpy()
+            return x, y
+
+        cat_x, cat_y = _ternary(cat_f)
+        an_x, an_y = _ternary(an_f)
+
+        dx = an_y / (4 * h) + 0.5 * an_x - cat_y / (4 * h) + 0.5 * cat_x - 0.5
+        dy = 0.5 * an_y + h * an_x + 0.5 * cat_y - h * cat_x
+
+        out = pd.DataFrame(index=data.index)
+        out["cation_f0"] = cat_f[0].to_numpy()
+        out["cation_f1"] = cat_f[1].to_numpy()
+        out["cation_f2"] = cat_f[2].to_numpy()
+        out["anion_f0"] = an_f[0].to_numpy()
+        out["anion_f1"] = an_f[1].to_numpy()
+        out["anion_f2"] = an_f[2].to_numpy()
+        out["diamond_x"] = np.nan_to_num(dx)
+        out["diamond_y"] = np.nan_to_num(dy)
+        return out

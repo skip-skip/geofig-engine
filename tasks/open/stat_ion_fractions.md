@@ -21,9 +21,9 @@ Design decisions locked during planning:
 
 ## Acceptance criteria
 
-- [ ] Emits `cation_f0/f1/f2`, `anion_f0/f1/f2` normalized per sample from meq/L inputs
-- [ ] Emits `diamond_x/diamond_y` matching current `_diamond_xy()` math within float tolerance
-- [ ] Zero-total rows handled deterministically (NaN policy chosen and tested, mirroring current `.fillna(0)`/nan_to_num behavior)
-- [ ] Pure function: no state, same input → same output
-- [ ] Hand-computed chemistry values verified in unit tests
-- [ ] Mapping strings referencing stat outputs resolve via generator stat_data routing for a spec with three layers sharing one instance
+- [x] Emits `cation_f0/f1/f2`, `anion_f0/f1/f2` normalized per sample from meq/L inputs
+- [x] Emits `diamond_x/diamond_y` matching current `_diamond_xy()` math within float tolerance
+- [x] Zero-total rows handled deterministically (NaN policy chosen and tested, mirroring current `.fillna(0)`/nan_to_num behavior)
+- [x] Pure function: no state, same input → same output
+- [x] Hand-computed chemistry values verified in unit tests
+- [x] Mapping strings referencing stat outputs resolve via generator stat_data routing for a spec with three layers sharing one instance

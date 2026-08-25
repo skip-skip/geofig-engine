@@ -62,6 +62,7 @@ from geofig_engine.core.stat import (
     StatCount,
     StatFn,
     StatIdentity,
+    StatIonFractions,
     StatPieLabels,
     StatRadar,
     StatSmooth,
@@ -406,6 +407,11 @@ def stat_from_dict(data: dict) -> Stat:
         return StatPieLabels(**params)
     elif name == "radar":
         return StatRadar(**params)
+    elif name == "ion_fractions":
+        return StatIonFractions(
+            cations=[tuple(g) for g in params.get("cations", [["Ca"], ["Mg"], ["Na", "K"]])],
+            anions=[tuple(g) for g in params.get("anions", [["HCO3", "CO3"], ["SO4"], ["Cl"]])],
+        )
     else:
         raise ValueError(f"Unknown stat type: {name}")
 
