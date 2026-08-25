@@ -26,7 +26,6 @@ class Layer:
     scales: dict[str, Scale] | None = None
     data_override: str | None = None
     zorder: int | None = None
-    subplot: str | None = None
     xlim: tuple[float, float] | None = None
     ylim: tuple[float, float] | None = None
 
@@ -46,9 +45,6 @@ class Layer:
 
         if self.zorder is not None and not isinstance(self.zorder, int):
             raise TypeError("zorder must be an int or None")
-
-        if self.subplot is not None and not isinstance(self.subplot, str):
-            raise TypeError("subplot must be a string or None")
 
         if self.xlim is not None and not (isinstance(self.xlim, tuple) and len(self.xlim) == 2):
             raise TypeError("xlim must be a tuple of 2 floats or None")

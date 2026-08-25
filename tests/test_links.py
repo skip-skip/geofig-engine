@@ -1,6 +1,6 @@
 """
-Tests for core.link: LinkTransform math, AxisLink validation, FigureSpec
-integration, and serialization round-trips (Phase 14.5 WP1).
+Tests for core.link: LinkTransform math, FigureSpec children validation,
+and serialization round-trips (Phase 14.51).
 
 The matrix convention pinned here: ``M = T · S · R``, i.e. points experience
 rotate -> scale -> translate, with scale acting along world axes after
@@ -19,14 +19,12 @@ import pytest
 from geofig_engine.core.coord import CoordCartesian, CoordPolar
 from geofig_engine.core.geom import GeomPoint
 from geofig_engine.core.layer import LayerSpec
-from geofig_engine.core.link import AxisLink, LinkTransform
+from geofig_engine.core.link import LinkTransform
 from geofig_engine.core.spec import FigureSpec, build_spec
 from geofig_engine.core.stat import StatIdentity
 from geofig_engine.serialize import (
     figure_spec_from_dict,
     figure_spec_to_dict,
-    link_from_dict,
-    link_to_dict,
     spec_from_json,
     spec_to_json,
 )
@@ -156,51 +154,11 @@ class TestLinkTransformSerialization:
 
 
 # ---------------------------------------------------------------------------
-# AxisLink validation
+# FigureSpec children validation
 # ---------------------------------------------------------------------------
 
 
-class TestAxisLinkValidation:
-    def test_minimal_construction(self):
-        link = AxisLink(name="cation", coord=CoordCartesian())
-        assert link.transform == LinkTransform()
-        assert link.frame is None
-
-    def test_frame_dict_accepted(self):
-        link = AxisLink(name="a", coord=CoordCartesian(), frame={"color": "k"})
-        assert link.frame == {"color": "k"}
-
-    def test_empty_name_raises(self):
-        with pytest.raises(ValueError, match="non-empty"):
-            AxisLink(name="", coord=CoordCartesian())
-
-    def test_whitespace_name_raises(self):
-        with pytest.raises(ValueError, match="non-empty"):
-            AxisLink(name="   ", coord=CoordCartesian())
-
-    def test_non_string_name_raises(self):
-        with pytest.raises(ValueError, match="non-empty string"):
-            AxisLink(name=42, coord=CoordCartesian())
-
-    def test_non_coord_raises(self):
-        with pytest.raises(TypeError, match="Coord"):
-            AxisLink(name="a", coord="cartesian")
-
-    def test_non_transform_raises(self):
-        with pytest.raises(TypeError, match="LinkTransform"):
-            AxisLink(name="a", coord=CoordCartesian(), transform={"translate": [0, 0]})
-
-    def test_non_dict_frame_raises(self):
-        with pytest.raises(TypeError, match="frame"):
-            AxisLink(name="a", coord=CoordCartesian(), frame=["color"])
-
-
-# ---------------------------------------------------------------------------
-# FigureSpec integration
-# ---------------------------------------------------------------------------
-
-
-def _make_spec(links=(), layers=None):
+def _make_spec(children=(), layers=None):
     return FigureSpec(
         data=pd.DataFrame({"x": [1, 2], "y": [3, 4]}),
         mappings={},
@@ -208,90 +166,112 @@ def _make_spec(links=(), layers=None):
         context={},
         template_name="test",
         layers=layers if layers is not None else [],
-        links=links,
+        children=children,
     )
 
 
-class TestFigureSpecLinks:
-    def test_default_links_empty(self):
+def _child(name="a", coord=None, transform=None):
+    return FigureSpec(
+        data=pd.DataFrame({"x": [1]}),
+        mappings={},
+        settings={},
+        context={},
+        template_name="test",
+        coord=coord or CoordCartesian(),
+        transform=transform or LinkTransform(),
+    )
+
+
+class TestFigureSpecChildren:
+    def test_default_children_empty(self):
         assert FigureSpec(
             data=pd.DataFrame({"x": [1]}),
             mappings={},
             settings={},
             context={},
             template_name="t",
-        ).links == ()
+        ).children == ()
 
-    def test_valid_links_pass_validation(self):
-        links = (
-            AxisLink(name="cation", coord=CoordCartesian()),
-            AxisLink(name="anion", coord=CoordPolar(theta="x")),
+    def test_valid_children_pass_validation(self):
+        children = (
+            _child("left", CoordCartesian()),
+            _child("right", CoordPolar(theta="x")),
         )
-        spec = _make_spec(links=links)
-        assert spec.links == links
+        spec = _make_spec(children=children)
+        assert spec.children == children
 
-    def test_duplicate_link_names_raise(self):
-        with pytest.raises(ValueError, match="duplicate link name: 'cation'"):
-            _make_spec(
-                links=(
-                    AxisLink(name="cation", coord=CoordCartesian()),
-                    AxisLink(name="cation", coord=CoordCartesian()),
-                )
-            )
+    def test_non_figure_spec_in_children_raises(self):
+        with pytest.raises(TypeError, match="FigureSpec"):
+            _make_spec(children=("not_a_spec",))
 
-    def test_non_axislink_in_links_raises(self):
-        with pytest.raises(TypeError, match="AxisLink"):
-            _make_spec(links=("cation",))
-
-    def test_unrouted_subplot_raises_when_links_present(self):
-        layer = LayerSpec(
-            geom=GeomPoint(),
-            stat=StatIdentity(),
-            visual_mapping={},
-            subplot="nope",
+    def test_nested_children_raises(self):
+        deep = FigureSpec(
+            data=pd.DataFrame({"x": [1]}),
+            mappings={},
+            settings={},
+            context={},
+            template_name="t",
+            children=(_child(),),
         )
-        with pytest.raises(ValueError, match="does not match any link"):
-            _make_spec(
-                links=(AxisLink(name="cation", coord=CoordCartesian()),),
-                layers=[layer],
-            )
+        with pytest.raises(ValueError, match="depth"):
+            _make_spec(children=(deep,))
 
-    def test_routed_subplot_resolves(self):
-        layer = LayerSpec(
-            geom=GeomPoint(),
-            stat=StatIdentity(),
-            visual_mapping={},
-            subplot="cation",
-        )
-        spec = _make_spec(
-            links=(AxisLink(name="cation", coord=CoordCartesian()),),
-            layers=[layer],
-        )
-        assert spec.layers[0].subplot == "cation"
-
-    def test_legacy_subplot_without_links_still_valid(self):
-        # Pre-14.5 per-diagram subplot names must keep validating until the
-        # legacy renderer paths are removed.
-        layer = LayerSpec(
-            geom=GeomPoint(),
-            stat=StatIdentity(),
-            visual_mapping={},
-            subplot="left_tri",
-        )
-        spec = _make_spec(layers=[layer])
-        assert spec.links == ()
-
-    def test_build_spec_accepts_links(self):
-        link = AxisLink(name="anion", coord=CoordCartesian())
+    def test_build_spec_accepts_children(self):
+        child = _child("c", CoordCartesian())
         spec = build_spec(
             data=pd.DataFrame({"x": [1]}),
             mappings={},
             settings={},
             context={},
             template_name="t",
-            links=(link,),
+            children=(child,),
         )
-        assert spec.links == (link,)
+        assert spec.children == (child,)
+
+    def test_build_spec_accepts_transform(self):
+        tf = LinkTransform(rotate=45)
+        spec = build_spec(
+            data=pd.DataFrame({"x": [1]}),
+            mappings={},
+            settings={},
+            context={},
+            template_name="t",
+            transform=tf,
+        )
+        assert spec.transform == tf
+
+    def test_build_spec_accepts_frame_config(self):
+        spec = build_spec(
+            data=pd.DataFrame({"x": [1]}),
+            mappings={},
+            settings={},
+            context={},
+            template_name="t",
+            frame_config={"title": "Test"},
+        )
+        assert spec.frame_config == {"title": "Test"}
+
+    def test_invalid_transform_raises(self):
+        with pytest.raises(TypeError, match="LinkTransform"):
+            FigureSpec(
+                data=pd.DataFrame({"x": [1]}),
+                mappings={},
+                settings={},
+                context={},
+                template_name="t",
+                transform="not_a_transform",
+            )
+
+    def test_invalid_frame_config_raises(self):
+        with pytest.raises(TypeError, match="frame_config"):
+            FigureSpec(
+                data=pd.DataFrame({"x": [1]}),
+                mappings={},
+                settings={},
+                context={},
+                template_name="t",
+                frame_config=["not", "a", "dict"],
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -299,91 +279,56 @@ class TestFigureSpecLinks:
 # ---------------------------------------------------------------------------
 
 
-class TestLinkSerialization:
-    def test_transform_nested_in_link_dict(self):
-        link = AxisLink(
-            name="diamond",
-            coord=CoordCartesian(),
-            transform=LinkTransform(translate=(1, 2), rotate=45, scale=(1, 0.5)),
-        )
-        d = link_to_dict(link)
-        assert d["transform"] == {
-            "translate": [1.0, 2.0],
-            "rotate": 45.0,
-            "scale": [1.0, 0.5],
-        }
-
-    def test_roundtrip_with_params_coord_and_frame(self):
-        link = AxisLink(
-            name="cation",
-            coord=CoordPolar(theta="x"),
-            transform=LinkTransform(translate=(-0.5, 0.0), rotate=15, scale=(2, 3)),
-            frame={"edgecolor": "k", "label_policy": "parallel"},
-        )
-        restored = link_from_dict(link_to_dict(link))
-        assert restored.name == "cation"
-        assert type(restored.coord) is CoordPolar
-        assert restored.coord.params["theta"] == "x"
-        assert restored.transform == link.transform
-        assert restored.frame == {"edgecolor": "k", "label_policy": "parallel"}
-
-    def test_frame_omitted_when_none(self):
-        d = link_to_dict(AxisLink(name="a", coord=CoordCartesian()))
-        assert "frame" not in d
-        restored = link_from_dict(d)
-        assert restored.frame is None
-
-    def test_unknown_coord_type_raises(self):
-        d = link_to_dict(AxisLink(name="a", coord=CoordCartesian()))
-        d["coord"]["type"] = "wat"
-        with pytest.raises(ValueError, match="Unknown coord type"):
-            link_from_dict(d)
-
-
-class TestFigureSpecLinksSerialization:
-    def _linked_spec(self):
-        return _make_spec(
-            links=(
-                AxisLink(
-                    name="diamond",
+class TestFigureSpecChildrenSerialization:
+    def _child_spec(self):
+        return FigureSpec(
+            data=pd.DataFrame({"v": [1.0, 2.0]}),
+            mappings={},
+            settings={},
+            context={},
+            template_name="test",
+            children=(
+                FigureSpec(
+                    data=pd.DataFrame({"v": [1.0]}),
+                    mappings={},
+                    settings={},
+                    context={},
+                    template_name="child",
                     coord=CoordCartesian(),
                     transform=LinkTransform(rotate=45, scale=(1, 0.5)),
+                    frame_config={"title": "LEFT"},
                 ),
-                AxisLink(
-                    name="cation",
+                FigureSpec(
+                    data=pd.DataFrame({"v": [1.0]}),
+                    mappings={},
+                    settings={},
+                    context={},
+                    template_name="child2",
                     coord=CoordPolar(theta="x"),
                     transform=LinkTransform(translate=(-0.5, 0.0)),
                 ),
             ),
-            layers=[
-                LayerSpec(
-                    geom=GeomPoint(),
-                    stat=StatIdentity(),
-                    visual_mapping={},
-                    subplot="cation",
-                )
-            ],
         )
 
-    def test_spec_with_links_roundtrips(self):
-        spec = self._linked_spec()
+    def test_spec_with_children_roundtrips(self):
+        spec = self._child_spec()
         restored = figure_spec_from_dict(figure_spec_to_dict(spec))
-        assert len(restored.links) == 2
-        assert restored.links[0].name == "diamond"
-        assert restored.links[0].transform == LinkTransform(rotate=45, scale=(1, 0.5))
-        assert type(restored.links[1].coord) is CoordPolar
-        assert restored.links[1].transform.translate == (-0.5, 0.0)
-        assert restored.layers[0].subplot == "cation"
+        assert len(restored.children) == 2
+        assert restored.children[0].transform == LinkTransform(rotate=45, scale=(1, 0.5))
+        assert type(restored.children[1].coord) is CoordPolar
+        assert restored.children[1].transform.translate == (-0.5, 0.0)
+        assert restored.children[0].frame_config == {"title": "LEFT"}
 
-    def test_spec_with_links_json_roundtrip(self):
-        spec = self._linked_spec()
+    def test_spec_with_children_json_roundtrip(self):
+        spec = self._child_spec()
         restored = spec_from_json(spec_to_json(spec))
-        assert [lk.name for lk in restored.links] == ["diamond", "cation"]
+        assert len(restored.children) == 2
+        assert restored.children[0].transform.rotate == 45.0
 
-    def test_payload_without_links_still_loads(self):
+    def test_payload_without_children_still_loads(self):
         spec = _make_spec()
         d = figure_spec_to_dict(spec)
-        assert "links" in d  # current writer always emits the key
-        del d["links"]      # but readers tolerate payloads predating it
+        assert "children" in d
+        del d["children"]
         restored = figure_spec_from_dict(d)
-        assert restored.links == ()
+        assert restored.children == ()

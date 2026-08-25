@@ -89,6 +89,29 @@ Generalize multi-panel diagrams (Piper, later Stiff/Durov) from renderer-hardcod
 
 ---
 
+## ✅ Phase 14.51 — Linked axes refactor: nested FigureSpecs (794 tests)
+
+Replace `AxisLink` + `LayerSpec.subplot` string-routing with nested `FigureSpec` children where frames are implied by coord type and transform. Depth-1 only — children must not nest.
+
+### Shipped
+
+- ✅ **Core model** — `FigureSpec` gains `children`, `transform`, `frame_config`; removes `links`, `root_transform`; `AxisLink` deleted; `LayerSpec` loses `subplot` and `coord`
+- ✅ **Frame implication** — `_draw_implied_frame` auto-selects ternary/diamond based on coord type; `TernaryCoord` → triangle frame with auto-derived `ions`, `reversals`, `title`; `CoordCartesian` + `rotate` → diamond frame
+- ✅ **Renderer refactor** — `_render_children` renders child FigureSpecs on one shared Axes; child coord transforms, frame stamping (snapshot→draw→stamp with affine), `_children_world_limits`
+- ✅ **Piper template rewrite** — `build_piper_specs()` creates 3 child FigureSpecs (left, right, diamond) with own coord/transform/layers/frame_config; `piper_overlay_diamond` removed
+- ✅ **Serialization** — recursive `_spec_to_dict`/`_spec_from_dict` for children; `link_to_dict`/`link_from_dict` deleted
+- ✅ **Tests rewritten** — `test_links.py`, `test_piper.py`, `test_linked_render.py` updated for children API; 794 tests pass
+- ✅ **Debug demo updated** — `debug_piper_axes.py` uses children API, no orange artifact
+
+### Verification
+
+- 794 tests pass (previously 676 non-linked + 142 linked tests)
+- `hydro_demo.py` produces all 7 figures correctly
+- `debug_piper_axes.py` renders 35 lines, 46 texts — frames with tick labels, grid, titles, ion arrows
+- Piper serialization round-trip preserves children, transforms, frame_config
+
+---
+
 ## 📋 Phase 15 — Enhanced legend features
 
 - **Multi-level grouped legends** — `subseries_col` pattern with section headers and aligned columns (from geochemplot's grouped-legend pattern)

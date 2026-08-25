@@ -107,7 +107,7 @@ class PiperCoord(Coord):
     ) -> None:
         warnings.warn(
             "PiperCoord is deprecated; use build_piper_specs() with "
-            "AxisLink + TernaryCoord instead.",
+            "nested FigureSpec children instead.",
             DeprecationWarning,
             stacklevel=2,
         )
