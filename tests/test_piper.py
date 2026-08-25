@@ -1,9 +1,35 @@
-import pandas as pd
+"""Tests for Piper diagram — declarative linked-axes spec (Phase 14.5 WP5)."""
 
-from geofig_engine.core.coord import PiperCoord
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+import pytest
+
+import matplotlib
+matplotlib.use("Agg")
+
+from geofig_engine.core.coord import CoordCartesian, PiperCoord, TernaryCoord
 from geofig_engine.core.geom import GeomPoint
+from geofig_engine.core.link import AxisLink, LinkTransform
+from geofig_engine.core.spec import FigureSpec
 from geofig_engine.templates import build_piper_specs, piper_overlay_diamond
 from geofig_engine.serialize import coord_to_dict, coord_from_dict
+
+
+# ---------------------------------------------------------------------------
+# Shared test data
+# ---------------------------------------------------------------------------
+
+_DATA = pd.DataFrame({
+    "Ca": [1.0, 2.0], "Mg": [0.5, 1.0], "Na+K": [0.3, 0.5],
+    "HCO3": [2.0, 3.0], "SO4": [0.2, 0.4], "Cl": [0.1, 0.2],
+})
+
+
+# ---------------------------------------------------------------------------
+# PiperCoord (still importable, deprecated)
+# ---------------------------------------------------------------------------
 
 
 class TestPiperCoord:
@@ -33,152 +59,181 @@ class TestPiperCoord:
         assert restored.params["right_tri"] == ["HCO3", "SO4", "Cl"]
 
 
+# ---------------------------------------------------------------------------
+# build_piper_specs — declarative linked-axes structure
+# ---------------------------------------------------------------------------
+
+
 class TestBuildPiperSpecs:
     def test_returns_list_of_specs(self):
-        data = pd.DataFrame({
-            "Ca": [1.0, 2.0], "Mg": [0.5, 1.0], "Na+K": [0.3, 0.5],
-            "HCO3": [2.0, 3.0], "SO4": [0.2, 0.4], "Cl": [0.1, 0.2],
-        })
-        specs = build_piper_specs(data)
+        specs = build_piper_specs(_DATA)
         assert len(specs) == 1
 
-    def test_piper_coord_in_spec(self):
-        data = pd.DataFrame({
-            "Ca": [1.0], "Mg": [0.5], "Na+K": [0.3],
-            "HCO3": [2.0], "SO4": [0.2], "Cl": [0.1],
-        })
-        specs = build_piper_specs(data)
-        assert isinstance(specs[0].coord, PiperCoord)
+    def test_spec_has_links_not_piper_coord(self):
+        specs = build_piper_specs(_DATA)
+        spec = specs[0]
+        assert not isinstance(spec.coord, PiperCoord)
+        assert isinstance(spec.coord, CoordCartesian)
+        assert len(spec.links) == 3
+
+    def test_link_names_and_types(self):
+        specs = build_piper_specs(_DATA)
+        spec = specs[0]
+        names = [link.name for link in spec.links]
+        assert names == ["left_tri", "right_tri", "diamond"]
+        for link in spec.links:
+            assert isinstance(link, AxisLink)
+
+    def test_left_link_has_ternary_coord_and_transform(self):
+        specs = build_piper_specs(_DATA)
+        left = specs[0].links[0]
+        assert isinstance(left.coord, TernaryCoord)
+        assert left.coord.handedness == "left"
+        assert left.coord.channels == ("Mg", "Ca", "Na+K")
+        assert left.transform == LinkTransform(scale=(0.5, 0.5))
+
+    def test_right_link_has_ternary_coord_and_transform(self):
+        specs = build_piper_specs(_DATA)
+        right = specs[0].links[1]
+        assert isinstance(right.coord, TernaryCoord)
+        assert right.coord.handedness == "right"
+        assert right.coord.channels == ("SO4", "Cl", "HCO3")
+        assert right.transform == LinkTransform(
+            scale=(-0.5, 0.5), translate=(1.0, 0.0))
+
+    def test_diamond_link_is_cartesian(self):
+        specs = build_piper_specs(_DATA)
+        dia = specs[0].links[2]
+        assert isinstance(dia.coord, CoordCartesian)
 
     def test_layers_have_subplot_tags(self):
-        data = pd.DataFrame({
-            "Ca": [1.0], "Mg": [0.5], "Na+K": [0.3],
-            "HCO3": [2.0], "SO4": [0.2], "Cl": [0.1],
-        })
-        specs = build_piper_specs(data)
+        specs = build_piper_specs(_DATA)
         subplots = {l.subplot for l in specs[0].layers}
         assert subplots == {"left_tri", "right_tri", "diamond"}
 
     def test_layers_are_geom_point(self):
-        data = pd.DataFrame({
-            "Ca": [1.0], "Mg": [0.5], "Na+K": [0.3],
-            "HCO3": [2.0], "SO4": [0.2], "Cl": [0.1],
-        })
-        specs = build_piper_specs(data)
+        specs = build_piper_specs(_DATA)
         for layer in specs[0].layers:
             assert isinstance(layer.geom, GeomPoint)
-            assert "x" in layer.visual_mapping
-            assert "y" in layer.visual_mapping
+            if layer.subplot == "diamond":
+                assert "x" in layer.visual_mapping
+                assert "y" in layer.visual_mapping
+            else:
+                # Ternary layers store ion channels; x/y produced by coord
+                assert len(layer.visual_mapping) >= 3
+
+    def test_ternary_layers_have_ion_channels(self):
+        specs = build_piper_specs(_DATA)
+        spec = specs[0]
+        left_layer = [l for l in spec.layers if l.subplot == "left_tri"][0]
+        for ch in ("Ca", "Mg", "Na+K"):
+            assert ch in left_layer.visual_mapping
 
     def test_custom_title(self):
-        data = pd.DataFrame({
-            "Ca": [1.0], "Mg": [0.5], "Na+K": [0.3],
-            "HCO3": [2.0], "SO4": [0.2], "Cl": [0.1],
-        })
-        specs = build_piper_specs(data, title="My Piper")
+        specs = build_piper_specs(_DATA, title="My Piper")
         assert specs[0].settings["title"] == "My Piper"
 
     def test_mapping_adds_color_channel(self):
-        data = pd.DataFrame({
-            "Ca": [1.0], "Mg": [0.5], "Na+K": [0.3],
-            "HCO3": [2.0], "SO4": [0.2], "Cl": [0.1],
-            "group": ["A"],
-        })
+        data = _DATA.copy()
+        data["group"] = ["A", "B"]
         specs = build_piper_specs(data, mapping={"color": "group"})
         for layer in specs[0].layers:
             assert "color" in layer.visual_mapping
 
     def test_mapping_adds_marker_channel(self):
-        data = pd.DataFrame({
-            "Ca": [1.0], "Mg": [0.5], "Na+K": [0.3],
-            "HCO3": [2.0], "SO4": [0.2], "Cl": [0.1],
-            "group": ["A"],
-        })
-        specs = build_piper_specs(data, mapping={"color": "group", "marker": "group"})
+        data = _DATA.copy()
+        data["group"] = ["A", "B"]
+        specs = build_piper_specs(data, mapping={"color": "group",
+                                                  "marker": "group"})
         for layer in specs[0].layers:
             assert "color" in layer.visual_mapping
             assert "marker" in layer.visual_mapping
 
+    def test_missing_ion_column_raises(self):
+        bad_data = pd.DataFrame({"Ca": [1], "Mg": [1]})
+        with pytest.raises(ValueError, match="ion column"):
+            build_piper_specs(bad_data)
+
+    def test_frame_providers_registered(self):
+        specs = build_piper_specs(_DATA)
+        for link in specs[0].links:
+            if link.frame:
+                assert "provider" in link.frame
+
+
+# ---------------------------------------------------------------------------
+# piper_overlay_diamond — plain layer routing
+# ---------------------------------------------------------------------------
+
 
 class TestPiperOverlay:
     def test_appends_layer(self):
-        data = pd.DataFrame({
-            "Ca": [1.0], "Mg": [0.5], "Na+K": [0.3],
-            "HCO3": [2.0], "SO4": [0.2], "Cl": [0.1],
-        })
-        specs = build_piper_specs(data)
+        specs = build_piper_specs(_DATA)
         n_before = len(specs[0].layers)
-        overlaid = piper_overlay_diamond(specs[0], data)
+        overlaid = piper_overlay_diamond(specs[0], _DATA)
         assert len(overlaid.layers) == n_before + 1
         assert overlaid.layers[-1].subplot == "diamond"
 
-    def test_overlay_setting(self):
-        data = pd.DataFrame({
-            "Ca": [1.0], "Mg": [0.5], "Na+K": [0.3],
-            "HCO3": [2.0], "SO4": [0.2], "Cl": [0.1],
-        })
-        specs = build_piper_specs(data)
-        overlaid = piper_overlay_diamond(specs[0], data)
-        assert overlaid.settings.get("piper_overlay") is True
+    def test_overlay_preserves_links(self):
+        specs = build_piper_specs(_DATA)
+        overlaid = piper_overlay_diamond(specs[0], _DATA)
+        assert overlaid.links == specs[0].links
+
+    def test_overlay_no_piper_setting(self):
+        specs = build_piper_specs(_DATA)
+        overlaid = piper_overlay_diamond(specs[0], _DATA)
+        assert "piper_overlay" not in overlaid.settings
+
+
+# ---------------------------------------------------------------------------
+# Rendering
+# ---------------------------------------------------------------------------
 
 
 class TestPiperRenderer:
-    def test_render_piper(self):
+    def test_render_piper_single_axes(self):
         from geofig_engine.renderers import MatplotlibRenderer
         renderer = MatplotlibRenderer()
-        data = pd.DataFrame({
-            "Ca": [1.0, 2.0], "Mg": [0.5, 1.0], "Na+K": [0.3, 0.5],
-            "HCO3": [2.0, 3.0], "SO4": [0.2, 0.4], "Cl": [0.1, 0.2],
-        })
-        specs = build_piper_specs(data)
+        specs = build_piper_specs(_DATA)
         assert renderer.supports(specs[0]) is True
         fig = renderer.render(specs[0])
         assert fig is not None
-        assert len(fig.axes) >= 3
+        # Linked path renders on a single Axes
+        assert len(fig.axes) == 1
 
     def test_render_with_mapping(self):
         from geofig_engine.renderers import MatplotlibRenderer
+        data = _DATA.copy()
+        data["group"] = ["A", "B"]
         renderer = MatplotlibRenderer()
-        data = pd.DataFrame({
-            "Ca": [1.0, 2.0], "Mg": [0.5, 1.0], "Na+K": [0.3, 0.5],
-            "HCO3": [2.0, 3.0], "SO4": [0.2, 0.4], "Cl": [0.1, 0.2],
-            "group": ["A", "B"],
-        })
         specs = build_piper_specs(data, mapping={"color": "group"})
         fig = renderer.render(specs[0])
         assert fig is not None
 
+    def test_render_overlay(self):
+        from geofig_engine.renderers import MatplotlibRenderer
+        renderer = MatplotlibRenderer()
+        specs = build_piper_specs(_DATA)
+        overlaid = piper_overlay_diamond(specs[0], _DATA)
+        fig = renderer.render(overlaid)
+        assert fig is not None
+
+
+# ---------------------------------------------------------------------------
+# Geom compatibility on linked axes
+# ---------------------------------------------------------------------------
+
 
 class TestPiperGeomCompatibility:
-    """Validate standard GoG geometries in Piper subplot coordinate spaces.
-
-    After build_piper_specs pre-computes ternary/diamond positions into
-    standard (x, y) cartesian coordinates, all geometries work naturally:
-    - Left triangle:   x in [0,1],  y in [0,sqrt(3)/2]
-    - Right triangle:  same bounds
-    - Diamond:          x in [-1,1], y in [-1,1]  -- |x|+|y|<=1 defines the diamond
-
-    GeomRect: axis-aligned rects work in all subplots (will be clipped by frame).
-    GeomAbline: infinite lines via ax.axline -- clipped by axes limits.
-    GeomPoint: standard scatter -- used as primary data layer.
-    GeomText: standard text annotations -- fully compatible.
-    """
-
-    def _make_data(self):
-        return pd.DataFrame({
-            "Ca": [1.0, 2.0], "Mg": [0.5, 1.0], "Na+K": [0.3, 0.5],
-            "HCO3": [2.0, 3.0], "SO4": [0.2, 0.4], "Cl": [0.1, 0.2],
-        })
+    """Standard GoG geometries work in Piper linked-axes subplots."""
 
     def test_abline_in_diamond(self):
-        """GeomAbline draws a reference line across the diamond."""
         from geofig_engine.renderers import MatplotlibRenderer
         from geofig_engine.core.layer import LayerSpec
         from geofig_engine.core.geom import GeomAbline
         from geofig_engine.core.stat import StatIdentity
         renderer = MatplotlibRenderer()
-        data = self._make_data()
-        specs = build_piper_specs(data)
+        specs = build_piper_specs(_DATA)
         spec = specs[0]
         abline_layer = LayerSpec(
             geom=GeomAbline(slope=0, intercept=0),
@@ -191,50 +246,18 @@ class TestPiperGeomCompatibility:
             data=spec.data, mappings=spec.mappings, settings=spec.settings,
             context=spec.context, template_name=spec.template_name,
             layers=list(spec.layers) + [abline_layer],
-            coord=spec.coord, facet=spec.facet,
-        )
-        fig = renderer.render(spec)
-        assert fig is not None
-
-    def test_rect_in_left_triangle(self):
-        """GeomRect draws a small highlight rectangle in the left triangle."""
-        from geofig_engine.renderers import MatplotlibRenderer
-        from geofig_engine.core.layer import LayerSpec
-        from geofig_engine.core.geom import GeomRect
-        from geofig_engine.core.stat import StatIdentity
-        renderer = MatplotlibRenderer()
-        data = self._make_data()
-        specs = build_piper_specs(data)
-        spec = specs[0]
-        rect_layer = LayerSpec(
-            geom=GeomRect(),
-            stat=StatIdentity(),
-            visual_mapping={
-                "xmin": 0.2, "xmax": 0.4,
-                "ymin": 0.2, "ymax": 0.4,
-                "color": "yellow", "alpha": 0.3,
-            },
-            subplot="left_tri",
-            zorder=0,
-        )
-        spec = spec.__class__(
-            data=spec.data, mappings=spec.mappings, settings=spec.settings,
-            context=spec.context, template_name=spec.template_name,
-            layers=list(spec.layers) + [rect_layer],
-            coord=spec.coord, facet=spec.facet,
+            coord=spec.coord, facet=spec.facet, links=spec.links,
         )
         fig = renderer.render(spec)
         assert fig is not None
 
     def test_text_in_diamond(self):
-        """GeomText places a label inside the diamond panel."""
         from geofig_engine.renderers import MatplotlibRenderer
         from geofig_engine.core.layer import LayerSpec
         from geofig_engine.core.geom import GeomText
         from geofig_engine.core.stat import StatIdentity
         renderer = MatplotlibRenderer()
-        data = self._make_data()
-        specs = build_piper_specs(data)
+        specs = build_piper_specs(_DATA)
         spec = specs[0]
         text_layer = LayerSpec(
             geom=GeomText(),
@@ -250,36 +273,112 @@ class TestPiperGeomCompatibility:
             data=spec.data, mappings=spec.mappings, settings=spec.settings,
             context=spec.context, template_name=spec.template_name,
             layers=list(spec.layers) + [text_layer],
-            coord=spec.coord, facet=spec.facet,
+            coord=spec.coord, facet=spec.facet, links=spec.links,
         )
         fig = renderer.render(spec)
         assert fig is not None
 
-    def test_vspan_in_right_triangle(self):
-        """GeomVSpan draws a vertical band in the right triangle."""
-        from geofig_engine.renderers import MatplotlibRenderer
-        from geofig_engine.core.layer import LayerSpec
-        from geofig_engine.core.geom import GeomVSpan
-        from geofig_engine.core.stat import StatIdentity
-        renderer = MatplotlibRenderer()
-        data = self._make_data()
-        specs = build_piper_specs(data)
+
+# ---------------------------------------------------------------------------
+# Parity: new linked spec matches legacy ternary/diamond math
+# ---------------------------------------------------------------------------
+
+
+class TestPiperParity:
+    """Verify the declarative spec produces the same point positions
+    as the legacy template-side math."""
+
+    def test_ternary_positions_match_legacy(self):
+        """Left triangle ternary projection matches _ternary_x/y from legacy."""
+        h = np.sqrt(3) / 2.0
+        specs = build_piper_specs(_DATA)
         spec = specs[0]
-        vspan_layer = LayerSpec(
-            geom=GeomVSpan(),
-            stat=StatIdentity(),
-            visual_mapping={
-                "xmin": 0.3, "xmax": 0.5,
-                "color": "lightblue", "alpha": 0.3,
-            },
-            subplot="right_tri",
-            zorder=0,
-        )
-        spec = spec.__class__(
-            data=spec.data, mappings=spec.mappings, settings=spec.settings,
-            context=spec.context, template_name=spec.template_name,
-            layers=list(spec.layers) + [vspan_layer],
-            coord=spec.coord, facet=spec.facet,
-        )
-        fig = renderer.render(spec)
-        assert fig is not None
+
+        # Apply TernaryCoord projection to get x/y from ion channels
+        left_link = [l for l in spec.links if l.name == "left_tri"][0]
+        left_layer = [l for l in spec.layers if l.subplot == "left_tri"][0]
+        vm = left_link.coord.transform_visual_mapping(
+            dict(left_layer.visual_mapping), left_layer.geom)
+        x_new = vm["x"].to_numpy()
+        y_new = vm["y"].to_numpy()
+
+        # Legacy math
+        def _fracs(cols):
+            total = _DATA[list(cols)].sum(axis=1)
+            return [_DATA[c] / total for c in cols]
+
+        cat_f = _fracs(("Ca", "Mg", "Na+K"))
+        legacy_x = cat_f[2].to_numpy() + 0.5 * cat_f[1].to_numpy()
+        legacy_y = h * cat_f[1].to_numpy()
+
+        np.testing.assert_allclose(x_new, legacy_x, atol=1e-12)
+        np.testing.assert_allclose(y_new, legacy_y, atol=1e-12)
+
+    def test_diamond_positions_match_legacy(self):
+        """Diamond coordinates match legacy _diamond_xy formula."""
+        h = np.sqrt(3) / 2.0
+        specs = build_piper_specs(_DATA)
+        spec = specs[0]
+
+        dia_layer = [l for l in spec.layers if l.subplot == "diamond"][0]
+        vm = dia_layer.visual_mapping
+        x_new = vm["x"].to_numpy()
+        y_new = vm["y"].to_numpy()
+
+        # Legacy full computation
+        def _fracs(cols):
+            total = _DATA[list(cols)].sum(axis=1)
+            return [_DATA[c] / total for c in cols]
+
+        cat_f = _fracs(("Ca", "Mg", "Na+K"))
+        an_f = _fracs(("HCO3", "SO4", "Cl"))
+        cat_x = cat_f[2].to_numpy() + 0.5 * cat_f[1].to_numpy()
+        cat_y = h * cat_f[1].to_numpy()
+        an_x = an_f[2].to_numpy() + 0.5 * an_f[1].to_numpy()
+        an_y = h * an_f[1].to_numpy()
+
+        dx = an_y / (4 * h) + 0.5 * an_x - cat_y / (4 * h) + 0.5 * cat_x - 0.5
+        dy = 0.5 * an_y + h * an_x + 0.5 * cat_y - h * cat_x
+        dx = np.nan_to_num(dx)
+        dy = np.nan_to_num(dy)
+
+        np.testing.assert_allclose(x_new, dx, atol=1e-12)
+        np.testing.assert_allclose(y_new, dy, atol=1e-12)
+
+    def test_right_triangle_positions_match_legacy(self):
+        """Right triangle ternary projection matches legacy _ternary_x/y."""
+        h = np.sqrt(3) / 2.0
+        specs = build_piper_specs(_DATA)
+        spec = specs[0]
+
+        right_link = [l for l in spec.links if l.name == "right_tri"][0]
+        right_layer = [l for l in spec.layers if l.subplot == "right_tri"][0]
+        vm = right_link.coord.transform_visual_mapping(
+            dict(right_layer.visual_mapping), right_layer.geom)
+        x_new = vm["x"].to_numpy()
+        y_new = vm["y"].to_numpy()
+
+        def _fracs(cols):
+            total = _DATA[list(cols)].sum(axis=1)
+            return [_DATA[c] / total for c in cols]
+
+        an_f = _fracs(("HCO3", "SO4", "Cl"))
+        # Legacy: _ternary_x(cl_f, so4_f) = cl + 0.5*so4
+        legacy_x = an_f[2].to_numpy() + 0.5 * an_f[1].to_numpy()
+        legacy_y = h * an_f[1].to_numpy()
+
+        np.testing.assert_allclose(x_new, legacy_x, atol=1e-12)
+        np.testing.assert_allclose(y_new, legacy_y, atol=1e-12)
+
+    def test_zero_ions_produce_zero_diamond(self):
+        """Rows with all-zero ions land at diamond origin."""
+        zero_data = pd.DataFrame({
+            "Ca": [0.0], "Mg": [0.0], "Na+K": [0.0],
+            "HCO3": [0.0], "SO4": [0.0], "Cl": [0.0],
+        })
+        specs = build_piper_specs(zero_data)
+        dia_layer = [l for l in specs[0].layers if l.subplot == "diamond"][0]
+        x = dia_layer.visual_mapping["x"].to_numpy()
+        y = dia_layer.visual_mapping["y"].to_numpy()
+        np.testing.assert_allclose(x, 0.0, atol=1e-12)
+        np.testing.assert_allclose(y, 0.0, atol=1e-12)

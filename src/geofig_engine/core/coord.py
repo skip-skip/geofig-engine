@@ -8,6 +8,8 @@ the spec-building pipeline.
 
 from __future__ import annotations
 
+import warnings
+
 import math
 from dataclasses import dataclass, field
 from typing import Any
@@ -103,6 +105,12 @@ class PiperCoord(Coord):
         left_tri: tuple[str, str, str] = ("Ca", "Mg", "Na+K"),
         right_tri: tuple[str, str, str] = ("HCO3", "SO4", "Cl"),
     ) -> None:
+        warnings.warn(
+            "PiperCoord is deprecated; use build_piper_specs() with "
+            "AxisLink + TernaryCoord instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         object.__setattr__(self, "left_tri", left_tri)
         object.__setattr__(self, "right_tri", right_tri)
         super().__init__(

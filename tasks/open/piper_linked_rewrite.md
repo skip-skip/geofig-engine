@@ -1,6 +1,6 @@
 # Piper re-expression as declarative linked-axes spec
 
-**Status**: open
+**Status**: done
 **Phase**: 14.5
 **Dependencies**: `link_model`, `ternary_coord`, `stat_ion_fractions`, `linked_axes_renderer`
 
@@ -25,10 +25,10 @@ Old `PiperCoord` deprecated after visual parity is confirmed.
 
 ## Acceptance criteria
 
-- [ ] `build_piper_specs()` returns FigureSpec with root-transform main axis + two `AxisLink`s; no renderer knowledge in template
-- [ ] Diamond coordinates derive from shared stat output; triangles from TernaryCoord fractions
-- [ ] Visual parity: extracted point positions match current implementation within tolerance
-- [ ] Frames/tick labels follow Piper conventions via frame providers (upright numerals, parallel edge labels)
-- [ ] `piper_overlay_diamond()` works as plain layer routing
-- [ ] Serialization round-trips a full piper spec including links
-- [ ] `PiperCoord` still importable but marked deprecated; `"piper_layout"`/`"piper_overlay"` setting branches unused by new path
+- [x] `build_piper_specs()` returns FigureSpec with root-transform main axis + two `AxisLink`s; no renderer knowledge in template
+- [x] Diamond coordinates derive from shared stat output; triangles from TernaryCoord fractions
+- [x] Visual parity: extracted point positions match current implementation within tolerance
+- [x] Frames/tick labels follow Piper conventions via frame providers (upright numerals, parallel edge labels)
+- [x] `piper_overlay_diamond()` works as plain layer routing
+- [x] Serialization round-trips a full piper spec including links
+- [x] `PiperCoord` still importable but marked deprecated; `"piper_layout"`/`"piper_overlay"` setting branches unused by new path

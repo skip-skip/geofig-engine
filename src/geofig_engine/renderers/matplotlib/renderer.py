@@ -165,6 +165,156 @@ def _box_frame(ax, link_matrix, label_policy="upright"):
                 rotation=rot, clip_on=False)
 
 
+SQRT3_2 = math.sqrt(3) / 2.0
+
+
+@frame_provider("piper_ternary_frame")
+def _piper_ternary_frame(ax, link_matrix, label_policy="upright",
+                         ions=None, rev_bottom=False, rev_left=False,
+                         rev_right=False, title=""):
+    """Piper ternary frame: triangle outline, internal grid, tick labels.
+
+    Ions = [top, left, right] ion names for edge labels. Reversal flags
+    invert tick numerals on each edge (20↔80) matching Piper convention.
+    """
+    # -- triangle outline --
+    tri_local = [(0, 0), (1, 0), (0.5, SQRT3_2), (0, 0)]
+    tri_world = _apply_matrix_pts(link_matrix, tri_local)
+    ax.plot(tri_world[:, 0], tri_world[:, 1], color="black", linewidth=1.0, zorder=2)
+
+    # -- internal grid at 20/40/60/80% --
+    for t in [0.2, 0.4, 0.6, 0.8]:
+        family1 = [(t, 0), (t * 0.5, t * SQRT3_2)]
+        family2 = [(t, 0), ((1 + t) / 2, (1 - t) * SQRT3_2)]
+        family3 = [(t * 0.5, t * SQRT3_2), (1 - t * 0.5, t * SQRT3_2)]
+        for fam in (family1, family2, family3):
+            w = _apply_matrix_pts(link_matrix, fam)
+            ax.plot(w[:, 0], w[:, 1], color="gray", linewidth=0.3,
+                    linestyle=":", zorder=1)
+
+    # -- tick labels at 20/40/60/80% --
+    for tick_val in [0.2, 0.4, 0.6, 0.8]:
+        tick_str = str(int(tick_val * 100))
+        inv = str(100 - int(tick_str))
+
+        bottom_lbl = inv if rev_bottom else tick_str
+        left_lbl = inv if rev_left else tick_str
+        right_lbl = inv if rev_right else tick_str
+
+        # bottom edge tick
+        wb = _apply_matrix_pts(link_matrix, [(tick_val, -0.03)])[0]
+        ax.text(wb[0], wb[1], bottom_lbl, ha="center", va="top", fontsize=5,
+                rotation=label_rotation((1, 0), link_matrix, policy=label_policy),
+                clip_on=False)
+
+        # left edge tick
+        wl = _apply_matrix_pts(link_matrix, [(
+            tick_val * 0.5 - 0.026, tick_val * SQRT3_2 + 0.015
+        )])[0]
+        ax.text(wl[0], wl[1], left_lbl, ha="center", va="center", fontsize=5,
+                rotation=label_rotation(
+                    (0.5, SQRT3_2), link_matrix, policy=label_policy),
+                clip_on=False)
+
+        # right edge tick
+        wr = _apply_matrix_pts(link_matrix, [(
+            1 - tick_val * 0.5 + 0.026, tick_val * SQRT3_2 + 0.015
+        )])[0]
+        ax.text(wr[0], wr[1], right_lbl, ha="center", va="center", fontsize=5,
+                rotation=label_rotation(
+                    (-0.5, SQRT3_2), link_matrix, policy=label_policy),
+                clip_on=False)
+
+    # -- edge title --
+    if title:
+        wt = _apply_matrix_pts(link_matrix, [(0.5, SQRT3_2 + 0.12)])[0]
+        ax.text(wt[0], wt[1], title, ha="center", va="bottom", fontsize=7,
+                fontweight="bold", clip_on=False)
+
+    # -- ion edge labels with arrows --
+    if ions and len(ions) == 3:
+        offset = 0.12
+        cos30 = SQRT3_2
+        mid_left = (0.25 - offset * cos30, SQRT3_2 / 2.0 + offset * 0.5)
+        mid_base = (0.5, -offset)
+        mid_right = (0.75 + offset * cos30, SQRT3_2 / 2.0 + offset * 0.5)
+
+        def _arrow(x, y, text, rotation=0, reverse=False):
+            length = 0.5
+            angle_rad = math.radians(rotation)
+            dx = (length / 2) * math.cos(angle_rad)
+            dy = (length / 2) * math.sin(angle_rad)
+            style = '-|>' if reverse else '<|-'
+            wxy = _apply_matrix_pts(link_matrix, [(x + dx, y + dy)])[0]
+            wxyt = _apply_matrix_pts(link_matrix, [(x - dx, y - dy)])[0]
+            ax.annotate('', xy=wxy, xytext=wxyt,
+                        arrowprops=dict(arrowstyle=style, color='black', lw=1.0),
+                        annotation_clip=False)
+            wpt = _apply_matrix_pts(link_matrix, [(x, y)])[0]
+            rot = label_rotation((1, 0), link_matrix, policy=label_policy)
+            ax.text(wpt[0], wpt[1], text, ha='center', va='center',
+                    rotation=rot, fontsize=7,
+                    bbox=dict(facecolor='white', edgecolor='none', pad=1),
+                    clip_on=False)
+
+        _arrow(*mid_left, ions[1], rotation=60, reverse=rev_left)
+        _arrow(*mid_base, ions[0], rotation=0, reverse=rev_bottom)
+        _arrow(*mid_right, ions[2], rotation=-60, reverse=rev_right)
+
+
+@frame_provider("piper_diamond_frame")
+def _piper_diamond_frame(ax, link_matrix, label_policy="upright",
+                         ions=None, title=""):
+    """Piper diamond frame: outline, internal grid, tick labels.
+
+    Ions = [cation_top, cation_left, anion_top, anion_right] for edge labels.
+    """
+    # -- outline --
+    h = SQRT3_2
+    dia_local = [(0, h), (0.5, 0), (0, -h), (-0.5, 0), (0, h)]
+    dia_world = _apply_matrix_pts(link_matrix, dia_local)
+    ax.plot(dia_world[:, 0], dia_world[:, 1], color="black", linewidth=1.0, zorder=2)
+
+    # -- internal grid --
+    for t in [0.2, 0.4, 0.6, 0.8]:
+        # Family 1: upper-right edge → lower-left edge
+        f1 = [(t / 2, h * (1 - t)), (-(1 - t) / 2, -t * h)]
+        w1 = _apply_matrix_pts(link_matrix, f1)
+        ax.plot(w1[:, 0], w1[:, 1], color="gray", linewidth=0.3,
+                linestyle=":", zorder=1)
+        # Family 2: upper-left edge → lower-right edge
+        f2 = [(-(1 - t) / 2, t * h), (t / 2, -h * (1 - t))]
+        w2 = _apply_matrix_pts(link_matrix, f2)
+        ax.plot(w2[:, 0], w2[:, 1], color="gray", linewidth=0.3,
+                linestyle=":", zorder=1)
+
+    # -- tick labels on upper-right edge (cation) --
+    for t in [0.2, 0.4, 0.6, 0.8]:
+        label = f"{t * 100:.0f}"
+        d = 0.03
+        w = _apply_matrix_pts(link_matrix, [(t / 2 + d, h * (1 - t) + d * 0.4)])[0]
+        ax.text(w[0], w[1], label, ha="center", va="bottom", fontsize=5,
+                rotation=label_rotation(
+                    (0.5, -h), link_matrix, policy=label_policy),
+                clip_on=False)
+
+    # -- tick labels on upper-left edge (anion) --
+    for t in [0.2, 0.4, 0.6, 0.8]:
+        label = f"{t * 100:.0f}"
+        d = 0.03
+        w = _apply_matrix_pts(link_matrix, [(-(1 - t) / 2 - d, t * h + d * 0.4)])[0]
+        ax.text(w[0], w[1], label, ha="center", va="bottom", fontsize=5,
+                rotation=label_rotation(
+                    (0.5, h), link_matrix, policy=label_policy),
+                clip_on=False)
+
+    # -- edge title --
+    if title:
+        wt = _apply_matrix_pts(link_matrix, [(0, h + 0.12)])[0]
+        ax.text(wt[0], wt[1], title, ha="center", va="bottom", fontsize=7,
+                fontweight="bold", clip_on=False)
+
+
 _ARTIST_CONTAINERS = ("lines", "collections", "patches", "texts", "images")
 
 

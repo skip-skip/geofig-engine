@@ -147,16 +147,29 @@ class TestDegenerateRows:
 
 class TestLegacyParity:
     def test_matches_piper_template_math(self):
-        from geofig_engine.templates.piper import (
-            _cat_fracs,
-            _diamond_xy,
-            _ternary_x,
-            _ternary_y,
-        )
+        """StatIonFractions output matches the legacy piper math (now inlined)."""
+        import math
 
         df = _sample_df()
         df = df.copy()
         df["NaK"] = df["Na"] + df["K"]
+
+        def _cat_fracs(data, cols):
+            total = data[list(cols)].sum(axis=1)
+            return [data[c] / total for c in cols]
+
+        def _ternary_x(f1, f0):
+            return f1.fillna(0).values * 1.0 + f0.fillna(0).values * 0.5
+
+        def _ternary_y(f0):
+            sx = math.sqrt(3) / 2.0
+            return f0.fillna(0).values * sx
+
+        def _diamond_xy(cat_x, cat_y, an_x, an_y):
+            h = 0.5 * math.sqrt(3)
+            dx = an_y / (4 * h) + 0.5 * an_x - cat_y / (4 * h) + 0.5 * cat_x - 0.5
+            dy = 0.5 * an_y + h * an_x + 0.5 * cat_y - h * cat_x
+            return np.nan_to_num(dx), np.nan_to_num(dy)
 
         ca_f, mg_f, nak_f = _cat_fracs(df, ("Ca", "Mg", "NaK"))
         hco3_f, so4_f, cl_f = _cat_fracs(df, ("HCO3", "SO4", "Cl"))
