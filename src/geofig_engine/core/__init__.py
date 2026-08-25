@@ -44,7 +44,6 @@ from .spec import (
 
 # Linked secondary axes
 from .link import (
-    AxisLink,
     LinkTransform,
 )
 
@@ -70,6 +69,5 @@ __all__ = [
     "build_spec",
     "extract_data_for_mapping",
     # Linked axes
-    "AxisLink",
     "LinkTransform",
 ]

@@ -47,7 +47,7 @@ from geofig_engine.core.facet import (
     FacetNull,
     FacetWrap,
 )
-from geofig_engine.core.link import AxisLink, LinkTransform
+from geofig_engine.core.link import LinkTransform
 from geofig_engine.core.scale import (
     Scale,
     ScaleConstant,
@@ -271,32 +271,6 @@ def coord_from_dict(data: dict) -> Coord:
 
 
 # ---------------------------------------------------------------------------
-# Link converters
-# ---------------------------------------------------------------------------
-
-def link_to_dict(link: AxisLink) -> dict:
-    """Convert an AxisLink to a JSON-compatible dict."""
-    result = {
-        "name": link.name,
-        "coord": coord_to_dict(link.coord),
-        "transform": link.transform.to_dict(),
-    }
-    if link.frame is not None:
-        result["frame"] = link.frame
-    return result
-
-
-def link_from_dict(data: dict) -> AxisLink:
-    """Reconstruct an AxisLink from its dict representation."""
-    return AxisLink(
-        name=data["name"],
-        coord=coord_from_dict(data["coord"]),
-        transform=LinkTransform.from_dict(data.get("transform", {})),
-        frame=data.get("frame"),
-    )
-
-
-# ---------------------------------------------------------------------------
 # Facet converters
 # ---------------------------------------------------------------------------
 
@@ -429,8 +403,6 @@ def layer_spec_to_dict(layer: LayerSpec) -> dict:
     }
     if layer.zorder is not None:
         result["zorder"] = layer.zorder
-    if layer.subplot is not None:
-        result["subplot"] = layer.subplot
     if layer.xlim is not None:
         result["xlim"] = list(layer.xlim)
     if layer.ylim is not None:
@@ -447,7 +419,6 @@ def layer_spec_from_dict(data: dict) -> LayerSpec:
         visual_mapping=_visual_mapping_from_dict(data["visual_mapping"]),
         data_override=data.get("data_override"),
         zorder=data.get("zorder"),
-        subplot=data.get("subplot"),
         xlim=tuple(xlim) if xlim is not None else None,
         ylim=tuple(ylim) if ylim is not None else None,
     )
@@ -469,18 +440,47 @@ def figure_spec_to_dict(spec: FigureSpec) -> dict:
         "context": spec.context,
         "mappings": _visual_mapping_to_dict(spec.mappings),
         "data": _dataframe_to_dict(spec.data),
-        "links": [link_to_dict(link) for link in spec.links],
+        "children": [_spec_to_dict(c) for c in spec.children],
+        "transform": spec.transform.to_dict(),
     }
-    if spec.root_transform is not None:
-        result["root_transform"] = spec.root_transform.to_dict()
+    if spec.frame_config is not None:
+        result["frame_config"] = spec.frame_config
+    return result
+
+
+def _spec_to_dict(spec: FigureSpec) -> dict:
+    """Recursive helper for serializing a child FigureSpec."""
+    result = {
+        "template_name": spec.template_name,
+        "iterator_key": list(spec.iterator_key),
+        "coord": coord_to_dict(spec.coord),
+        "facet": facet_to_dict(spec.facet),
+        "layers": [layer_spec_to_dict(l) for l in spec.layers],
+        "settings": spec.settings,
+        "context": spec.context,
+        "mappings": _visual_mapping_to_dict(spec.mappings),
+        "data": _dataframe_to_dict(spec.data),
+        "children": [_spec_to_dict(c) for c in spec.children],
+        "transform": spec.transform.to_dict(),
+    }
+    if spec.frame_config is not None:
+        result["frame_config"] = spec.frame_config
     return result
 
 
 def figure_spec_from_dict(data: dict) -> FigureSpec:
     """Reconstruct a FigureSpec from a JSON-compatible dict."""
+    return _spec_from_dict(data)
+
+
+def _spec_from_dict(data: dict) -> FigureSpec:
+    """Recursive helper for deserializing a FigureSpec."""
     df = _dataframe_from_dict(data["data"])
-    layers = [layer_spec_from_dict(l) for l in data["layers"]]
-    root_data = data.get("root_transform")
+    layers = [layer_spec_from_dict(l) for l in data.get("layers", [])]
+    children = tuple(
+        _spec_from_dict(c) for c in data.get("children", [])
+    )
+    transform_data = data.get("transform")
     return build_spec(
         data=df,
         mappings=_visual_mapping_from_dict(data["mappings"]),
@@ -491,8 +491,9 @@ def figure_spec_from_dict(data: dict) -> FigureSpec:
         layers=layers,
         coord=coord_from_dict(data["coord"]),
         facet=facet_from_dict(data["facet"]),
-        links=tuple(link_from_dict(link) for link in data.get("links", [])),
-        root_transform=LinkTransform.from_dict(root_data) if root_data else None,
+        children=children,
+        transform=LinkTransform.from_dict(transform_data) if transform_data else None,
+        frame_config=data.get("frame_config"),
     )
 
 

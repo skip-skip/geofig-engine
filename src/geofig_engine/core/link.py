@@ -1,9 +1,8 @@
 """
-AxisLink: declarative secondary axes sharing one canvas (Phase 14.5).
+LinkTransform: affine placement of a linked axis inside world space.
 
-A figure has one main axis plus zero or more named links. World space is
-defined as the main axis's post-transform data space; each link places its
-own local ``[0, 1]²`` space inside that world via a :class:`LinkTransform`.
+Each child FigureSpec carries a LinkTransform that maps its local
+coordinate space into the parent's world space.
 
 Composition convention (pinned by unit tests in ``tests/test_links.py``):
 
@@ -30,9 +29,6 @@ import math
 from dataclasses import dataclass, field
 
 import numpy as np
-
-from geofig_engine.core.coord import Coord
-
 
 def _numeric_pair(value, label: str) -> tuple[float, float]:
     """Validate and coerce a length-2 sequence of real numbers (bools excluded)."""
@@ -127,38 +123,6 @@ class LinkTransform:
             rotate=data.get("rotate", 0.0),
             scale=tuple(data.get("scale", (1.0, 1.0))),
         )
-
-
-@dataclass(frozen=True)
-class AxisLink:
-    """
-    A named secondary axis placed in world space.
-
-    Attributes:
-        name: Unique identifier; LayerSpec.subplot routes layers here.
-        coord: Projection for this axis's local space (Coord instance).
-        transform: Placement of the local [0, 1]² space in world space.
-        frame: Optional styling hints consumed by renderer frame providers.
-    """
-
-    name: str
-    coord: Coord
-    transform: LinkTransform = field(default_factory=LinkTransform)
-    frame: dict | None = None
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.name, str) or not self.name.strip():
-            raise ValueError(f"name must be a non-empty string, got {self.name!r}")
-        if not isinstance(self.coord, Coord):
-            raise TypeError(
-                f"coord must be a Coord instance, got {type(self.coord).__name__}"
-            )
-        if not isinstance(self.transform, LinkTransform):
-            raise TypeError(
-                f"transform must be a LinkTransform, got {type(self.transform).__name__}"
-            )
-        if self.frame is not None and not isinstance(self.frame, dict):
-            raise TypeError(f"frame must be a dict or None, got {self.frame!r}")
 
 
 def label_rotation(local_vec, matrix: np.ndarray, policy: str = "upright") -> float:

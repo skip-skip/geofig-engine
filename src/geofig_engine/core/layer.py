@@ -62,8 +62,6 @@ class LayerSpec:
     stat: Stat
     visual_mapping: dict[str, Any]
     data_override: str | None = None
-    coord: Any = None
     zorder: int | None = None
-    subplot: str | None = None
     xlim: tuple[float, float] | None = None
     ylim: tuple[float, float] | None = None

@@ -14,7 +14,6 @@ from geofig_engine.templates import (
     build_piper_specs,
     nagph_nag,
     npr_nnp,
-    piper_overlay_diamond,
     plot_stiff,
 )
 
@@ -90,21 +89,22 @@ def main() -> None:
     print("1/7  Piper diagram saved")
 
     # ------------------------------------------------------------------
-    # 2. Piper with diamond overlay
+    # 2. Piper with extra data
     # ------------------------------------------------------------------
     extra = pd.DataFrame({
         "Ca": [30.0], "Mg": [20.0], "Na+K": [10.0],
         "HCO3": [100.0], "SO4": [40.0], "Cl": [15.0],
         "site": ["X"],
     })
-    overlaid = piper_overlay_diamond(
-        specs[0], extra, mapping={"color": "site", "marker": "site"},
+    extra_specs = build_piper_specs(
+        extra,
+        mapping={"color": "site", "marker": "site"},
+        title="2 – Piper Extra Sample",
     )
-    overlaid.settings["title"] = "2 – Piper with diamond overlay"
-    fig = renderer.render(overlaid)
+    fig = renderer.render(extra_specs[0])
     fig.savefig(out / "02_piper_overlay.png", dpi=150)
     fig.clf()
-    print("2/7  Piper with overlay saved")
+    print("2/7  Piper extra sample saved")
 
     # ------------------------------------------------------------------
     # 3. Stiff diagram — single sample

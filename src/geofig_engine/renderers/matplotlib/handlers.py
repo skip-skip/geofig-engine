@@ -25,7 +25,7 @@ def _resolve_constant(series: pd.Series) -> Any:
     return None
 
 
-def render_point(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+def render_point(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     x = layer_spec.visual_mapping.get("x")
     y = layer_spec.visual_mapping.get("y")
     if x is None or y is None:
@@ -42,6 +42,9 @@ def render_point(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
 
     x_vals = x.values if isinstance(x, pd.Series) else np.asarray(x)
     y_vals = y.values if isinstance(y, pd.Series) else np.asarray(y)
+
+    if len(x_vals) == 0:
+        return
 
     # Resolve color to per-point values
     resolved_color = resolve_color_series(color) if color is not None else None
@@ -142,7 +145,7 @@ def _draw_lines_grouped(ax, x, y, color_series, kwargs, polar=False):
             ax.plot(xs.values[order], ys.values[order], **kw)
 
 
-def render_line(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+def render_line(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     x = layer_spec.visual_mapping.get("x")
     y = layer_spec.visual_mapping.get("y")
     if x is None or y is None:
@@ -167,13 +170,13 @@ def render_line(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     if color is not None:
         resolved = resolve_color_series(color)
         if isinstance(resolved, pd.Series) and resolved.nunique() > 1:
-            _draw_lines_grouped(ax, x, y, resolved, kwargs, polar=isinstance(layer_spec.coord, CoordPolar))
+            _draw_lines_grouped(ax, x, y, resolved, kwargs, polar=isinstance(coord, CoordPolar))
             return
         kwargs["color"] = _resolve_constant(resolved) if isinstance(resolved, pd.Series) else resolved
 
     x_vals = x.values if isinstance(x, pd.Series) else x
     y_vals = y.values if isinstance(y, pd.Series) else y
-    if isinstance(layer_spec.coord, CoordPolar):
+    if isinstance(coord, CoordPolar):
         x_vals = np.append(x_vals, x_vals[0])
         y_vals = np.append(y_vals, y_vals[0])
     ax.plot(x_vals, y_vals, **kwargs)
@@ -191,7 +194,7 @@ def _stack_values(x: pd.Series, y: pd.Series, fill: bool = False) -> tuple[pd.Se
     return pd.Series(df["y"].values), pd.Series(df["bottom"].values)
 
 
-def render_bar(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+def render_bar(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     x = layer_spec.visual_mapping.get("x")
     y = layer_spec.visual_mapping.get("y")
     if x is None or y is None:
@@ -253,7 +256,7 @@ def _draw_areas_grouped(ax, x, y, color_series, kwargs, polar=False, stiff=False
             ax.fill_between(xs.values[order], ys.values[order], 0, **kw)
 
 
-def render_area(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+def render_area(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     x = layer_spec.visual_mapping.get("x")
     y = layer_spec.visual_mapping.get("y")
     if x is None or y is None:
@@ -272,18 +275,18 @@ def render_area(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
         resolved = resolve_color_series(color)
         if isinstance(resolved, pd.Series) and resolved.nunique() > 1:
             _draw_areas_grouped(ax, x, y, resolved, kwargs,
-                                polar=isinstance(layer_spec.coord, CoordPolar),
-                                stiff=isinstance(layer_spec.coord, StiffCoord))
+                                polar=isinstance(coord, CoordPolar),
+                                stiff=isinstance(coord, StiffCoord))
             return
         kwargs["color"] = _resolve_constant(resolved) if isinstance(resolved, pd.Series) else resolved
 
-    if isinstance(layer_spec.coord, StiffCoord):
+    if isinstance(coord, StiffCoord):
         fill_kw = {"facecolor": kwargs.pop("color", None)} if "color" in kwargs else {}
         fill_kw.update(kwargs)
         fill_kw.setdefault("edgecolor", "black")
         fill_kw.setdefault("linewidth", 1.5)
         ax.fill(x, y, **fill_kw)
-    elif isinstance(layer_spec.coord, CoordPolar):
+    elif isinstance(coord, CoordPolar):
         x_vals = np.append(x.values, x.values[0])
         y_vals = np.append(y.values, y.values[0])
         fill_kw = {"facecolor": kwargs.pop("color", None)} if "color" in kwargs else {}
@@ -293,7 +296,7 @@ def render_area(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
         ax.fill_between(x, y, 0, **kwargs)
 
 
-def render_ribbon(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+def render_ribbon(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     x = layer_spec.visual_mapping.get("x")
     ymin = layer_spec.visual_mapping.get("ymin")
     ymax = layer_spec.visual_mapping.get("ymax")
@@ -316,7 +319,7 @@ def render_ribbon(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     ax.fill_between(x, ymin, ymax, **kwargs)
 
 
-def render_function_line(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+def render_function_line(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     func = layer_spec.geom.func
     if not func:
         raise ValueError("GeomFunctionLine requires a func expression")
@@ -382,7 +385,7 @@ def _measure_text_px(text: str, fontsize: float, rotation: float = 0) -> tuple[f
     return bb.width, bb.height
 
 
-def render_text(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+def render_text(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     x = layer_spec.visual_mapping.get("x")
     y = layer_spec.visual_mapping.get("y")
     label = layer_spec.visual_mapping.get("label")
@@ -417,7 +420,7 @@ def render_text(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
             b = bbox.values[i] if isinstance(bbox, pd.Series) else bbox
             kw["bbox"] = b
 
-        if isinstance(layer_spec.coord, CoordPolar):
+        if isinstance(coord, CoordPolar):
             angle_rad = float(x_vals[i])
             kw["ha"] = "left" if -np.pi / 2 <= angle_rad % (2 * np.pi) <= np.pi / 2 else "right"
             kw["va"] = "center"
@@ -425,7 +428,7 @@ def render_text(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
         ax.text(x_vals[i], y_vals[i], str(labels[i]), **kw)
 
 
-def render_errorbar(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+def render_errorbar(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     x = layer_spec.visual_mapping.get("x")
     y = layer_spec.visual_mapping.get("y")
     ymin = layer_spec.visual_mapping.get("ymin")
@@ -505,7 +508,7 @@ def _build_color_map(color_series):
     return {s: cycle[i % len(cycle)] for i, s in enumerate(unique)}
 
 
-def render_box(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+def render_box(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     x = layer_spec.visual_mapping.get("x")
     y = layer_spec.visual_mapping.get("y")
     if x is None or y is None:
@@ -647,7 +650,7 @@ def _apply_violin_colors(bodies, series_for_pos, all_series, alpha_val):
             body.set_alpha(1.0)
 
 
-def render_violin(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+def render_violin(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     x = layer_spec.visual_mapping.get("x")
     y = layer_spec.visual_mapping.get("y")
     if x is None or y is None:
@@ -724,7 +727,7 @@ def render_violin(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
                 body.set_alpha(1.0)
 
 
-def render_abline(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+def render_abline(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     geom = layer_spec.geom
     kwargs: dict[str, Any] = {"zorder": order}
 
@@ -750,7 +753,7 @@ def render_abline(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
         ax.axline(xy1=(geom.x1, geom.y1), xy2=(geom.x2, geom.y2), **kwargs)
 
 
-def render_hspan(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+def render_hspan(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     ymin = layer_spec.visual_mapping.get("ymin")
     ymax = layer_spec.visual_mapping.get("ymax")
     if ymin is None or ymax is None:
@@ -773,7 +776,7 @@ def render_hspan(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     ax.axhspan(ymin_val, ymax_val, **kwargs)
 
 
-def render_vspan(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+def render_vspan(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     xmin = layer_spec.visual_mapping.get("xmin")
     xmax = layer_spec.visual_mapping.get("xmax")
     if xmin is None or xmax is None:
@@ -796,7 +799,7 @@ def render_vspan(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     ax.axvspan(xmin_val, xmax_val, **kwargs)
 
 
-def render_rect(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+def render_rect(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     xmin = layer_spec.visual_mapping.get("xmin")
     xmax = layer_spec.visual_mapping.get("xmax")
     ymin = layer_spec.visual_mapping.get("ymin")
@@ -831,7 +834,7 @@ def render_rect(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
     ax.add_patch(rect)
 
 
-def render_step_line(ax: Axes, layer_spec: LayerSpec, order: int) -> None:
+def render_step_line(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     x = layer_spec.visual_mapping.get("x")
     y = layer_spec.visual_mapping.get("y")
     if x is None or y is None:

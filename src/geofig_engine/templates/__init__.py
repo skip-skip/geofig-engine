@@ -15,7 +15,7 @@ from .isotope import isotope
 from .npr_nnp import npr_nnp
 from .anp_agp import anp_agp
 from .nagph_nag import nagph_nag
-from .piper import build_piper_specs, piper_overlay_diamond
+from .piper import build_piper_specs
 from .stiff import plot_stiff
 
 __all__ = [
@@ -31,6 +31,5 @@ __all__ = [
     "anp_agp",
     "nagph_nag",
     "build_piper_specs",
-    "piper_overlay_diamond",
     "plot_stiff",
 ]

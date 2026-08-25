@@ -333,8 +333,8 @@ class MatplotlibRenderer(BaseRenderer):
         if self.supports(spec) is False:
             raise NotImplementedError(f"MatplotlibRenderer does not currently support template '{spec.template_name}'")
 
-        if spec.links:
-            return self._render_linked(spec)
+        if spec.children:
+            return self._render_children(spec)
         if isinstance(spec.coord, StiffCoord):
             return self._render_stiff(spec)
         if not isinstance(spec.facet, FacetNull):
@@ -388,9 +388,7 @@ class MatplotlibRenderer(BaseRenderer):
                 stat=layer.stat,
                 visual_mapping={k: _filter_series(v, rows) for k, v in layer.visual_mapping.items()},
                 data_override=layer.data_override,
-                coord=spec.coord,
                 zorder=layer.zorder,
-                subplot=layer.subplot,
                 xlim=layer.xlim,
                 ylim=layer.ylim,
             )
@@ -414,9 +412,7 @@ class MatplotlibRenderer(BaseRenderer):
                 geom=layer.geom,
                 stat=layer.stat,
                 visual_mapping={k: _filter_series(v, rows) for k, v in layer.visual_mapping.items() if k != "x"},
-                coord=spec.coord,
                 zorder=layer.zorder,
-                subplot=layer.subplot,
                 xlim=layer.xlim,
                 ylim=layer.ylim,
             )
@@ -448,55 +444,35 @@ class MatplotlibRenderer(BaseRenderer):
             return
         stacked = affine + base_transform
         for artist in MatplotlibRenderer._new_artists(ax, snapshot):
+            if (isinstance(artist, matplotlib.collections.PathCollection)
+                    and len(artist.get_offsets()) == 0):
+                artist.remove()
+                continue
             artist.set_transform(stacked)
 
     # ------------------------------------------------------------------
     # Linked axes (Phase 14.5): one shared Axes, flat transform stacks
     # ------------------------------------------------------------------
 
-    def _render_linked(self, spec: FigureSpec):
+    def _render_children(self, spec: FigureSpec):
         if not isinstance(spec.facet, FacetNull):
-            raise NotImplementedError("Linked axes do not support facets yet")
+            raise NotImplementedError("Children axes do not support facets yet")
 
         figsize = spec.settings.get("figsize", (10, 6))
         fig, ax = plt.subplots(figsize=figsize)
         ax.set_facecolor("none")
-        if not spec.layers:
-            raise ValueError("FigureSpec must define at least one layer")
+        if not spec.children:
+            raise ValueError("FigureSpec must define at least one child")
 
-        # Per-layer coord application: routed layers use their link's coord.
-        spec = self._apply_linked_coord_transforms(spec)
+        for child in spec.children:
+            child = self._apply_child_coord_transforms(child)
+            affine = _affine_from_matrix(child.transform.matrix())
 
-        main_tf = spec.root_transform or LinkTransform()
-        main_matrix = main_tf.matrix()
-        link_by_name = {link.name: link for link in spec.links}
+            self._render_axes(ax, child, child.data, layer_affine=lambda layer, a=affine: a)
 
-        def affine_for(layer):
-            link = link_by_name.get(layer.subplot) if layer.subplot else None
-            matrix = link.transform.matrix() if link is not None else main_matrix
-            return _affine_from_matrix(matrix)
-
-        # Frames first (below data): providers draw line geometry in local
-        # coordinate space.  The renderer stamps those lines with the link
-        # affine so they deform identically to data.  Text labels placed
-        # world-side remain upright (not stamped).
-        for link in spec.links:
-            frame = link.frame or {}
-            provider = _FRAME_PROVIDERS.get(frame.get("provider"))
-            if provider is not None:
-                snapshot = self._snapshot_artists(ax)
-                provider(ax, link.transform.matrix(),
-                         frame.get("label_policy", "upright"))
-                affine = _affine_from_matrix(link.transform.matrix())
-                for artist in self._new_artists(ax, snapshot):
-                    if not isinstance(artist, matplotlib.text.Text):
-                        artist.set_transform(affine + ax.transData)
-
-        xlim, ylim = self._linked_world_limits(spec, main_matrix, link_by_name)
+        xlim, ylim = self._children_world_limits(spec.children)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
-
-        self._render_axes(ax, spec, spec.data, layer_affine=affine_for)
 
         title = spec.settings.get("title")
         if title:
@@ -506,58 +482,53 @@ class MatplotlibRenderer(BaseRenderer):
         plt.close(fig)
         return fig
 
-    def _apply_linked_coord_transforms(self, spec: FigureSpec) -> FigureSpec:
-        """Apply each routed layer's link coord (others keep the main coord)."""
-        if not spec.layers:
-            return spec
-        link_coords = {link.name: link.coord for link in spec.links}
+    def _apply_child_coord_transforms(self, child: FigureSpec) -> FigureSpec:
+        """Apply each child's coord to its own layers' visual mappings."""
+        if not child.layers:
+            return child
         trans_layers = []
-        for layer in spec.layers:
-            coord = link_coords.get(layer.subplot, spec.coord)
-            vm = coord.transform_visual_mapping(dict(layer.visual_mapping), layer.geom)
+        for layer in child.layers:
+            vm = child.coord.transform_visual_mapping(dict(layer.visual_mapping), layer.geom)
             trans_layers.append(
                 LayerSpec(
                     geom=layer.geom,
                     stat=layer.stat,
                     visual_mapping=vm,
                     data_override=layer.data_override,
-                    coord=coord,
                     zorder=layer.zorder,
-                    subplot=layer.subplot,
                     xlim=layer.xlim,
                     ylim=layer.ylim,
                 )
             )
-        return dataclasses.replace(spec, layers=trans_layers)
+        return dataclasses.replace(child, layers=trans_layers)
 
     @staticmethod
-    def _linked_world_limits(spec, main_matrix, link_by_name):
-        """World-space bounding box: all layer data through link transforms + link extents."""
+    def _children_world_limits(children):
+        """World-space bounding box from all children's transforms + data."""
         xs: list[np.ndarray] = []
         ys: list[np.ndarray] = []
 
-        rows = spec.data.index
-        for layer in spec.layers:
-            if layer.geom.name == "function_line":
-                continue
-            x = _filter_series(layer.visual_mapping.get("x"), rows)
-            y = _filter_series(layer.visual_mapping.get("y"), rows)
-            if not isinstance(x, pd.Series) or not isinstance(y, pd.Series):
-                continue
-            if not (pd.api.types.is_numeric_dtype(x) and pd.api.types.is_numeric_dtype(y)):
-                continue
-            n = min(len(x), len(y))
-            if n == 0:
-                continue
-            pts = np.column_stack([x.to_numpy()[:n], y.to_numpy()[:n]])
-            link = link_by_name.get(layer.subplot) if layer.subplot else None
-            matrix = link.transform.matrix() if link is not None else main_matrix
-            world = _apply_matrix_pts(matrix, pts)
-            xs.append(world[:, 0])
-            ys.append(world[:, 1])
+        for child in children:
+            matrix = child.transform.matrix()
+            rows = child.data.index
+            for layer in child.layers:
+                if layer.geom.name == "function_line":
+                    continue
+                x = _filter_series(layer.visual_mapping.get("x"), rows)
+                y = _filter_series(layer.visual_mapping.get("y"), rows)
+                if not isinstance(x, pd.Series) or not isinstance(y, pd.Series):
+                    continue
+                if not (pd.api.types.is_numeric_dtype(x) and pd.api.types.is_numeric_dtype(y)):
+                    continue
+                n = min(len(x), len(y))
+                if n == 0:
+                    continue
+                pts = np.column_stack([x.to_numpy()[:n], y.to_numpy()[:n]])
+                world = _apply_matrix_pts(matrix, pts)
+                xs.append(world[:, 0])
+                ys.append(world[:, 1])
 
-        for link in spec.links:
-            corners = link.transform.transform_points(
+            corners = child.transform.transform_points(
                 [(0, 0), (1, 0), (0, 1), (1, 1)]
             )
             xs.append(corners[:, 0])
@@ -878,6 +849,12 @@ class MatplotlibRenderer(BaseRenderer):
                 l.geom.name in _GEOM_HANDLERS
                 for l in spec.layers
             )
+        if spec.children:
+            return all(
+                l.geom.name in _GEOM_HANDLERS
+                for child in spec.children
+                for l in child.layers
+            )
         return False
 
     # ------------------------------------------------------------------
@@ -900,9 +877,7 @@ class MatplotlibRenderer(BaseRenderer):
                     stat=layer.stat,
                     visual_mapping=vm,
                     data_override=layer.data_override,
-                    coord=spec.coord,
                     zorder=layer.zorder,
-                    subplot=layer.subplot,
                     xlim=layer.xlim,
                     ylim=layer.ylim,
                 )
@@ -913,4 +888,4 @@ class MatplotlibRenderer(BaseRenderer):
         handler = _GEOM_HANDLERS.get(layer.geom.name)
         if handler is None:
             raise TypeError(f"Unsupported geom: {layer.geom.name}")
-        handler(ax, layer, order)
+        handler(ax, layer, order, coord=spec.coord)
