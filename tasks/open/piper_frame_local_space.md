@@ -1,6 +1,6 @@
 # Frame providers: draw in local space, stamp like data
 
-**Status**: open
+**Status**: closed
 **Phase**: 14.5
 **Depends on**: `piper_world_limits_fix`
 
