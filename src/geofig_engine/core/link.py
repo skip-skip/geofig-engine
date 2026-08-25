@@ -95,6 +95,22 @@ class LinkTransform:
         vec = self.matrix() @ np.array([x, y, 1.0])
         return (float(vec[0]), float(vec[1]))
 
+    def transform_points(self, pts) -> np.ndarray:
+        """Map an (n, 2)-like sequence of local points into world space."""
+        arr = np.asarray(pts, dtype=float)
+        if arr.ndim != 2 or arr.shape[1] != 2:
+            raise ValueError(f"pts must have shape (n, 2), got {arr.shape}")
+        ones = np.ones((arr.shape[0], 1))
+        return (self.matrix() @ np.hstack([arr, ones]).T).T[:, :2]
+
+    def transform_direction(self, vec) -> tuple[float, float]:
+        """Apply only the linear part (rotate+scale) to a direction vector."""
+        vx = _real_number(vec[0], "vec x")
+        vy = _real_number(vec[1], "vec y")
+        lin = self.matrix()[:2, :2]
+        wx, wy = lin @ np.array([vx, vy])
+        return (float(wx), float(wy))
+
     def to_dict(self) -> dict:
         """JSON-compatible representation of this transform."""
         return {
@@ -143,3 +159,31 @@ class AxisLink:
             )
         if self.frame is not None and not isinstance(self.frame, dict):
             raise TypeError(f"frame must be a dict or None, got {self.frame!r}")
+
+
+def label_rotation(local_vec, matrix: np.ndarray, policy: str = "upright") -> float:
+    """
+    Text rotation (degrees) for a label attached to a transformed axis.
+
+    Labels never inherit transforms; the renderer places them world-side at
+    ``transform_point()`` anchors. This helper decides their rotation:
+
+    - ``"upright"`` (default): always 0 — text stays horizontal regardless
+      of the transform stack.
+    - ``"parallel"``: rotation of the transformed tangent direction, so the
+      label runs along its edge *after* deformation. Uses only the linear
+      part of *matrix*, making it correct under non-uniform scale (the
+      squash-aware case: rotate 45° + scale_y<1 tilts a horizontal edge to
+      atan2(sin45·k, cos45), not 45°).
+    """
+    if policy == "upright":
+        return 0.0
+    if policy != "parallel":
+        raise ValueError(f"label policy must be 'upright' or 'parallel', got {policy!r}")
+    v = np.asarray(local_vec, dtype=float)
+    if v.shape != (2,):
+        raise ValueError(f"local_vec must have shape (2,), got {v.shape}")
+    w = matrix[:2, :2] @ v
+    if w[0] == 0.0 and w[1] == 0.0:
+        return 0.0
+    return float(math.degrees(math.atan2(w[1], w[0])))

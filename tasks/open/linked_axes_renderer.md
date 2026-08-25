@@ -22,10 +22,12 @@ Text never inherits transforms: tick numerals, vertex names, and edge labels are
 
 ## Acceptance criteria
 
-- [ ] Synthetic two-link spec renders on one Axes; each link's geometry lands at affine-predicted positions
-- [ ] Main-axis root transform (`M_main`) applies only to main-axis artists; links stay world-anchored
-- [ ] Frames/grids/tick marks deform with their link; text labels remain upright by default
-- [ ] `parallel` policy rotation computed from transformed edge tangent (correct under non-uniform scale)
-- [ ] Layers route to the correct link via `subplot`; unrouted layers draw in main space
-- [ ] zorder semantics preserved across links (data ≥ 10, function lines below)
+- [x] Synthetic two-link spec renders on one Axes; each link's geometry lands at affine-predicted positions
+- [x] Main-axis root transform (`M_main`) applies only to main-axis artists; links stay world-anchored
+- [x] Frames/grids/tick marks deform with their link; text labels remain upright by default
+- [x] `parallel` policy rotation computed from transformed edge tangent (correct under non-uniform scale)
+- [x] Layers route to the correct link via `subplot`; unrouted layers draw in main space
+- [x] zorder semantics preserved across links (data ≥ 10, function lines below)
 - [ ] Legends/facets operate unchanged on the single shared axes
+      (partial: facets intentionally raise NotImplementedError while linked — covered by test;
+       legends untouched via existing engine accumulator; full legend-on-linked-canvas coverage deferred)

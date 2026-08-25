@@ -18,6 +18,7 @@ from geofig_engine.core.dataset import Dataset
 from geofig_engine.core.facet import Facet, FacetNull
 from geofig_engine.core.iterator import DimensionIterator, IteratorResult, expand
 from geofig_engine.core.layer import Layer, LayerSpec
+from geofig_engine.core.link import AxisLink, LinkTransform
 from geofig_engine.core.scale import Scale
 from geofig_engine.core.spec import FigureSpec, build_spec
 from geofig_engine.renderers.base import BaseRenderer
@@ -55,6 +56,8 @@ class FigureEngine:
         iterators: Sequence[DimensionIterator] | DimensionIterator | None = None,
         coord: Coord | None = None,
         facet: Facet | None = None,
+        links: tuple[AxisLink, ...] | None = None,
+        root_transform: LinkTransform | None = None,
         _template_name: str = "custom",
     ) -> list[FigureSpec]:
         """Build FigureSpecs from Layer objects (Grammar of Graphics path)."""
@@ -84,6 +87,8 @@ class FigureEngine:
                 layers=layer_specs,
                 coord=coord or CoordCartesian(),
                 facet=facet or FacetNull(),
+                links=links or (),
+                root_transform=root_transform,
             )
             specs.append(spec)
 

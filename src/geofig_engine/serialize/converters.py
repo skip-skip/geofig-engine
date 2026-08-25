@@ -459,7 +459,7 @@ def layer_spec_from_dict(data: dict) -> LayerSpec:
 
 def figure_spec_to_dict(spec: FigureSpec) -> dict:
     """Convert a FigureSpec to a JSON-compatible dict."""
-    return {
+    result = {
         "template_name": spec.template_name,
         "iterator_key": list(spec.iterator_key),
         "coord": coord_to_dict(spec.coord),
@@ -471,12 +471,16 @@ def figure_spec_to_dict(spec: FigureSpec) -> dict:
         "data": _dataframe_to_dict(spec.data),
         "links": [link_to_dict(link) for link in spec.links],
     }
+    if spec.root_transform is not None:
+        result["root_transform"] = spec.root_transform.to_dict()
+    return result
 
 
 def figure_spec_from_dict(data: dict) -> FigureSpec:
     """Reconstruct a FigureSpec from a JSON-compatible dict."""
     df = _dataframe_from_dict(data["data"])
     layers = [layer_spec_from_dict(l) for l in data["layers"]]
+    root_data = data.get("root_transform")
     return build_spec(
         data=df,
         mappings=_visual_mapping_from_dict(data["mappings"]),
@@ -488,6 +492,7 @@ def figure_spec_from_dict(data: dict) -> FigureSpec:
         coord=coord_from_dict(data["coord"]),
         facet=facet_from_dict(data["facet"]),
         links=tuple(link_from_dict(link) for link in data.get("links", [])),
+        root_transform=LinkTransform.from_dict(root_data) if root_data else None,
     )
 
 

@@ -13,7 +13,7 @@ import pandas as pd
 from geofig_engine.core.coord import Coord, CoordCartesian
 from geofig_engine.core.facet import Facet, FacetNull
 from geofig_engine.core.layer import LayerSpec
-from geofig_engine.core.link import AxisLink
+from geofig_engine.core.link import AxisLink, LinkTransform
 
 from geofig_engine.utils.validation import (
     validate_columns_exist,
@@ -46,6 +46,9 @@ class FigureSpec:
         facet: Facet specification for subplot splitting.
         links: Named secondary axes sharing the canvas; LayerSpec.subplot
                routes layers to a link by name.
+        root_transform: Optional root transform (M_main) applied to main-axis
+               artists only; world space is defined as its post-transform data
+               space (e.g. the Piper diamond's rotate-then-squash).
     """
 
     data: pd.DataFrame
@@ -58,6 +61,7 @@ class FigureSpec:
     coord: Coord = field(default_factory=CoordCartesian)
     facet: Facet = field(default_factory=FacetNull)
     links: tuple[AxisLink, ...] = ()
+    root_transform: LinkTransform | None = None
     
     def __post_init__(self) -> None:
         """Validate spec on creation."""
@@ -113,6 +117,12 @@ def validate_figure_spec(spec: FigureSpec) -> None:
                     f"(available: {sorted(link_names)})"
                 )
 
+    if spec.root_transform is not None and not isinstance(spec.root_transform, LinkTransform):
+        raise TypeError(
+            f"root_transform must be a LinkTransform or None, "
+            f"got {type(spec.root_transform).__name__}"
+        )
+
 
 def build_spec(
     data: pd.DataFrame,
@@ -125,6 +135,7 @@ def build_spec(
     coord: Coord | None = None,
     facet: Facet | None = None,
     links: tuple[AxisLink, ...] | None = None,
+    root_transform: LinkTransform | None = None,
 ) -> FigureSpec:
     """
     Factory function to create and validate a FigureSpec.
@@ -140,6 +151,7 @@ def build_spec(
         coord: Coordinate system for the figure.
         facet: Facet specification for subplot splitting.
         links: Named secondary axes sharing the canvas.
+        root_transform: Optional main-axis root transform (M_main).
 
     Returns:
         A validated FigureSpec instance.
@@ -159,6 +171,7 @@ def build_spec(
         coord=coord or CoordCartesian(),
         facet=facet or FacetNull(),
         links=links or (),
+        root_transform=root_transform,
     )
 
 

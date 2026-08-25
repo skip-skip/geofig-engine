@@ -15,12 +15,14 @@ from matplotlib.dates import DateFormatter
 import matplotlib.pyplot as plt
 
 from matplotlib.gridspec import GridSpec
+from matplotlib.transforms import Affine2D
 
 from matplotlib.patches import Polygon
 
 from geofig_engine.core.coord import CoordFlipped, CoordFixed, CoordPolar, PiperCoord, StiffCoord
 from geofig_engine.core.facet import FacetGrid, FacetNull, FacetWrap
 from geofig_engine.core.layer import LayerSpec
+from geofig_engine.core.link import LinkTransform, label_rotation
 from geofig_engine.core.spec import FigureSpec
 from geofig_engine.renderers.base import BaseRenderer
 from geofig_engine.renderers.matplotlib.handlers import (
@@ -93,6 +95,79 @@ def _facet_panels(facet, data):
     return panels
 
 
+# ---------------------------------------------------------------------------
+# Linked axes (Phase 14.5): frame providers and world-space helpers
+#
+# World space is the main axis's post-transform data space. Each link's
+# artists draw through a flat Affine2D (built from its LinkTransform matrix)
+# stacked on the shared Axes' transData; text labels never inherit
+# transforms — they are placed world-side at transform_point() anchors with
+# a rotation chosen by their label policy ("upright" or "parallel").
+# ---------------------------------------------------------------------------
+
+_FRAME_PROVIDERS: dict = {}
+
+
+def frame_provider(name: str):
+    """Register a frame provider under *name*.
+
+    Provider signature: ``(ax, link_matrix, label_policy)`` where
+    *link_matrix* is the link's 3x3 homogeneous numpy matrix. Providers draw
+    geometry in local space mapped through the matrix (or plot pre-mapped
+    world coordinates) and place text via :func:`label_rotation`.
+    """
+    def decorator(func):
+        _FRAME_PROVIDERS[name] = func
+        return func
+    return decorator
+
+
+def _apply_matrix_pts(matrix: np.ndarray, pts) -> np.ndarray:
+    """Map an iterable of (x, y) points through a 3x3 homogeneous matrix."""
+    arr = np.asarray(pts, dtype=float)
+    ones = np.ones((arr.shape[0], 1))
+    return (matrix @ np.hstack([arr, ones]).T).T[:, :2]
+
+
+def _affine_from_matrix(matrix: np.ndarray) -> Affine2D:
+    """Build an Affine2D from a 3x3 homogeneous matrix (flat, no nesting)."""
+    return Affine2D.from_values(
+        matrix[0, 0], matrix[1, 0],
+        matrix[0, 1], matrix[1, 1],
+        matrix[0, 2], matrix[1, 2],
+    )
+
+
+@frame_provider("box")
+def _box_frame(ax, link_matrix, label_policy="upright"):
+    """Reference provider: unit-square outline with labeled corners.
+
+    Generalizes the ternary/diamond frame pattern; real chemistry frames
+    arrive with WP5. The outline deforms with the link; corner labels stay
+    upright by default or run parallel to their edge under 'parallel'.
+    """
+    corners_local = [(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]
+    outline = _apply_matrix_pts(link_matrix, corners_local)
+    ax.plot(outline[:, 0], outline[:, 1], color="black", linewidth=1.0, zorder=2)
+
+    # Corner anchors with a small outward offset, plus each corner's
+    # tangent direction for the 'parallel' policy.
+    anchor_specs = [
+        ((-0.06, -0.06), "BL", (1.0, 0.0)),
+        ((1.06, -0.06), "BR", (1.0, 0.0)),
+        ((1.06, 1.06), "TR", (0.0, 1.0)),
+        ((-0.06, 1.06), "TL", (0.0, 1.0)),
+    ]
+    for local_anchor, text, tangent in anchor_specs:
+        wx, wy = _apply_matrix_pts(link_matrix, [local_anchor])[0]
+        rot = label_rotation(tangent, link_matrix, policy=label_policy)
+        ax.text(wx, wy, text, ha="center", va="center", fontsize=7,
+                rotation=rot, clip_on=False)
+
+
+_ARTIST_CONTAINERS = ("lines", "collections", "patches", "texts", "images")
+
+
 class MatplotlibRenderer(BaseRenderer):
     """Matplotlib backend for rendering FigEngine FigureSpec objects."""
 
@@ -100,6 +175,8 @@ class MatplotlibRenderer(BaseRenderer):
         if self.supports(spec) is False:
             raise NotImplementedError(f"MatplotlibRenderer does not currently support template '{spec.template_name}'")
 
+        if spec.links:
+            return self._render_linked(spec)
         if isinstance(spec.coord, PiperCoord):
             return self._render_piper(spec)
         if isinstance(spec.coord, StiffCoord):
@@ -133,8 +210,14 @@ class MatplotlibRenderer(BaseRenderer):
         plt.close(fig)
         return fig
 
-    def _render_axes(self, ax, spec, data):
-        """Render all layers onto a single Axes, filtered to *data* rows."""
+    def _render_axes(self, ax, spec, data, layer_affine=None):
+        """Render all layers onto a single Axes, filtered to *data* rows.
+
+        When *layer_affine* is provided (linked-axes path) it maps each
+        LayerSpec to an Affine2D placed between data and display space;
+        artists created for that layer are stamped with
+        ``affine + ax.transData``. Handlers themselves stay transform-blind.
+        """
         rows = data.index
 
         data_idx = 0
@@ -155,7 +238,10 @@ class MatplotlibRenderer(BaseRenderer):
                 xlim=layer.xlim,
                 ylim=layer.ylim,
             )
+            snapshot = self._snapshot_artists(ax)
             self._render_layer(ax, spec, filtered, order)
+            if layer_affine is not None:
+                self._stamp_new_artists(ax, snapshot, layer_affine(filtered), ax.transData)
             if layer.xlim is not None:
                 ax.set_xlim(layer.xlim)
             if layer.ylim is not None:
@@ -179,10 +265,149 @@ class MatplotlibRenderer(BaseRenderer):
                 ylim=layer.ylim,
             )
             # Keep function lines below data layers (data starts at zorder=10)
+            snapshot = self._snapshot_artists(ax)
             self._render_layer(ax, spec, filtered, order)
+            if layer_affine is not None:
+                self._stamp_new_artists(ax, snapshot, layer_affine(filtered), ax.transData)
 
         ax.set_xlim(xlim_data)
         ax.set_ylim(ylim_data)
+
+    @staticmethod
+    def _snapshot_artists(ax):
+        return {name: len(getattr(ax, name)) for name in _ARTIST_CONTAINERS}
+
+    @classmethod
+    def _new_artists(cls, ax, snapshot):
+        new_artists = []
+        for name in _ARTIST_CONTAINERS:
+            container = getattr(ax, name)
+            new_artists.extend(container[snapshot[name]:])
+        return new_artists
+
+    @staticmethod
+    def _stamp_new_artists(ax, snapshot, affine, base_transform):
+        """Attach affine+base to artists created since *snapshot*."""
+        if affine is None:
+            return
+        stacked = affine + base_transform
+        for artist in MatplotlibRenderer._new_artists(ax, snapshot):
+            artist.set_transform(stacked)
+
+    # ------------------------------------------------------------------
+    # Linked axes (Phase 14.5): one shared Axes, flat transform stacks
+    # ------------------------------------------------------------------
+
+    def _render_linked(self, spec: FigureSpec):
+        if not isinstance(spec.facet, FacetNull):
+            raise NotImplementedError("Linked axes do not support facets yet")
+
+        figsize = spec.settings.get("figsize", (10, 6))
+        fig, ax = plt.subplots(figsize=figsize)
+        if not spec.layers:
+            raise ValueError("FigureSpec must define at least one layer")
+
+        # Per-layer coord application: routed layers use their link's coord.
+        spec = self._apply_linked_coord_transforms(spec)
+
+        main_tf = spec.root_transform or LinkTransform()
+        main_matrix = main_tf.matrix()
+        link_by_name = {link.name: link for link in spec.links}
+
+        def affine_for(layer):
+            link = link_by_name.get(layer.subplot) if layer.subplot else None
+            matrix = link.transform.matrix() if link is not None else main_matrix
+            return _affine_from_matrix(matrix)
+
+        # Frames first (below data): providers deform with their link,
+        # labels are placed world-side per label policy.
+        for link in spec.links:
+            frame = link.frame or {}
+            provider = _FRAME_PROVIDERS.get(frame.get("provider"))
+            if provider is not None:
+                provider(ax, link.transform.matrix(),
+                         frame.get("label_policy", "upright"))
+
+        xlim, ylim = self._linked_world_limits(spec, main_matrix, link_by_name)
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+
+        self._render_axes(ax, spec, spec.data, layer_affine=affine_for)
+
+        title = spec.settings.get("title")
+        if title:
+            fig.suptitle(title, fontsize=14, y=0.98)
+        ax.axis("off")
+
+        plt.close(fig)
+        return fig
+
+    def _apply_linked_coord_transforms(self, spec: FigureSpec) -> FigureSpec:
+        """Apply each routed layer's link coord (others keep the main coord)."""
+        if not spec.layers:
+            return spec
+        link_coords = {link.name: link.coord for link in spec.links}
+        trans_layers = []
+        for layer in spec.layers:
+            coord = link_coords.get(layer.subplot, spec.coord)
+            vm = coord.transform_visual_mapping(dict(layer.visual_mapping), layer.geom)
+            trans_layers.append(
+                LayerSpec(
+                    geom=layer.geom,
+                    stat=layer.stat,
+                    visual_mapping=vm,
+                    data_override=layer.data_override,
+                    coord=coord,
+                    zorder=layer.zorder,
+                    subplot=layer.subplot,
+                    xlim=layer.xlim,
+                    ylim=layer.ylim,
+                )
+            )
+        return dataclasses.replace(spec, layers=trans_layers)
+
+    @staticmethod
+    def _linked_world_limits(spec, main_matrix, link_by_name):
+        """World-space bounding box: unrouted data through M_main + link extents."""
+        xs: list[np.ndarray] = []
+        ys: list[np.ndarray] = []
+
+        rows = spec.data.index
+        for layer in spec.layers:
+            if layer.subplot is not None or layer.geom.name == "function_line":
+                continue
+            x = _filter_series(layer.visual_mapping.get("x"), rows)
+            y = _filter_series(layer.visual_mapping.get("y"), rows)
+            if not isinstance(x, pd.Series) or not isinstance(y, pd.Series):
+                continue
+            if not (pd.api.types.is_numeric_dtype(x) and pd.api.types.is_numeric_dtype(y)):
+                continue
+            n = min(len(x), len(y))
+            if n == 0:
+                continue
+            pts = np.column_stack([x.to_numpy()[:n], y.to_numpy()[:n]])
+            world = _apply_matrix_pts(main_matrix, pts)
+            xs.append(world[:, 0])
+            ys.append(world[:, 1])
+
+        for link in spec.links:
+            corners = link.transform.transform_points(
+                [(0, 0), (1, 0), (0, 1), (1, 1)]
+            )
+            xs.append(corners[:, 0])
+            ys.append(corners[:, 1])
+
+        if not xs:
+            return (-1.0, 1.0), (-1.0, 1.0)
+
+        all_x = np.concatenate(xs)
+        all_y = np.concatenate(ys)
+        pad_x = 0.05 * (all_x.max() - all_x.min() or 1.0)
+        pad_y = 0.05 * (all_y.max() - all_y.min() or 1.0)
+        return (
+            (float(all_x.min() - pad_x), float(all_x.max() + pad_x)),
+            (float(all_y.min() - pad_y), float(all_y.max() + pad_y)),
+        )
 
     @staticmethod
     def _channel_label(spec: FigureSpec, channel: str) -> str | None:
