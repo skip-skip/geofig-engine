@@ -17,7 +17,7 @@ import matplotlib.text
 
 from matplotlib.transforms import Affine2D
 
-from geofig_engine.core.coord import CoordFlipped, CoordFixed, CoordPolar, StiffCoord
+from geofig_engine.core.coord import CoordFlipped, CoordFixed, CoordPolar, StiffCoord, TernaryCoord
 from geofig_engine.core.facet import FacetGrid, FacetNull, FacetWrap
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.core.link import LinkTransform, label_rotation
@@ -94,30 +94,14 @@ def _facet_panels(facet, data):
 
 
 # ---------------------------------------------------------------------------
-# Linked axes (Phase 14.5): frame providers and world-space helpers
+# Frame drawing: implied by child FigureSpec's coord type
 #
-# World space is the main axis's post-transform data space. Each link's
-# artists draw through a flat Affine2D (built from its LinkTransform matrix)
-# stacked on the shared Axes' transData; text labels never inherit
-# transforms — they are placed world-side at transform_point() anchors with
-# a rotation chosen by their label policy ("upright" or "parallel").
+# Each child FigureSpec carries a coord and frame_config. The renderer
+# auto-selects the frame drawing function based on isinstance checks.
+# Frame geometry is drawn in local space; the renderer stamps line artists
+# with the child's affine so they deform identically to data. Text labels
+# are placed world-side via _apply_matrix_pts so they remain upright.
 # ---------------------------------------------------------------------------
-
-_FRAME_PROVIDERS: dict = {}
-
-
-def frame_provider(name: str):
-    """Register a frame provider under *name*.
-
-    Provider signature: ``(ax, link_matrix, label_policy)`` where
-    *link_matrix* is the link's 3x3 homogeneous numpy matrix. Providers draw
-    geometry in local space mapped through the matrix (or plot pre-mapped
-    world coordinates) and place text via :func:`label_rotation`.
-    """
-    def decorator(func):
-        _FRAME_PROVIDERS[name] = func
-        return func
-    return decorator
 
 
 def _apply_matrix_pts(matrix: np.ndarray, pts) -> np.ndarray:
@@ -136,51 +120,25 @@ def _affine_from_matrix(matrix: np.ndarray) -> Affine2D:
     )
 
 
-@frame_provider("box")
-def _box_frame(ax, link_matrix, label_policy="upright"):
-    """Reference provider: unit-square outline with labeled corners.
-
-    Generalizes the ternary/diamond frame pattern; real chemistry frames
-    arrive with WP5.  Line geometry is drawn in local space and stamped
-    by the renderer; corner labels stay upright by default or run
-    parallel to their edge under 'parallel'.
-    """
-    corners_local = [(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]
-    outline_arr = np.array(corners_local, dtype=float)
-    ax.plot(outline_arr[:, 0], outline_arr[:, 1], color="black", linewidth=1.0, zorder=2)
-
-    # Corner anchors with a small outward offset, plus each corner's
-    # tangent direction for the 'parallel' policy.
-    anchor_specs = [
-        ((-0.06, -0.06), "BL", (1.0, 0.0)),
-        ((1.06, -0.06), "BR", (1.0, 0.0)),
-        ((1.06, 1.06), "TR", (0.0, 1.0)),
-        ((-0.06, 1.06), "TL", (0.0, 1.0)),
-    ]
-    for local_anchor, text, tangent in anchor_specs:
-        wx, wy = _apply_matrix_pts(link_matrix, [local_anchor])[0]
-        rot = label_rotation(tangent, link_matrix, policy=label_policy)
-        ax.text(wx, wy, text, ha="center", va="center", fontsize=7,
-                rotation=rot, clip_on=False)
-
-
 SQRT3_2 = math.sqrt(3) / 2.0
 
 
-@frame_provider("piper_ternary_frame")
-def _piper_ternary_frame(ax, link_matrix, label_policy="upright",
-                         ions=None, rev_bottom=False, rev_left=False,
-                         rev_right=False, title=""):
-    """Piper ternary frame: triangle outline, internal grid, tick labels.
+def _draw_ternary_frame(ax, matrix, coord, frame_config):
+    """Draw ternary triangle frame in local space, stamped by matrix.
 
-    Line geometry is drawn in local space ([0,1]²).  The renderer stamps
-    these line artists with the link affine so they deform identically to
-    data.  Text labels and arrows are placed world-side via
-    ``_apply_matrix_pts`` so they remain upright.
-
-    Ions = [top, left, right] ion names for edge labels. Reversal flags
-    invert tick numerals on each edge (20↔80) matching Piper convention.
+    Reads ions from coord.channels, reversals from coord.handedness,
+    title from frame_config.
     """
+    cfg = frame_config or {}
+    ions = list(coord.channels)
+    handedness = coord.handedness
+    title = cfg.get("title", "")
+    label_policy = cfg.get("label_policy", "upright")
+
+    rev_bottom = handedness == "left"
+    rev_left = handedness == "right"
+    rev_right = handedness == "left"
+
     # -- triangle outline (local space) --
     tri_local = [(0, 0), (1, 0), (0.5, SQRT3_2), (0, 0)]
     tri_arr = np.array(tri_local, dtype=float)
@@ -205,38 +163,35 @@ def _piper_ternary_frame(ax, link_matrix, label_policy="upright",
         left_lbl = inv if rev_left else tick_str
         right_lbl = inv if rev_right else tick_str
 
-        # bottom edge tick
-        wb = _apply_matrix_pts(link_matrix, [(tick_val, -0.03)])[0]
+        wb = _apply_matrix_pts(matrix, [(tick_val, -0.03)])[0]
         ax.text(wb[0], wb[1], bottom_lbl, ha="center", va="top", fontsize=5,
-                rotation=label_rotation((1, 0), link_matrix, policy=label_policy),
+                rotation=label_rotation((1, 0), matrix, policy=label_policy),
                 clip_on=False)
 
-        # left edge tick
-        wl = _apply_matrix_pts(link_matrix, [(
+        wl = _apply_matrix_pts(matrix, [(
             tick_val * 0.5 - 0.026, tick_val * SQRT3_2 + 0.015
         )])[0]
         ax.text(wl[0], wl[1], left_lbl, ha="center", va="center", fontsize=5,
                 rotation=label_rotation(
-                    (0.5, SQRT3_2), link_matrix, policy=label_policy),
+                    (0.5, SQRT3_2), matrix, policy=label_policy),
                 clip_on=False)
 
-        # right edge tick
-        wr = _apply_matrix_pts(link_matrix, [(
+        wr = _apply_matrix_pts(matrix, [(
             1 - tick_val * 0.5 + 0.026, tick_val * SQRT3_2 + 0.015
         )])[0]
         ax.text(wr[0], wr[1], right_lbl, ha="center", va="center", fontsize=5,
                 rotation=label_rotation(
-                    (-0.5, SQRT3_2), link_matrix, policy=label_policy),
+                    (-0.5, SQRT3_2), matrix, policy=label_policy),
                 clip_on=False)
 
     # -- edge title (world-side text) --
     if title:
-        wt = _apply_matrix_pts(link_matrix, [(0.5, SQRT3_2 + 0.12)])[0]
+        wt = _apply_matrix_pts(matrix, [(0.5, SQRT3_2 + 0.12)])[0]
         ax.text(wt[0], wt[1], title, ha="center", va="bottom", fontsize=7,
                 fontweight="bold", clip_on=False)
 
     # -- ion edge labels with arrows (world-side annotations) --
-    if ions and len(ions) == 3:
+    if len(ions) == 3:
         offset = 0.12
         cos30 = SQRT3_2
         mid_left = (0.25 - offset * cos30, SQRT3_2 / 2.0 + offset * 0.5)
@@ -249,13 +204,13 @@ def _piper_ternary_frame(ax, link_matrix, label_policy="upright",
             dx = (length / 2) * math.cos(angle_rad)
             dy = (length / 2) * math.sin(angle_rad)
             style = '-|>' if reverse else '<|-'
-            wxy = _apply_matrix_pts(link_matrix, [(x + dx, y + dy)])[0]
-            wxyt = _apply_matrix_pts(link_matrix, [(x - dx, y - dy)])[0]
+            wxy = _apply_matrix_pts(matrix, [(x + dx, y + dy)])[0]
+            wxyt = _apply_matrix_pts(matrix, [(x - dx, y - dy)])[0]
             ax.annotate('', xy=wxy, xytext=wxyt,
                         arrowprops=dict(arrowstyle=style, color='black', lw=1.0),
                         annotation_clip=False)
-            wpt = _apply_matrix_pts(link_matrix, [(x, y)])[0]
-            rot = label_rotation((1, 0), link_matrix, policy=label_policy)
+            wpt = _apply_matrix_pts(matrix, [(x, y)])[0]
+            rot = label_rotation((1, 0), matrix, policy=label_policy)
             ax.text(wpt[0], wpt[1], text, ha='center', va='center',
                     rotation=rot, fontsize=7,
                     bbox=dict(facecolor='white', edgecolor='none', pad=1),
@@ -266,18 +221,15 @@ def _piper_ternary_frame(ax, link_matrix, label_policy="upright",
         _arrow(*mid_right, ions[2], rotation=-60, reverse=rev_right)
 
 
-@frame_provider("piper_diamond_frame")
-def _piper_diamond_frame(ax, link_matrix, label_policy="upright",
-                         ions=None, title=""):
-    """Piper diamond frame: outline, internal grid, tick labels.
+def _draw_diamond_frame(ax, matrix, frame_config):
+    """Draw diamond frame in local [0,100]² percentage space, stamped by matrix.
 
-    Line geometry is drawn in local space ([0,100]² percentage space).
-    The renderer stamps these line artists with the link affine so they
-    deform identically to data.  Text labels are placed world-side via
-    ``_apply_matrix_pts`` so they remain upright.
-
-    Ions = [cation_top, cation_left, anion_top, anion_right] for edge labels.
+    Reads title from frame_config.
     """
+    cfg = frame_config or {}
+    title = cfg.get("title", "")
+    label_policy = cfg.get("label_policy", "upright")
+
     # -- outline (local [0,100]²) --
     dia_local = [(0, 0), (100, 0), (100, 100), (0, 100), (0, 0)]
     dia_arr = np.array(dia_local, dtype=float)
@@ -285,40 +237,38 @@ def _piper_diamond_frame(ax, link_matrix, label_policy="upright",
 
     # -- internal grid at 20/40/60/80% (local space) --
     for t in [20, 40, 60, 80]:
-        # Family 1: bottom edge → top edge (vertical lines)
         f1 = [(t, 0), (t, 100)]
         f1_arr = np.array(f1, dtype=float)
         ax.plot(f1_arr[:, 0], f1_arr[:, 1], color="gray", linewidth=0.3,
                 linestyle=":", zorder=1)
-        # Family 2: left edge → right edge (horizontal lines)
         f2 = [(0, t), (100, t)]
         f2_arr = np.array(f2, dtype=float)
         ax.plot(f2_arr[:, 0], f2_arr[:, 1], color="gray", linewidth=0.3,
                 linestyle=":", zorder=1)
 
-    # -- tick labels on bottom edge (cation %) (world-side text) --
+    # -- tick labels on bottom edge (world-side text) --
     for t in [20, 40, 60, 80]:
         label = f"{t}"
         d = 3
-        w = _apply_matrix_pts(link_matrix, [(t, -d)])[0]
+        w = _apply_matrix_pts(matrix, [(t, -d)])[0]
         ax.text(w[0], w[1], label, ha="center", va="top", fontsize=5,
                 rotation=label_rotation(
-                    (1, 0), link_matrix, policy=label_policy),
+                    (1, 0), matrix, policy=label_policy),
                 clip_on=False)
 
-    # -- tick labels on left edge (anion %) (world-side text) --
+    # -- tick labels on left edge (world-side text) --
     for t in [20, 40, 60, 80]:
         label = f"{t}"
         d = 3
-        w = _apply_matrix_pts(link_matrix, [(-d, t)])[0]
+        w = _apply_matrix_pts(matrix, [(-d, t)])[0]
         ax.text(w[0], w[1], label, ha="right", va="center", fontsize=5,
                 rotation=label_rotation(
-                    (0, 1), link_matrix, policy=label_policy),
+                    (0, 1), matrix, policy=label_policy),
                 clip_on=False)
 
     # -- edge title (world-side text) --
     if title:
-        wt = _apply_matrix_pts(link_matrix, [(50, 112)])[0]
+        wt = _apply_matrix_pts(matrix, [(50, 112)])[0]
         ax.text(wt[0], wt[1], title, ha="center", va="bottom", fontsize=7,
                 fontweight="bold", clip_on=False)
 
@@ -451,7 +401,7 @@ class MatplotlibRenderer(BaseRenderer):
             artist.set_transform(stacked)
 
     # ------------------------------------------------------------------
-    # Linked axes (Phase 14.5): one shared Axes, flat transform stacks
+    # Children axes (Phase 14.51): nested FigureSpecs with implied frames
     # ------------------------------------------------------------------
 
     def _render_children(self, spec: FigureSpec):
@@ -468,6 +418,14 @@ class MatplotlibRenderer(BaseRenderer):
             child = self._apply_child_coord_transforms(child)
             affine = _affine_from_matrix(child.transform.matrix())
 
+            # Draw frame first (below data): line geometry in local space,
+            # stamped with the child's affine. Text labels placed world-side.
+            snapshot = self._snapshot_artists(ax)
+            self._draw_implied_frame(ax, child)
+            for artist in self._new_artists(ax, snapshot):
+                if not isinstance(artist, matplotlib.text.Text):
+                    artist.set_transform(affine + ax.transData)
+
             self._render_axes(ax, child, child.data, layer_affine=lambda layer, a=affine: a)
 
         xlim, ylim = self._children_world_limits(spec.children)
@@ -481,6 +439,15 @@ class MatplotlibRenderer(BaseRenderer):
 
         plt.close(fig)
         return fig
+
+    @staticmethod
+    def _draw_implied_frame(ax, child: FigureSpec):
+        """Draw frame auto-selected from child's coord type."""
+        matrix = child.transform.matrix()
+        if isinstance(child.coord, TernaryCoord):
+            _draw_ternary_frame(ax, matrix, child.coord, child.frame_config)
+        elif child.transform.rotate != 0:
+            _draw_diamond_frame(ax, matrix, child.frame_config)
 
     def _apply_child_coord_transforms(self, child: FigureSpec) -> FigureSpec:
         """Apply each child's coord to its own layers' visual mappings."""
