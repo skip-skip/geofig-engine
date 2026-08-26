@@ -58,7 +58,7 @@ def build_empty_piper() -> FigureSpec:
     )
 
     dia_pct = np.sqrt(3) / 200.0
-    dia_scale = (np.sqrt(2) / 400.0, dia_pct * np.sqrt(2))
+    dia_scale = (np.sqrt(2) / 400.0, dia_pct * np.sqrt(2) / 2.0)
     diamond_child = FigureSpec(
         data=empty_df, mappings={}, settings={}, context={},
         template_name="piper",

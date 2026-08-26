@@ -17,7 +17,7 @@ import matplotlib.text
 
 from matplotlib.transforms import Affine2D
 
-from geofig_engine.core.coord import CoordFlipped, CoordFixed, CoordPolar, StiffCoord, TernaryCoord
+from geofig_engine.core.coord import CoordCartesian, CoordFlipped, CoordFixed, CoordPolar, StiffCoord, TernaryCoord
 from geofig_engine.core.facet import FacetGrid, FacetNull, FacetWrap
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.core.link import LinkTransform, label_rotation
@@ -121,6 +121,20 @@ def _affine_from_matrix(matrix: np.ndarray) -> Affine2D:
 
 
 SQRT3_2 = math.sqrt(3) / 2.0
+
+
+def _child_local_bbox(child):
+    """Local-space bounding box corners for a child FigureSpec.
+
+    TernaryCoord → unit triangle, CoordCartesian+rotate → [0,100]² percentage
+    space (diamond), everything else → unit square.
+    """
+    coord = child.coord
+    if isinstance(coord, TernaryCoord):
+        return [(0, 0), (1, 0), (0.5, SQRT3_2), (0, 0)]
+    if isinstance(coord, CoordCartesian) and child.transform.rotate != 0:
+        return [(0, 0), (100, 0), (100, 100), (0, 100)]
+    return [(0, 0), (1, 0), (0, 1), (1, 1)]
 
 
 def _draw_ternary_frame(ax, matrix, coord, frame_config):
@@ -431,6 +445,7 @@ class MatplotlibRenderer(BaseRenderer):
         xlim, ylim = self._children_world_limits(spec.children)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
+        ax.set_aspect("equal")
 
         title = spec.settings.get("title")
         if title:
@@ -496,7 +511,7 @@ class MatplotlibRenderer(BaseRenderer):
                 ys.append(world[:, 1])
 
             corners = child.transform.transform_points(
-                [(0, 0), (1, 0), (0, 1), (1, 1)]
+                _child_local_bbox(child)
             )
             xs.append(corners[:, 0])
             ys.append(corners[:, 1])
