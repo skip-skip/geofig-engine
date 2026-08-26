@@ -102,7 +102,7 @@ def build_piper_specs(
         layers=[LayerSpec(
             geom=GeomPoint(),
             stat=StatIdentity(),
-            visual_mapping={ch: aug[ch] for ch in left_channels},
+            visual_mapping={**visuals, **{ch: aug[ch] for ch in left_channels}},
             zorder=10,
         )],
     )
@@ -118,7 +118,7 @@ def build_piper_specs(
         layers=[LayerSpec(
             geom=GeomPoint(),
             stat=StatIdentity(),
-            visual_mapping={ch: aug[ch] for ch in right_channels},
+            visual_mapping={**visuals, **{ch: aug[ch] for ch in right_channels}},
             zorder=10,
         )],
     )
@@ -139,7 +139,7 @@ def build_piper_specs(
         layers=[LayerSpec(
             geom=GeomPoint(),
             stat=StatIdentity(),
-            visual_mapping={"x": aug["_dia_anion_pct"], "y": aug["_dia_cation_pct"]},
+            visual_mapping={**visuals, "x": aug["_dia_anion_pct"], "y": aug["_dia_cation_pct"]},
             zorder=10,
         )],
     )
