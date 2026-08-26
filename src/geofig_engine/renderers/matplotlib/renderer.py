@@ -15,7 +15,7 @@ from matplotlib.dates import DateFormatter
 import matplotlib.pyplot as plt
 import matplotlib.text
 
-from matplotlib.transforms import Affine2D
+from matplotlib.transforms import Affine2D, IdentityTransform
 
 from geofig_engine.core.coord import CoordCartesian, CoordFlipped, CoordFixed, CoordPolar, StiffCoord, TernaryCoord
 from geofig_engine.core.facet import FacetGrid, FacetNull, FacetWrap
@@ -403,7 +403,14 @@ class MatplotlibRenderer(BaseRenderer):
 
     @staticmethod
     def _stamp_new_artists(ax, snapshot, affine, base_transform):
-        """Attach affine+base to artists created since *snapshot*."""
+        """Attach affine+base to artists created since *snapshot*.
+
+        For PathCollections (scatter), offsets are pre-transformed through
+        the affine and the collection keeps IdentityTransform (the default
+        set by ax.scatter). This prevents the marker path vertices from
+        being scaled by the data→display transform, which would stretch
+        markers to fill the axes.
+        """
         if affine is None:
             return
         stacked = affine + base_transform
@@ -412,7 +419,12 @@ class MatplotlibRenderer(BaseRenderer):
                     and len(artist.get_offsets()) == 0):
                 artist.remove()
                 continue
-            artist.set_transform(stacked)
+            if isinstance(artist, matplotlib.collections.PathCollection):
+                offsets = artist.get_offsets()
+                artist.set_offsets(affine.transform(offsets))
+                artist.set_transform(IdentityTransform())
+            else:
+                artist.set_transform(stacked)
 
     # ------------------------------------------------------------------
     # Children axes (Phase 14.51): nested FigureSpecs with implied frames
