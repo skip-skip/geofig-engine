@@ -112,6 +112,21 @@ Replace `AxisLink` + `LayerSpec.subplot` string-routing with nested `FigureSpec`
 
 ---
 
+## 🚧 Phase 14.52 — Fluent orderable transforms + generalized cartesian axis (in progress)
+
+Make `LinkTransform` a fluent, orderable builder (`LinkTransform().rotate(45).scale(...).translate(...)`) with call-order = point-operation order, and replace the diamond special-case with a general cartesian-axis handler dispatched by coord type + `frame_config` (removing the `rotate != 0` proxy).
+
+### Work packages (open in `tasks/open/`)
+
+- [ ] **WP1 Fluent LinkTransform** — ordered-op builder, call-order semantics (first-called op transforms points first), immutable new-instance methods, `.ops` introspection, op-list serialization
+- [ ] **WP2 Generalized cartesian-axis handler** — `_draw_cartesian_axis(ax, matrix, frame_config)` subsumes `_draw_diamond_frame`; dispatch by coord type + frame_config presence; `_child_local_bbox` bounds from `frame_config`; text stays upright world-side
+- [ ] **WP3 Piper template + demo** — fluent transform construction; diamond declares `[0,100]²` bounds + grid/tick steps in `frame_config`
+- [ ] **WP4 Serialization** — adapt to ordered-op `to_dict`/`from_dict`
+- [ ] **WP5 Tests** — rewrite to fluent API; assert against `matrix()` / `.ops`; diamond render test passes bounds
+- [ ] **WP6 Cleanup + ROADMAP** — remove leftover constructor-form/`rotate != 0` refs; verify suite + demos; document phase; close task files
+
+---
+
 ## 📋 Phase 15 — Enhanced legend features
 
 - **Multi-level grouped legends** — `subseries_col` pattern with section headers and aligned columns (from geochemplot's grouped-legend pattern)
