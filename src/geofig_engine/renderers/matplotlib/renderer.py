@@ -285,9 +285,11 @@ def _draw_cartesian_axis(ax, matrix, frame_config):
                 linestyle=":", zorder=1)
 
     # -- tick labels on bottom edge (world-side text) --
-    # X-axis ticks at tick_step along the bottom (y0) edge.
+    # X-axis ticks at tick_step along the bottom (y0) edge, interior only.
     d = 1.0 if x1 - x0 == 1.0 else (x1 - x0) / 20.0
     for tx in np.arange(x0, x1 + 0.5 * tick_step, tick_step):
+        if x0 - 1e-9 <= tx <= x0 + 1e-9 or x1 - 1e-9 <= tx <= x1 + 1e-9:
+            continue
         w = _apply_matrix_pts(matrix, [(tx, y0 - d)])[0]
         ax.text(w[0], w[1], f"{tx:g}", ha="center", va="top", fontsize=5,
                 rotation=label_rotation((1, 0), matrix, policy=label_policy),
@@ -295,6 +297,8 @@ def _draw_cartesian_axis(ax, matrix, frame_config):
 
     # -- tick labels on left edge (world-side text) --
     for ty in np.arange(y0, y1 + 0.5 * tick_step, tick_step):
+        if y0 - 1e-9 <= ty <= y0 + 1e-9 or y1 - 1e-9 <= ty <= y1 + 1e-9:
+            continue
         w = _apply_matrix_pts(matrix, [(x0 - d, ty)])[0]
         ax.text(w[0], w[1], f"{ty:g}", ha="right", va="center", fontsize=5,
                 rotation=label_rotation((0, 1), matrix, policy=label_policy),

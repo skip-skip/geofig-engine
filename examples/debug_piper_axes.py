@@ -30,7 +30,7 @@ def build_empty_piper() -> FigureSpec:
         data=empty_df, mappings={}, settings={}, context={},
         template_name="piper",
         coord=TernaryCoord(channels=left_channels, handedness="left"),
-        transform=LinkTransform(scale=(0.5, 0.5)),
+        transform=LinkTransform().scale(0.5, 0.5),
         frame_config={
             "title": "LEFT TRIANGLE",
             "rev_bottom": True,
@@ -46,7 +46,7 @@ def build_empty_piper() -> FigureSpec:
         data=empty_df, mappings={}, settings={}, context={},
         template_name="piper",
         coord=TernaryCoord(channels=right_channels, handedness="right"),
-        transform=LinkTransform(scale=(-0.5, 0.5), translate=(1.0, 0.0)),
+        transform=LinkTransform().scale(-0.5, 0.5).translate(1.0, 0.0),
         frame_config={
             "title": "RIGHT TRIANGLE",
             "rev_left": True,
@@ -63,10 +63,17 @@ def build_empty_piper() -> FigureSpec:
         data=empty_df, mappings={}, settings={}, context={},
         template_name="piper",
         coord=CoordCartesian(),
-        transform=LinkTransform(
-            translate=(0.5, 0.0), rotate=45.0, scale=dia_scale,
-        ),
-        frame_config={},
+        transform=LinkTransform()
+        .rotate(45.0)
+        .scale(*dia_scale)
+        .translate(0.5, 0.0),
+        frame_config={
+            "title": "DIAMOND",
+            "xlim": (0, 100),
+            "ylim": (0, 100),
+            "grid_step": 20,
+            "tick_step": 20,
+        },
         layers=[LayerSpec(
             geom=GeomPoint(), stat=StatIdentity(),
             visual_mapping={"x": pd.Series([], dtype=float),
