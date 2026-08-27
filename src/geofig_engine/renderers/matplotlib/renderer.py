@@ -126,14 +126,19 @@ SQRT3_2 = math.sqrt(3) / 2.0
 def _child_local_bbox(child):
     """Local-space bounding box corners for a child FigureSpec.
 
-    TernaryCoord → unit triangle, CoordCartesian+rotate → [0,100]² percentage
-    space (diamond), everything else → unit square.
+    TernaryCoord → unit triangle; CoordCartesian with frame_config
+    ``xlim``/``ylim`` → that axis region (e.g. the diamond's [0,100]²);
+    everything else → unit square.
     """
     coord = child.coord
     if isinstance(coord, TernaryCoord):
         return [(0, 0), (1, 0), (0.5, SQRT3_2), (0, 0)]
-    if isinstance(coord, CoordCartesian) and child.transform.rotate != 0:
-        return [(0, 0), (100, 0), (100, 100), (0, 100)]
+    if isinstance(coord, CoordCartesian) and child.frame_config:
+        cfg = child.frame_config
+        if "xlim" in cfg and "ylim" in cfg:
+            x0, x1 = cfg["xlim"]
+            y0, y1 = cfg["ylim"]
+            return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
     return [(0, 0), (1, 0), (0, 1), (1, 1)]
 
 
@@ -235,54 +240,69 @@ def _draw_ternary_frame(ax, matrix, coord, frame_config):
         _arrow(*mid_right, ions[2], rotation=-60, reverse=rev_right)
 
 
-def _draw_diamond_frame(ax, matrix, frame_config):
-    """Draw diamond frame in local [0,100]² percentage space, stamped by matrix.
+def _draw_cartesian_axis(ax, matrix, frame_config):
+    """Draw a cartesian axis frame in local space, stamped by *matrix*.
 
-    Reads title from frame_config.
+    Reads the axis region and styling from ``frame_config``:
+      - ``xlim``/``ylim``: axis bounds in local space (default ``(0, 1)²``)
+      - ``grid_step``: gridline spacing in both directions (default 0.2)
+      - ``tick_step``: tick label spacing (default = grid_step)
+      - ``label_policy``: "upright" or "parallel" (default "upright")
+      - ``title``: world-side label above the box
+
+    All geometry (box + gridlines) is drawn in local space and later stamped
+    with the child's affine, exactly like data. Tick labels and title are
+    placed world-side via ``_apply_matrix_pts`` so they stay upright. This
+    generalizes the Piper diamond (a cartesian child in ``[0,100]²`` rotated
+    45°) as well as any rotated/translated cartesian child that opts into a
+    frame by supplying a ``frame_config``.
     """
     cfg = frame_config or {}
-    title = cfg.get("title", "")
+    xlim = cfg.get("xlim", (0.0, 1.0))
+    ylim = cfg.get("ylim", (0.0, 1.0))
+    grid_step = cfg.get("grid_step", 0.2)
+    tick_step = cfg.get("tick_step", grid_step)
     label_policy = cfg.get("label_policy", "upright")
+    title = cfg.get("title", "")
 
-    # -- outline (local [0,100]²) --
-    dia_local = [(0, 0), (100, 0), (100, 100), (0, 100), (0, 0)]
-    dia_arr = np.array(dia_local, dtype=float)
-    ax.plot(dia_arr[:, 0], dia_arr[:, 1], color="black", linewidth=1.0, zorder=2)
+    x0, x1 = xlim
+    y0, y1 = ylim
 
-    # -- internal grid at 20/40/60/80% (local space) --
-    for t in [20, 40, 60, 80]:
-        f1 = [(t, 0), (t, 100)]
-        f1_arr = np.array(f1, dtype=float)
-        ax.plot(f1_arr[:, 0], f1_arr[:, 1], color="gray", linewidth=0.3,
-                linestyle=":", zorder=1)
-        f2 = [(0, t), (100, t)]
-        f2_arr = np.array(f2, dtype=float)
-        ax.plot(f2_arr[:, 0], f2_arr[:, 1], color="gray", linewidth=0.3,
+    # -- outline (local space) --
+    box = [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]
+    box_arr = np.array(box, dtype=float)
+    ax.plot(box_arr[:, 0], box_arr[:, 1], color="black", linewidth=1.0, zorder=2)
+
+    # -- internal grid (local space) --
+    xs = list(np.arange(x0 + grid_step, x1, grid_step))
+    ys = list(np.arange(y0 + grid_step, y1, grid_step))
+    for gx in xs:
+        g = [(gx, y0), (gx, y1)]
+        ax.plot([g[0][0], g[1][0]], [g[0][1], g[1][1]], color="gray",
+                linewidth=0.3, linestyle=":", zorder=1)
+    for gy in ys:
+        ax.plot([x0, x1], [gy, gy], color="gray", linewidth=0.3,
                 linestyle=":", zorder=1)
 
     # -- tick labels on bottom edge (world-side text) --
-    for t in [20, 40, 60, 80]:
-        label = f"{t}"
-        d = 3
-        w = _apply_matrix_pts(matrix, [(t, -d)])[0]
-        ax.text(w[0], w[1], label, ha="center", va="top", fontsize=5,
-                rotation=label_rotation(
-                    (1, 0), matrix, policy=label_policy),
+    # X-axis ticks at tick_step along the bottom (y0) edge.
+    d = 1.0 if x1 - x0 == 1.0 else (x1 - x0) / 20.0
+    for tx in np.arange(x0, x1 + 0.5 * tick_step, tick_step):
+        w = _apply_matrix_pts(matrix, [(tx, y0 - d)])[0]
+        ax.text(w[0], w[1], f"{tx:g}", ha="center", va="top", fontsize=5,
+                rotation=label_rotation((1, 0), matrix, policy=label_policy),
                 clip_on=False)
 
     # -- tick labels on left edge (world-side text) --
-    for t in [20, 40, 60, 80]:
-        label = f"{t}"
-        d = 3
-        w = _apply_matrix_pts(matrix, [(-d, t)])[0]
-        ax.text(w[0], w[1], label, ha="right", va="center", fontsize=5,
-                rotation=label_rotation(
-                    (0, 1), matrix, policy=label_policy),
+    for ty in np.arange(y0, y1 + 0.5 * tick_step, tick_step):
+        w = _apply_matrix_pts(matrix, [(x0 - d, ty)])[0]
+        ax.text(w[0], w[1], f"{ty:g}", ha="right", va="center", fontsize=5,
+                rotation=label_rotation((0, 1), matrix, policy=label_policy),
                 clip_on=False)
 
     # -- edge title (world-side text) --
     if title:
-        wt = _apply_matrix_pts(matrix, [(50, 112)])[0]
+        wt = _apply_matrix_pts(matrix, [((x0 + x1) / 2.0, y1 + 0.12 * (y1 - y0))])[0]
         ax.text(wt[0], wt[1], title, ha="center", va="bottom", fontsize=7,
                 fontweight="bold", clip_on=False)
 
@@ -473,8 +493,8 @@ class MatplotlibRenderer(BaseRenderer):
         matrix = child.transform.matrix()
         if isinstance(child.coord, TernaryCoord):
             _draw_ternary_frame(ax, matrix, child.coord, child.frame_config)
-        elif child.transform.rotate != 0:
-            _draw_diamond_frame(ax, matrix, child.frame_config)
+        elif isinstance(child.coord, CoordCartesian) and child.frame_config:
+            _draw_cartesian_axis(ax, matrix, child.frame_config)
 
     def _apply_child_coord_transforms(self, child: FigureSpec) -> FigureSpec:
         """Apply each child's coord to its own layers' visual mappings."""
