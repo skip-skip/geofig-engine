@@ -493,8 +493,25 @@ def _spec_from_dict(data: dict) -> FigureSpec:
         facet=facet_from_dict(data["facet"]),
         children=children,
         transform=LinkTransform.from_dict(transform_data) if transform_data else None,
-        frame_config=data.get("frame_config"),
+        frame_config=_frame_config_from_dict(data.get("frame_config")),
     )
+
+
+def _frame_config_from_dict(data):
+    """Restore tuple-valued geometry keys in a frame_config dict.
+
+    frame_config is serialized as a raw dict, so JSON round-trips coerce
+    length-2 list pairs (e.g. ``xlim``/``ylim``) back to tuples so they
+    compare equal to the original and match the renderer's expectations.
+    """
+    if not data:
+        return data
+    result = dict(data)
+    for key in ("xlim", "ylim"):
+        value = result.get(key)
+        if isinstance(value, list) and len(value) == 2:
+            result[key] = tuple(value)
+    return result
 
 
 # ---------------------------------------------------------------------------
