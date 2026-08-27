@@ -11,7 +11,6 @@ matplotlib.use("Agg")
 
 from geofig_engine.core.coord import CoordCartesian, PiperCoord, TernaryCoord
 from geofig_engine.core.geom import GeomPoint
-from geofig_engine.core.link import LinkTransform
 from geofig_engine.core.spec import FigureSpec
 from geofig_engine.templates import build_piper_specs
 from geofig_engine.serialize import coord_to_dict, coord_from_dict
@@ -89,7 +88,7 @@ class TestBuildPiperSpecs:
         assert isinstance(left.coord, TernaryCoord)
         assert left.coord.handedness == "left"
         assert left.coord.channels == ("Mg", "Ca", "Na+K")
-        assert left.transform == LinkTransform(scale=(0.5, 0.5))
+        assert left.transform.ops == (("scale", (0.5, 0.5)),)
 
     def test_right_child_has_ternary_coord_and_transform(self):
         specs = build_piper_specs(_DATA)
@@ -97,15 +96,20 @@ class TestBuildPiperSpecs:
         assert isinstance(right.coord, TernaryCoord)
         assert right.coord.handedness == "right"
         assert right.coord.channels == ("SO4", "Cl", "HCO3")
-        assert right.transform == LinkTransform(
-            scale=(-0.5, 0.5), translate=(1.0, 0.0))
+        assert right.transform.ops == (
+            ("scale", (-0.5, 0.5)),
+            ("translate", (1.0, 0.0)),
+        )
 
     def test_diamond_child_is_cartesian(self):
         specs = build_piper_specs(_DATA)
         dia = specs[0].children[2]
         assert isinstance(dia.coord, CoordCartesian)
-        assert dia.transform.rotate == 45.0
-        assert dia.transform.translate == (0.5, 0.0)
+        m = dia.transform.matrix()
+        # translate=(0.5, 0.0), rotate=45, scale=(sqrt2/400, sqrt6/400)
+        assert m[0, 2] == pytest.approx(0.5)
+        assert m[1, 2] == pytest.approx(0.0)
+        assert dia.transform.ops[0] == ("rotate", 45.0)
 
     def test_children_have_layers(self):
         specs = build_piper_specs(_DATA)
@@ -132,6 +136,10 @@ class TestBuildPiperSpecs:
         left = specs[0].children[0]
         assert left.frame_config is not None
         assert left.frame_config.get("title") == "LEFT TRIANGLE"
+        dia = specs[0].children[2]
+        assert dia.frame_config["xlim"] == (0, 100)
+        assert dia.frame_config["ylim"] == (0, 100)
+        assert dia.frame_config["grid_step"] == 20
 
     def test_custom_title(self):
         specs = build_piper_specs(_DATA, title="My Piper")

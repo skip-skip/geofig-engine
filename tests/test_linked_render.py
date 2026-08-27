@@ -35,7 +35,7 @@ CHILD_A = FigureSpec(
     settings={},
     context={},
     template_name="test",
-    transform=LinkTransform(translate=(10, 20)),
+    transform=LinkTransform().translate(10, 20),
 )
 CHILD_B = FigureSpec(
     data=pd.DataFrame({"v": [1.0]}),
@@ -43,7 +43,7 @@ CHILD_B = FigureSpec(
     settings={},
     context={},
     template_name="test",
-    transform=LinkTransform(translate=(-3, 4), rotate=45, scale=(1.0, 0.5)),
+    transform=LinkTransform().rotate(45).scale(1.0, 0.5).translate(-3, 4),
 )
 
 
@@ -96,7 +96,7 @@ class TestChildRendering:
     def test_single_shared_axes(self):
         fig = _render(_parent([
             _child_spec([0, 1], [0, 0], transform=CHILD_A.transform),
-            _child_spec([0, 1], [0, 0], transform=LinkTransform(translate=(-3, 4))),
+            _child_spec([0, 1], [0, 0], transform=LinkTransform().translate(-3, 4)),
         ]))
         assert len(fig.axes) == 1
 
@@ -113,7 +113,7 @@ class TestChildRendering:
         assert any(np.allclose(w, expected_a, atol=1e-9) for w in worlds_a)
 
         # Child B: translate=(-3,4), scale=(1,0.5)
-        child_b_no_rotate = LinkTransform(translate=(-3, 4), scale=(1.0, 0.5))
+        child_b_no_rotate = LinkTransform().scale(1.0, 0.5).translate(-3, 4)
         fig_b = _render(_parent([
             _child_spec([0, 1], [0, 0], transform=child_b_no_rotate),
         ]))
@@ -141,7 +141,7 @@ class TestFrameImplication:
                 data=pd.DataFrame({"v": np.arange(3, dtype=float)}),
                 mappings={}, settings={}, context={}, template_name="test",
                 coord=coord,
-                transform=LinkTransform(scale=(0.5, 0.5)),
+                transform=LinkTransform().scale(0.5, 0.5),
                 frame_config={"title": "TEST TRIANGLE"},
                 layers=[layer],
             ),
@@ -156,10 +156,17 @@ class TestFrameImplication:
         fig = _render(_parent([
             _child_spec(
                 [0.0, 50.0, 100.0], [0.0, 50.0, 100.0],
-                transform=LinkTransform(
-                    translate=(0.5, 0.0), rotate=45.0,
-                    scale=(np.sqrt(2) / 400, np.sqrt(3) / 200)),
-                frame_config={"title": "TEST DIAMOND"},
+                transform=LinkTransform()
+                .rotate(45.0)
+                .scale(np.sqrt(2) / 400, np.sqrt(3) / 200)
+                .translate(0.5, 0.0),
+                frame_config={
+                    "title": "TEST DIAMOND",
+                    "xlim": (0, 100),
+                    "ylim": (0, 100),
+                    "grid_step": 20,
+                    "tick_step": 20,
+                },
             ),
         ]))
         ax = fig.axes[0]
@@ -254,7 +261,7 @@ class TestLinkedSerializationRoundTrip:
                     settings={},
                     context={},
                     template_name="child",
-                    transform=LinkTransform(translate=(10, 20)),
+                    transform=LinkTransform().translate(10, 20),
                 ),
                 FigureSpec(
                     data=pd.DataFrame({"v": [1.0]}),
@@ -270,5 +277,5 @@ class TestLinkedSerializationRoundTrip:
         restored = spec_from_json(spec_to_json(spec))
 
         assert len(restored.children) == 2
-        assert restored.children[0].transform == LinkTransform(translate=(10, 20))
+        assert restored.children[0].transform == LinkTransform().translate(10, 20)
         assert restored.children[1].transform == CHILD_B.transform
