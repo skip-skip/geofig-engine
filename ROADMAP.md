@@ -112,18 +112,16 @@ Replace `AxisLink` + `LayerSpec.subplot` string-routing with nested `FigureSpec`
 
 ---
 
-## 🚧 Phase 14.52 — Fluent orderable transforms + generalized cartesian axis (in progress)
+## ✅ Phase 14.52 — Fluent orderable transforms + generalized cartesian axis
 
-Make `LinkTransform` a fluent, orderable builder (`LinkTransform().rotate(45).scale(...).translate(...)`) with call-order = point-operation order, and replace the diamond special-case with a general cartesian-axis handler dispatched by coord type + `frame_config` (removing the `rotate != 0` proxy).
+Made `LinkTransform` a fluent, orderable builder (`LinkTransform().rotate(45).scale(...).translate(...)`) with call-order = point-operation order, and replaced the diamond special-case with a general cartesian-axis handler dispatched by coord type + `frame_config` (removing the `rotate != 0` proxy).
 
-### Work packages (open in `tasks/open/`)
-
-- [ ] **WP1 Fluent LinkTransform** — ordered-op builder, call-order semantics (first-called op transforms points first), immutable new-instance methods, `.ops` introspection, op-list serialization
-- [ ] **WP2 Generalized cartesian-axis handler** — `_draw_cartesian_axis(ax, matrix, frame_config)` subsumes `_draw_diamond_frame`; dispatch by coord type + frame_config presence; `_child_local_bbox` bounds from `frame_config`; text stays upright world-side
-- [ ] **WP3 Piper template + demo** — fluent transform construction; diamond declares `[0,100]²` bounds + grid/tick steps in `frame_config`
-- [ ] **WP4 Serialization** — adapt to ordered-op `to_dict`/`from_dict`
-- [ ] **WP5 Tests** — rewrite to fluent API; assert against `matrix()` / `.ops`; diamond render test passes bounds
-- [ ] **WP6 Cleanup + ROADMAP** — remove leftover constructor-form/`rotate != 0` refs; verify suite + demos; document phase; close task files
+- **WP1 Fluent LinkTransform** — `LinkTransform` is now an immutable, ordered-op builder: `rotate(deg)` / `scale(sx, sy)` / `translate(tx, ty)` each append an op to `.ops` and return a new instance; call-order = point-op order so `matrix()` = `T·S·R` reproduces the old diamond convention. Supports `transform_point(s)`, `transform_direction`, `matrix()`, and op-list (de)serialization via `to_dict()`/`from_dict()`.
+- **WP2 Generalized cartesian-axis handler** — new `_draw_cartesian_axis(ax, matrix, frame_config)` subsumes the deleted `_draw_diamond_frame`; `_draw_implied_frame` dispatches by coord type + frame_config presence (ternary → triangle, cartesian + frame_config → axes, cartesian without → no frame). `_child_local_bbox` reads bounds from `frame_config`. Tick/title text stays upright world-side; only geometry gets the affine.
+- **WP3 Piper template + demo** — fluent transform construction for left/right triangles + diamond; diamond declares `[0,100]²` bounds + `grid_step`/`tick_step` in `frame_config`; renderer skips tick labels at bounding edges (interior 20–80 only).
+- **WP4 Serialization** — ordered-op `to_dict`/`from_dict` round-trip through `figure_spec_to_dict`/`spec_from_json`; added `_frame_config_from_dict` to restore tuple-valued `xlim`/`ylim` after JSON (which coerces them to lists).
+- **WP5 Tests** — rewrote `test_piper.py` / `test_linked_render.py` to the fluent API, asserting against `matrix()` / `.ops` directly; diamond render test passes explicit bounds. Full suite: **800 passed**.
+- **WP6 Cleanup + ROADMAP** — no constructor-form (`LinkTransform(rotate=, translate=, scale=)`) or field reads remain; no `_draw_diamond_frame` / `rotate != 0` dispatch; `hydro_demo.py` renders all 7 figures with consistent per-sample colors and no orange regression; `debug_piper_axes.py` geometry unchanged (35 lines / 47 texts including DIAMOND title).
 
 ---
 
