@@ -21,6 +21,7 @@ from geofig_engine.core.coord import CoordCartesian, CoordFlipped, CoordFixed, C
 from geofig_engine.core.facet import FacetGrid, FacetNull, FacetWrap
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.core.link import LinkTransform, label_rotation
+from geofig_engine.core.secondary_axis import parse_secondary_settings
 from geofig_engine.core.spec import FigureSpec
 from geofig_engine.renderers.base import BaseRenderer
 from geofig_engine.renderers.matplotlib.handlers import (
@@ -251,6 +252,10 @@ def _draw_cartesian_axis(ax, matrix, settings):
       - ``tick_step``: tick label spacing (default = grid_step)
       - ``label_policy``: "upright" or "parallel" (default "upright")
       - ``title``: world-side label above the box
+      - ``secondary_x``/``secondary_y``: optional dicts declaring extra scales
+        drawn along the top (secondary x) and right (secondary y) edges, mapped
+        linearly onto the primary ``xlim``/``ylim`` ranges (see
+        :mod:`geofig_engine.core.secondary_axis`).
 
     All geometry (box + gridlines) is drawn in local space and later stamped
     with the child's affine, exactly like data. Tick labels and title are
@@ -266,6 +271,8 @@ def _draw_cartesian_axis(ax, matrix, settings):
     tick_step = cfg.get("tick_step", grid_step)
     label_policy = cfg.get("label_policy", "upright")
     title = cfg.get("title", "")
+
+    secondary = parse_secondary_settings(cfg)
 
     x0, x1 = xlim
     y0, y1 = ylim
@@ -304,6 +311,42 @@ def _draw_cartesian_axis(ax, matrix, settings):
         w = _apply_matrix_pts(matrix, [(x0 - d, ty)])[0]
         ax.text(w[0], w[1], f"{ty:g}", ha="right", va="center", fontsize=5,
                 rotation=label_rotation((0, 1), matrix, policy=label_policy),
+                clip_on=False)
+
+    # -- tick labels on top edge from secondary x (world-side text) --
+    if "x" in secondary:
+        axis = secondary["x"]
+        for sv, lx in axis.tick_coordinates():
+            if x0 - 1e-9 <= lx <= x0 + 1e-9 or x1 - 1e-9 <= lx <= x1 + 1e-9:
+                continue
+            w = _apply_matrix_pts(matrix, [(lx, y1 + d)])[0]
+            ax.text(w[0], w[1], f"{sv:g}", ha="center", va="bottom", fontsize=5,
+                    rotation=label_rotation((1, 0), matrix, policy=axis.label_policy),
+                    clip_on=False)
+
+    # -- tick labels on right edge from secondary y (world-side text) --
+    if "y" in secondary:
+        axis = secondary["y"]
+        for sv, ly in axis.tick_coordinates():
+            if y0 - 1e-9 <= ly <= y0 + 1e-9 or y1 - 1e-9 <= ly <= y1 + 1e-9:
+                continue
+            w = _apply_matrix_pts(matrix, [(x1 + d, ly)])[0]
+            ax.text(w[0], w[1], f"{sv:g}", ha="left", va="center", fontsize=5,
+                    rotation=label_rotation((0, 1), matrix, policy=axis.label_policy),
+                    clip_on=False)
+
+    # -- secondary axis titles (world-side text, beyond the tick labels) --
+    if "x" in secondary and secondary["x"].label:
+        axis = secondary["x"]
+        wt = _apply_matrix_pts(matrix, [((x0 + x1) / 2.0, y1 + 0.20 * (y1 - y0))])[0]
+        ax.text(wt[0], wt[1], axis.label, ha="center", va="bottom", fontsize=6,
+                rotation=label_rotation((1, 0), matrix, policy=axis.label_policy),
+                clip_on=False)
+    if "y" in secondary and secondary["y"].label:
+        axis = secondary["y"]
+        wt = _apply_matrix_pts(matrix, [(x1 + 0.20 * (x1 - x0), (y0 + y1) / 2.0)])[0]
+        ax.text(wt[0], wt[1], axis.label, ha="left", va="center", fontsize=6,
+                rotation=label_rotation((0, 1), matrix, policy=axis.label_policy),
                 clip_on=False)
 
     # -- edge title (world-side text) --

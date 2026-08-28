@@ -182,6 +182,99 @@ class TestFrameImplication:
         assert len(ax.texts) == 0
 
 
+class TestSecondaryFrameTicks:
+    """Reversed secondary axes draw top/right tick labels deformed by the matrix."""
+
+    def _diamond_spec(self):
+        """A rotated cartesian child with reversed secondary x/y axes."""
+        shared = {
+            "title": "TEST DIAMOND",
+            "xlim": (0, 100),
+            "ylim": (0, 100),
+            "grid_step": 20,
+            "tick_step": 20,
+            "secondary_x": {"range": [100, 0], "label": "Anions (%)"},
+            "secondary_y": {"range": [100, 0], "label": "Cations (%)"},
+        }
+        transform = (
+            LinkTransform()
+            .rotate(45.0)
+            .scale(np.sqrt(2) / 400, np.sqrt(3) / 200)
+            .translate(0.5, 0.0)
+        )
+        return _parent([
+            _child_spec([0.0, 50.0, 100.0], [0.0, 50.0, 100.0],
+                        transform=transform, settings=shared),
+        ])
+
+    def test_secondary_axis_titles_rendered(self):
+        fig = _render(self._diamond_spec())
+        ax = fig.axes[0]
+        texts = [t.get_text() for t in ax.texts]
+        assert "Anions (%)" in texts
+        assert "Cations (%)" in texts
+
+    def test_secondary_ticks_match_expected_world_positions(self):
+        """Secondary ticks sit at the matrix-transformed local anchors."""
+        fig = _render(self._diamond_spec())
+        ax = fig.axes[0]
+
+        transform = (
+            LinkTransform()
+            .rotate(45.0)
+            .scale(np.sqrt(2) / 400, np.sqrt(3) / 200)
+            .translate(0.5, 0.0)
+        )
+
+        # Reversed secondary range [100,0] on a [0,100] primary: secondary value
+        # sv -> local coord inv(sv) = 100 - sv. Secondary-x anchors sit on the
+        # top edge at local y=105 (just outside y1=100); secondary-y anchors on
+        # the right edge at local x=105.
+        def inv(sv):
+            return 100.0 - sv
+
+        x_anchor = {f"{sv:g}": transform.transform_points([[inv(sv), 105.0]])[0]
+                    for sv in (20, 40, 60, 80)}
+        y_anchor = {f"{sv:g}": transform.transform_points([[105.0, inv(sv)]])[0]
+                    for sv in (20, 40, 60, 80)}
+
+        matched_x = 0
+        matched_y = 0
+        for t in ax.texts:
+            text = t.get_text()
+            if text not in x_anchor:
+                continue
+            x, y = t.get_position()
+            if np.allclose(x_anchor[text], (x, y), atol=1e-9):
+                matched_x += 1
+            if np.allclose(y_anchor[text], (x, y), atol=1e-9):
+                matched_y += 1
+
+        # 4 interior ticks drawn on the top (secondary x) and right (secondary y).
+        assert matched_x == 4
+        assert matched_y == 4
+
+    def test_no_secondary_ticks_when_not_declared(self):
+        fig = _render(_parent([
+            _child_spec([0.0, 50.0, 100.0], [0.0, 50.0, 100.0],
+                        transform=LinkTransform()
+                        .rotate(45.0)
+                        .scale(np.sqrt(2) / 400, np.sqrt(3) / 200)
+                        .translate(0.5, 0.0),
+                        settings={
+                            "title": "TEST DIAMOND",
+                            "xlim": (0, 100),
+                            "ylim": (0, 100),
+                            "grid_step": 20,
+                            "tick_step": 20,
+                        }),
+        ]))
+        ax = fig.axes[0]
+        texts = [t.get_text() for t in ax.texts]
+        assert "Anions (%)" not in texts
+        assert "Cations (%)" not in texts
+
+
 class TestWorldLimits:
     def test_limits_cover_child_extents(self):
         fig = _render(_parent(
