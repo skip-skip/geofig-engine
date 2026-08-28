@@ -112,7 +112,7 @@ def build_piper_specs(
         context={},
         template_name="piper",
         coord=TernaryCoord(channels=right_channels, handedness="right"),
-        transform=LinkTransform().scale(-0.5, 0.5).translate(1.2, 0.1),
+        transform=LinkTransform().scale(-0.5, 0.5).translate(1.2, 0.0),
         layers=[LayerSpec(
             geom=GeomPoint(),
             stat=StatIdentity(),
@@ -130,8 +130,8 @@ def build_piper_specs(
             "ylim": (0, 100),
             "grid_step": 20,
             "tick_step": 20,
-            "secondary_x": {"range": [100, 0], "label": "Anions (%)"},
-            "secondary_y": {"range": [100, 0], "label": "Cations (%)"},
+            "secondary_x": {"range": [0, 100], "label": "Anions (%)"},
+            "secondary_y": {"range": [0, 100], "label": "Cations (%)"},
         },
         context={},
         template_name="piper",
@@ -139,7 +139,7 @@ def build_piper_specs(
         transform=LinkTransform()
         .rotate(45.0)
         .scale(_SQRT2 / 400.0, dia_pct * _SQRT2 / 2.0)
-        .translate(0.6, 0.0),
+        .translate(0.6, 0.1),
         layers=[LayerSpec(
             geom=GeomPoint(),
             stat=StatIdentity(),
