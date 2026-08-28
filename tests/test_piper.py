@@ -98,7 +98,7 @@ class TestBuildPiperSpecs:
         assert right.coord.channels == ("SO4", "Cl", "HCO3")
         assert right.transform.ops == (
             ("scale", (-0.5, 0.5)),
-            ("translate", (1.2, 0.1)),
+            ("translate", (1.2, 0.0)),
         )
 
     def test_diamond_child_is_cartesian(self):
@@ -106,9 +106,9 @@ class TestBuildPiperSpecs:
         dia = specs[0].children[2]
         assert isinstance(dia.coord, CoordCartesian)
         m = dia.transform.matrix()
-        # translate=(0.6, 0.0), rotate=45, scale=(sqrt2/400, sqrt6/400)
+        # translate=(0.6, 0.1), rotate=45, scale=(sqrt2/400, sqrt6/400)
         assert m[0, 2] == pytest.approx(0.6)
-        assert m[1, 2] == pytest.approx(0.0)
+        assert m[1, 2] == pytest.approx(0.1)
         assert dia.transform.ops[0] == ("rotate", 45.0)
 
     def test_children_have_layers(self):
@@ -142,9 +142,9 @@ class TestBuildPiperSpecs:
         assert dia.settings["xlim"] == (0, 100)
         assert dia.settings["ylim"] == (0, 100)
         assert dia.settings["grid_step"] == 20
-        # Reversed secondary axes for the diamond's upper edges.
-        assert dia.settings["secondary_x"]["range"] == [100, 0]
-        assert dia.settings["secondary_y"]["range"] == [100, 0]
+        # Secondary axes for the diamond's upper edges (identity mapping here).
+        assert dia.settings["secondary_x"]["range"] == [0, 100]
+        assert dia.settings["secondary_y"]["range"] == [0, 100]
 
     def test_custom_title(self):
         specs = build_piper_specs(_DATA, title="My Piper")
@@ -196,14 +196,14 @@ class TestPiperRenderer:
         fig = renderer.render(specs[0])
         assert fig is not None
 
-    def test_diamond_renders_reversed_secondary_ticks(self):
+    def test_diamond_renders_secondary_ticks(self):
         from geofig_engine.renderers import MatplotlibRenderer
         renderer = MatplotlibRenderer()
         specs = build_piper_specs(_DATA)
         fig = renderer.render(specs[0])
         ax = fig.axes[0]
         texts = [t.get_text() for t in ax.texts]
-        # Reversed upper-edge scales: interior ticks descending toward the apex.
+        # Upper-edge scales: interior ticks toward the apex.
         assert "80" in texts
         assert "60" in texts
         assert "40" in texts
@@ -275,10 +275,10 @@ class TestPiperParity:
         corners_world = dia.transform.transform_points(corners_pct)
 
         expected_world = np.array([
-            [0.6, 0.0],          # bottom vertex
-            [0.85, h / 2.0],     # right vertex (≈0.433)
-            [0.6, h],            # top vertex (≈0.866)
-            [0.35, h / 2.0],     # left vertex (≈0.433)
+            [0.6, 0.1],          # bottom vertex
+            [0.85, h / 2.0 + 0.1],  # right vertex (≈0.433)
+            [0.6, h + 0.1],      # top vertex (≈0.866)
+            [0.35, h / 2.0 + 0.1],  # left vertex (≈0.433)
         ])
         np.testing.assert_allclose(corners_world, expected_world, atol=1e-10)
 
