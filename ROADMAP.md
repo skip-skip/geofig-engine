@@ -124,6 +124,20 @@ Made `LinkTransform` a fluent, orderable builder (`LinkTransform().rotate(45).sc
 - **WP6 Cleanup + ROADMAP** — no constructor-form (`LinkTransform(rotate=, translate=, scale=)`) or field reads remain; no `_draw_diamond_frame` / `rotate != 0` dispatch; `hydro_demo.py` renders all 7 figures with consistent per-sample colors and no orange regression; `debug_piper_axes.py` geometry unchanged (35 lines / 47 texts including DIAMOND title).
 - **WP7-12 settings-based frames** — removed the `frame_config` field from `FigureSpec` entirely; frame hints (`title`, `xlim`/`ylim` bounds, `grid_step`, `tick_step`, `label_policy`) now live in each spec's `settings`. For children, `xlim`/`ylim` in settings are local-space frame bounds (e.g. diamond `[0,100]²`), not matplotlib axis limits; child settings feed only the frame-drawing logic, not the generic `_apply_settings` handler. Serializer round-trips `settings` (restoring tuple bounds); piper template + debug demo and all tests updated. Full suite: **800 passed**.
 
+## 🚧 Phase 14.53 — General secondary axis system for cartesian coordinates
+
+Add a general secondary-axis system to the cartesian frame: secondary **x** and secondary **y** axes that (a) draw tick labels on the frame's top/right edges and (b) support plotting a second data series against them (twin-axis). Secondary axes are transformed exactly like primary axes (local-space anchors stamped by the child's `LinkTransform`, rotated per `label_policy`). Declared as structured `settings` entries; reused to add reversed upper-edge scales to the piper diamond.
+
+### Work packages (open in `tasks/open/`)
+
+- [ ] **WP-A Secondary-axis data model + helpers** — structured `settings["secondary_x"]`/`settings["secondary_y"]` declarations (`range`, `tick_step`, `label_policy`, `position`, `label`); pure linear `fwd`/`inv` mapping from primary range onto the secondary range (generalizes reversal); tick-then-coordinate enumerator
+- [ ] **WP-B Frame tick-label rendering** — `_draw_cartesian_axis` draws top-edge (secondary x) and right-edge (secondary y) tick labels, deformed by the same matrix as primary; opt-in via settings presence
+- [ ] **WP-C Piper diamond integration** — diamond carries `secondary_x`/`secondary_y` with reversed `[100,0]` ranges so its upper edges show reversed scales; update debug demo text count and piper tests
+- [ ] **WP-D Data twin-axis** — map a layer's `x2`/`y2` channel through the secondary→primary mapping into local `x`/`y` before rendering, so a second series plots against the secondary axis and deforms with the child transform
+- [ ] **WP-E Serialization + validation** — secondary `range` tuples survive JSON round-trip; validate secondary-axis settings shape
+- [ ] **WP-F Tests** — mapping round-trips, reversed frame ticks at correct world positions, data twin-axis positioning, serialization, validation, piper integration
+- [ ] **WP-G Cleanup + ROADMAP** — full suite + demos, document phase, close task files
+
 ---
 
 ## 📋 Phase 15 — Enhanced legend features
