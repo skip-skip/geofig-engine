@@ -28,7 +28,7 @@ def build_empty_piper() -> FigureSpec:
 
     left_child = FigureSpec(
         data=empty_df, mappings={},
-        settings={"title": "LEFT TRIANGLE"}, context={},
+        settings={}, context={},
         template_name="piper",
         coord=TernaryCoord(channels=left_channels, handedness="left"),
         transform=LinkTransform().scale(0.5, 0.5),
@@ -40,10 +40,10 @@ def build_empty_piper() -> FigureSpec:
 
     right_child = FigureSpec(
         data=empty_df, mappings={},
-        settings={"title": "RIGHT TRIANGLE"}, context={},
+        settings={}, context={},
         template_name="piper",
         coord=TernaryCoord(channels=right_channels, handedness="right"),
-        transform=LinkTransform().scale(-0.5, 0.5).translate(1.0, 0.0),
+        transform=LinkTransform().scale(-0.5, 0.5).translate(1.2, 0.1),
         layers=[LayerSpec(
             geom=GeomPoint(), stat=StatIdentity(),
             visual_mapping=_empty_vm(right_channels), zorder=10,
@@ -55,11 +55,12 @@ def build_empty_piper() -> FigureSpec:
     diamond_child = FigureSpec(
         data=empty_df, mappings={},
         settings={
-            "title": "DIAMOND",
             "xlim": (0, 100),
             "ylim": (0, 100),
             "grid_step": 20,
             "tick_step": 20,
+            "secondary_x": {"range": [100, 0], "label": "Anions (%)"},
+            "secondary_y": {"range": [100, 0], "label": "Cations (%)"},
         },
         context={},
         template_name="piper",
@@ -67,7 +68,7 @@ def build_empty_piper() -> FigureSpec:
         transform=LinkTransform()
         .rotate(45.0)
         .scale(*dia_scale)
-        .translate(0.5, 0.0),
+        .translate(0.6, 0.0),
         layers=[LayerSpec(
             geom=GeomPoint(), stat=StatIdentity(),
             visual_mapping={"x": pd.Series([], dtype=float),

@@ -130,6 +130,8 @@ def build_piper_specs(
             "ylim": (0, 100),
             "grid_step": 20,
             "tick_step": 20,
+            "secondary_x": {"range": [100, 0], "label": "Anions (%)"},
+            "secondary_y": {"range": [100, 0], "label": "Cations (%)"},
         },
         context={},
         template_name="piper",

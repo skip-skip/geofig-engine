@@ -142,6 +142,9 @@ class TestBuildPiperSpecs:
         assert dia.settings["xlim"] == (0, 100)
         assert dia.settings["ylim"] == (0, 100)
         assert dia.settings["grid_step"] == 20
+        # Reversed secondary axes for the diamond's upper edges.
+        assert dia.settings["secondary_x"]["range"] == [100, 0]
+        assert dia.settings["secondary_y"]["range"] == [100, 0]
 
     def test_custom_title(self):
         specs = build_piper_specs(_DATA, title="My Piper")
@@ -192,6 +195,22 @@ class TestPiperRenderer:
         specs = build_piper_specs(data, mapping={"color": "group"})
         fig = renderer.render(specs[0])
         assert fig is not None
+
+    def test_diamond_renders_reversed_secondary_ticks(self):
+        from geofig_engine.renderers import MatplotlibRenderer
+        renderer = MatplotlibRenderer()
+        specs = build_piper_specs(_DATA)
+        fig = renderer.render(specs[0])
+        ax = fig.axes[0]
+        texts = [t.get_text() for t in ax.texts]
+        # Reversed upper-edge scales: interior ticks descending toward the apex.
+        assert "80" in texts
+        assert "60" in texts
+        assert "40" in texts
+        assert "20" in texts
+        # Secondary axis titles.
+        assert "Anions (%)" in texts
+        assert "Cations (%)" in texts
 
 
 # ---------------------------------------------------------------------------
