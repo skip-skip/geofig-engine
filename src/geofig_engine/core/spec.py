@@ -16,6 +16,7 @@ from geofig_engine.core.coord import Coord, CoordCartesian
 from geofig_engine.core.facet import Facet, FacetNull
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.core.link import LinkTransform
+from geofig_engine.core.secondary_axis import parse_secondary_settings
 
 from geofig_engine.utils.validation import (
     validate_columns_exist,
@@ -69,6 +70,16 @@ class FigureSpec:
         validate_figure_spec(self)
 
 
+def _validate_secondary_settings(settings) -> None:
+    """Raise :class:`ValueError` for any malformed secondary-axis declaration.
+
+    Delegates to :func:`parse_secondary_settings`, which enforces the shape
+    rules (mapping declaration, required ``range`` pair, non-degenerate ranges,
+    valid ``position``/``label_policy``, positive ``tick_step``).
+    """
+    parse_secondary_settings(settings)
+
+
 def validate_figure_spec(spec: FigureSpec) -> None:
     """
     Validate a FigureSpec instance.
@@ -94,6 +105,7 @@ def validate_figure_spec(spec: FigureSpec) -> None:
             raise TypeError(f"mapping '{key}' must be a DimensionSelector, not a plain dict")
 
     validate_dict(spec.settings, "settings")
+    _validate_secondary_settings(spec.settings)
     validate_dict(spec.context, "context")
     validate_string(spec.template_name, "template_name", allow_empty=False)
     validate_tuple(spec.iterator_key, "iterator_key", str, allow_empty=True)

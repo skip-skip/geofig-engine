@@ -497,7 +497,8 @@ def _settings_from_dict(data):
 
     settings is serialized as a raw dict, so JSON round-trips coerce length-2
     list pairs (e.g. ``xlim``/``ylim``) back to tuples so they compare equal
-    to the original and match the renderer's frame expectations.
+    to the original and match the renderer's frame expectations. Secondary
+    axis ``range`` values are restored the same way.
     """
     if not data:
         return data
@@ -506,6 +507,12 @@ def _settings_from_dict(data):
         value = result.get(key)
         if isinstance(value, list) and len(value) == 2:
             result[key] = tuple(value)
+    for axis_key in ("secondary_x", "secondary_y"):
+        axis = result.get(axis_key)
+        if isinstance(axis, dict):
+            rng = axis.get("range")
+            if isinstance(rng, list) and len(rng) == 2:
+                axis["range"] = tuple(rng)
     return result
 
 

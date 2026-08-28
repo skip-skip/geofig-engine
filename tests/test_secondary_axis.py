@@ -1,5 +1,6 @@
 """Unit tests for the secondary-axis data model and mapping helpers (WP-A)."""
 
+import pandas as pd
 import pytest
 
 from geofig_engine.core.secondary_axis import (
@@ -7,6 +8,8 @@ from geofig_engine.core.secondary_axis import (
     linear_mapping,
     parse_secondary_settings,
 )
+from geofig_engine.core.spec import FigureSpec, validate_figure_spec
+from geofig_engine.serialize import spec_from_json, spec_to_json
 
 
 class TestLinearMapping:
@@ -157,3 +160,79 @@ class TestParseSecondarySettings:
     def test_missing_range_raises(self):
         with pytest.raises(ValueError):
             parse_secondary_settings({"secondary_x": {"tick_step": 20}})
+
+
+class TestSecondarySettingsSerialization:
+    def _spec(self, settings):
+        return FigureSpec(
+            data=pd.DataFrame({"v": [1.0]}),
+            mappings={},
+            settings=settings,
+            context={},
+            template_name="test",
+        )
+
+    def test_secondary_range_survives_json_round_trip_as_tuple(self):
+        spec = self._spec({
+            "xlim": (0, 100),
+            "ylim": (0, 100),
+            "secondary_x": {"range": [0, 100], "label": "Anions (%)"},
+            "secondary_y": {"range": [100, 0], "tick_step": 20},
+        })
+        restored = spec_from_json(spec_to_json(spec))
+        assert restored.settings["secondary_x"]["range"] == (0, 100)
+        assert restored.settings["secondary_y"]["range"] == (100, 0)
+        assert restored.settings["secondary_x"]["label"] == "Anions (%)"
+        assert restored.settings["secondary_y"]["tick_step"] == 20
+
+    def test_xlim_ylim_still_restored(self):
+        spec = self._spec({"xlim": (0, 100), "ylim": (0, 100)})
+        restored = spec_from_json(spec_to_json(spec))
+        assert restored.settings["xlim"] == (0, 100)
+        assert restored.settings["ylim"] == (0, 100)
+
+
+class TestSecondarySettingsValidation:
+    def _spec(self, settings):
+        return FigureSpec(
+            data=pd.DataFrame({"v": [1.0]}),
+            mappings={},
+            settings=settings,
+            context={},
+            template_name="test",
+        )
+
+    def test_valid_secondary_settings_pass(self):
+        spec = self._spec({
+            "xlim": (0, 100), "ylim": (0, 100),
+            "secondary_x": {"range": [0, 100], "tick_step": 20, "label_policy": "upright"},
+            "secondary_y": {"range": [100, 0], "position": "right"},
+        })
+        validate_figure_spec(spec)
+
+    def test_missing_range_raises(self):
+        with pytest.raises(ValueError):
+            validate_figure_spec(self._spec({"secondary_x": {"tick_step": 20}}))
+
+    def test_non_mapping_declaration_raises(self):
+        with pytest.raises(ValueError):
+            validate_figure_spec(self._spec({"secondary_x": [0, 100]}))
+
+    def test_degenerate_range_raises(self):
+        with pytest.raises(ValueError):
+            validate_figure_spec(self._spec({"secondary_x": {"range": [50, 50]}}))
+
+    def test_invalid_policy_raises(self):
+        with pytest.raises(ValueError):
+            validate_figure_spec(self._spec(
+                {"secondary_x": {"range": [0, 100], "label_policy": "diagonal"}}))
+
+    def test_invalid_position_raises(self):
+        with pytest.raises(ValueError):
+            validate_figure_spec(self._spec(
+                {"secondary_y": {"range": [0, 100], "position": "top"}}))
+
+    def test_nonpositive_tick_step_raises(self):
+        with pytest.raises(ValueError):
+            validate_figure_spec(self._spec(
+                {"secondary_y": {"range": [0, 100], "tick_step": 0}}))
