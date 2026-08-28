@@ -98,7 +98,7 @@ class TestBuildPiperSpecs:
         assert right.coord.channels == ("SO4", "Cl", "HCO3")
         assert right.transform.ops == (
             ("scale", (-0.5, 0.5)),
-            ("translate", (1.0, 0.0)),
+            ("translate", (1.2, 0.1)),
         )
 
     def test_diamond_child_is_cartesian(self):
@@ -106,8 +106,8 @@ class TestBuildPiperSpecs:
         dia = specs[0].children[2]
         assert isinstance(dia.coord, CoordCartesian)
         m = dia.transform.matrix()
-        # translate=(0.5, 0.0), rotate=45, scale=(sqrt2/400, sqrt6/400)
-        assert m[0, 2] == pytest.approx(0.5)
+        # translate=(0.6, 0.0), rotate=45, scale=(sqrt2/400, sqrt6/400)
+        assert m[0, 2] == pytest.approx(0.6)
         assert m[1, 2] == pytest.approx(0.0)
         assert dia.transform.ops[0] == ("rotate", 45.0)
 
@@ -133,8 +133,11 @@ class TestBuildPiperSpecs:
 
     def test_children_have_settings(self):
         specs = build_piper_specs(_DATA)
+        # Per-panel titles were dropped; left/right carry no settings.
         left = specs[0].children[0]
-        assert left.settings.get("title") == "LEFT TRIANGLE"
+        right = specs[0].children[1]
+        assert left.settings == {}
+        assert right.settings == {}
         dia = specs[0].children[2]
         assert dia.settings["xlim"] == (0, 100)
         assert dia.settings["ylim"] == (0, 100)
@@ -253,10 +256,10 @@ class TestPiperParity:
         corners_world = dia.transform.transform_points(corners_pct)
 
         expected_world = np.array([
-            [0.5, 0.0],          # bottom vertex
-            [0.75, h / 2.0],     # right vertex (≈0.433)
-            [0.5, h],            # top vertex (≈0.866)
-            [0.25, h / 2.0],     # left vertex (≈0.433)
+            [0.6, 0.0],          # bottom vertex
+            [0.85, h / 2.0],     # right vertex (≈0.433)
+            [0.6, h],            # top vertex (≈0.866)
+            [0.35, h / 2.0],     # left vertex (≈0.433)
         ])
         np.testing.assert_allclose(corners_world, expected_world, atol=1e-10)
 
