@@ -93,7 +93,7 @@ def build_piper_specs(
     left = FigureSpec(
         data=aug,
         mappings=left_mmap,
-        settings={"title": "LEFT TRIANGLE"},
+        settings={},
         context={},
         template_name="piper",
         coord=TernaryCoord(channels=left_channels, handedness="left"),
@@ -108,11 +108,11 @@ def build_piper_specs(
     right = FigureSpec(
         data=aug,
         mappings=right_mmap,
-        settings={"title": "RIGHT TRIANGLE"},
+        settings={},
         context={},
         template_name="piper",
         coord=TernaryCoord(channels=right_channels, handedness="right"),
-        transform=LinkTransform().scale(-0.5, 0.5).translate(1.0, 0.0),
+        transform=LinkTransform().scale(-0.5, 0.5).translate(1.2, 0.1),
         layers=[LayerSpec(
             geom=GeomPoint(),
             stat=StatIdentity(),
@@ -126,7 +126,6 @@ def build_piper_specs(
         data=aug,
         mappings=dia_mmap,
         settings={
-            "title": "DIAMOND",
             "xlim": (0, 100),
             "ylim": (0, 100),
             "grid_step": 20,
@@ -138,7 +137,7 @@ def build_piper_specs(
         transform=LinkTransform()
         .rotate(45.0)
         .scale(_SQRT2 / 400.0, dia_pct * _SQRT2 / 2.0)
-        .translate(0.5, 0.0),
+        .translate(0.6, 0.0),
         layers=[LayerSpec(
             geom=GeomPoint(),
             stat=StatIdentity(),
