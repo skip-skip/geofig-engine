@@ -22,6 +22,7 @@ from geofig_engine.core.facet import FacetWrap
 from geofig_engine.core.geom import GeomLine
 from geofig_engine.core.layer import Layer, LayerSpec
 from geofig_engine.core.link import LinkTransform, label_rotation
+from geofig_engine.core.secondary_axis import parse_secondary_settings
 from geofig_engine.core.spec import FigureSpec, build_spec
 from geofig_engine.core.stat import StatIdentity
 from geofig_engine.engine.generator import FigureEngine
@@ -273,6 +274,85 @@ class TestSecondaryFrameTicks:
         texts = [t.get_text() for t in ax.texts]
         assert "Anions (%)" not in texts
         assert "Cations (%)" not in texts
+
+
+class TestDataTwinAxis:
+    """WP-D: secondary-axis (x2/y2) data channels map into local x/y."""
+
+    def _child(self, vm, secondary=True):
+        settings = {
+            "xlim": (0, 100), "ylim": (0, 100),
+            "grid_step": 20, "tick_step": 20,
+        }
+        if secondary:
+            settings["secondary_x"] = {"range": [0, 100]}
+            settings["secondary_y"] = {"range": [0, 100]}
+        return FigureSpec(
+            data=pd.DataFrame({"v": [1.0]}),
+            mappings={}, settings=settings, context={},
+            template_name="other",
+            coord=CoordCartesian(),
+            transform=LinkTransform().translate(0, 0),
+            layers=[LayerSpec(
+                geom=GeomLine(), stat=StatIdentity(),
+                visual_mapping=vm, zorder=10,
+            )],
+        )
+
+    def test_y2_maps_through_secondary_y(self):
+        secondary = parse_secondary_settings(
+            self._child({"x": pd.Series([10.0]), "y2": pd.Series([80.0])}).settings)
+        out = MatplotlibRenderer._remap_secondary_channels(
+            {"x": pd.Series([10.0]), "y2": pd.Series([80.0])}, secondary)
+        assert "y2" not in out
+        assert out["y"].iloc[0] == pytest.approx(80.0)
+        assert out["x"].iloc[0] == pytest.approx(10.0)
+
+    def test_x2_maps_through_secondary_x_reversed(self):
+        settings = {
+            "xlim": (0, 100), "ylim": (0, 100),
+            "secondary_x": {"range": [100, 0]},
+        }
+        secondary = parse_secondary_settings(settings)
+        out = MatplotlibRenderer._remap_secondary_channels(
+            {"x2": pd.Series([20.0]), "y": pd.Series([5.0])}, secondary)
+        assert "x2" not in out
+        assert out["x"].iloc[0] == pytest.approx(80.0)
+        assert out["y"].iloc[0] == pytest.approx(5.0)
+
+    def test_no_secondary_channel_is_noop(self):
+        secondary = parse_secondary_settings({})
+        vm = {"x": pd.Series([1.0]), "y": pd.Series([2.0])}
+        out = MatplotlibRenderer._remap_secondary_channels(vm, secondary)
+        assert "x2" not in out and "y2" not in out
+        assert out["x"].iloc[0] == pytest.approx(1.0)
+        assert out["y"].iloc[0] == pytest.approx(2.0)
+
+    def test_y2_without_declaration_raises(self):
+        secondary = parse_secondary_settings({"xlim": (0, 100), "ylim": (0, 100)})
+        with pytest.raises(ValueError, match="secondary_y"):
+            MatplotlibRenderer._remap_secondary_channels(
+                {"x": pd.Series([1.0]), "y2": pd.Series([2.0])}, secondary)
+
+    def test_non_series_secondary_channel_raises(self):
+        secondary = parse_secondary_settings({"secondary_y": {"range": [0, 100]}})
+        with pytest.raises(TypeError):
+            MatplotlibRenderer._remap_secondary_channels({"y2": [1, 2]}, secondary)
+
+    def test_apply_child_coord_transforms_remaps_y2(self):
+        child = self._child({"x": pd.Series([50.0]), "y2": pd.Series([30.0])})
+        out = MatplotlibRenderer()._apply_child_coord_transforms(child)
+        vm = out.layers[0].visual_mapping
+        assert "y2" not in vm
+        assert vm["y"].iloc[0] == pytest.approx(30.0)
+        assert vm["x"].iloc[0] == pytest.approx(50.0)
+
+    def test_render_pipeline_accepts_twin_axis_layer(self):
+        child = self._child({"x": pd.Series([50.0]), "y2": pd.Series([30.0])},
+                            secondary=True)
+        fig = _render(_parent([child]))
+        ax = fig.axes[0]
+        assert len(ax.lines) >= 1
 
 
 class TestWorldLimits:

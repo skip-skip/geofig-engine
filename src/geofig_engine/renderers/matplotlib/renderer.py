@@ -509,8 +509,10 @@ class MatplotlibRenderer(BaseRenderer):
         if not spec.children:
             raise ValueError("FigureSpec must define at least one child")
 
+        transformed_children = []
         for child in spec.children:
             child = self._apply_child_coord_transforms(child)
+            transformed_children.append(child)
             affine = _affine_from_matrix(child.transform.matrix())
 
             # Draw frame first (below data): line geometry in local space,
@@ -523,7 +525,7 @@ class MatplotlibRenderer(BaseRenderer):
 
             self._render_axes(ax, child, child.data, layer_affine=lambda layer, a=affine: a)
 
-        xlim, ylim = self._children_world_limits(spec.children)
+        xlim, ylim = self._children_world_limits(transformed_children)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
         ax.set_aspect("equal")
@@ -550,12 +552,14 @@ class MatplotlibRenderer(BaseRenderer):
             _draw_cartesian_axis(ax, matrix, child.settings)
 
     def _apply_child_coord_transforms(self, child: FigureSpec) -> FigureSpec:
-        """Apply each child's coord to its own layers' visual mappings."""
+        """Apply each child's coord (and secondary-axis channels) to its layers."""
         if not child.layers:
             return child
+        secondary = parse_secondary_settings(child.settings)
         trans_layers = []
         for layer in child.layers:
             vm = child.coord.transform_visual_mapping(dict(layer.visual_mapping), layer.geom)
+            vm = self._remap_secondary_channels(vm, secondary)
             trans_layers.append(
                 LayerSpec(
                     geom=layer.geom,
@@ -568,6 +572,36 @@ class MatplotlibRenderer(BaseRenderer):
                 )
             )
         return dataclasses.replace(child, layers=trans_layers)
+
+    @staticmethod
+    def _remap_secondary_channels(vm: dict, secondary: dict) -> dict:
+        """Rewrite secondary-axis channels into local x/y.
+
+        ``x2``/``y2`` values are interpreted in the child's secondary-axis
+        units and mapped through the matching secondary-axis linear transform
+        into the local-frame ``x``/``y`` coordinates (then the ``x2``/``y2``
+        keys are removed). Requires the child to declare the corresponding
+        ``secondary_x``/``secondary_y`` axis; otherwise a clear error is raised.
+        """
+        vm = dict(vm)
+        for src, dst, orient in (("x2", "x", "x"), ("y2", "y", "y")):
+            if src not in vm:
+                continue
+            axis = secondary.get(orient)
+            if axis is None:
+                raise ValueError(
+                    f"visual mapping uses '{src}' but the child declares no "
+                    f"'secondary_{orient}' axis; cannot map secondary data"
+                )
+            series = vm[src]
+            if not isinstance(series, pd.Series):
+                raise TypeError(
+                    f"'{src}' must map to a data column (pd.Series), "
+                    f"got {type(series).__name__}"
+                )
+            vm[dst] = series.map(axis.inv)
+            del vm[src]
+        return vm
 
     @staticmethod
     def _children_world_limits(children):
