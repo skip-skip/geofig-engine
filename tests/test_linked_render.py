@@ -56,17 +56,16 @@ def _child_layer(x, y, zorder=None):
     )
 
 
-def _child_spec(x, y, transform=None, coord=None, frame_config=None, zorder=None):
+def _child_spec(x, y, transform=None, coord=None, settings=None, zorder=None):
     n = len(x)
     return FigureSpec(
         data=pd.DataFrame({"v": np.arange(n, dtype=float)}),
         mappings={},
-        settings={},
+        settings=settings or {},
         context={},
         template_name="test",
         coord=coord or CoordCartesian(),
         transform=transform or LinkTransform(),
-        frame_config=frame_config,
         layers=[_child_layer(x, y, zorder=zorder)],
     )
 
@@ -139,10 +138,10 @@ class TestFrameImplication:
         fig = _render(_parent([
             FigureSpec(
                 data=pd.DataFrame({"v": np.arange(3, dtype=float)}),
-                mappings={}, settings={}, context={}, template_name="test",
+                mappings={}, settings={"title": "TEST TRIANGLE"}, context={},
+                template_name="test",
                 coord=coord,
                 transform=LinkTransform().scale(0.5, 0.5),
-                frame_config={"title": "TEST TRIANGLE"},
                 layers=[layer],
             ),
         ]))
@@ -160,7 +159,7 @@ class TestFrameImplication:
                 .rotate(45.0)
                 .scale(np.sqrt(2) / 400, np.sqrt(3) / 200)
                 .translate(0.5, 0.0),
-                frame_config={
+                settings={
                     "title": "TEST DIAMOND",
                     "xlim": (0, 100),
                     "ylim": (0, 100),
@@ -174,12 +173,12 @@ class TestFrameImplication:
         texts = [t.get_text() for t in ax.texts]
         assert "TEST DIAMOND" in texts
 
-    def test_no_frame_when_no_frame_config_and_identity_transform(self):
+    def test_no_frame_when_no_frame_bounds_and_identity_transform(self):
         fig = _render(_parent([
             _child_spec([0, 1], [0, 0]),
         ]))
         ax = fig.axes[0]
-        # No frame for plain Cartesian with no frame_config
+        # No frame for plain Cartesian with no xlim/ylim bounds in settings
         assert len(ax.texts) == 0
 
 

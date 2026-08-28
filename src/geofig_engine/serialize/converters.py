@@ -443,8 +443,6 @@ def figure_spec_to_dict(spec: FigureSpec) -> dict:
         "children": [_spec_to_dict(c) for c in spec.children],
         "transform": spec.transform.to_dict(),
     }
-    if spec.frame_config is not None:
-        result["frame_config"] = spec.frame_config
     return result
 
 
@@ -463,8 +461,6 @@ def _spec_to_dict(spec: FigureSpec) -> dict:
         "children": [_spec_to_dict(c) for c in spec.children],
         "transform": spec.transform.to_dict(),
     }
-    if spec.frame_config is not None:
-        result["frame_config"] = spec.frame_config
     return result
 
 
@@ -484,7 +480,7 @@ def _spec_from_dict(data: dict) -> FigureSpec:
     return build_spec(
         data=df,
         mappings=_visual_mapping_from_dict(data["mappings"]),
-        settings=data["settings"],
+        settings=_settings_from_dict(data["settings"]),
         context=data["context"],
         template_name=data["template_name"],
         iterator_key=tuple(data.get("iterator_key", [])),
@@ -493,16 +489,15 @@ def _spec_from_dict(data: dict) -> FigureSpec:
         facet=facet_from_dict(data["facet"]),
         children=children,
         transform=LinkTransform.from_dict(transform_data) if transform_data else None,
-        frame_config=_frame_config_from_dict(data.get("frame_config")),
     )
 
 
-def _frame_config_from_dict(data):
-    """Restore tuple-valued geometry keys in a frame_config dict.
+def _settings_from_dict(data):
+    """Restore tuple-valued geometry keys in a settings dict.
 
-    frame_config is serialized as a raw dict, so JSON round-trips coerce
-    length-2 list pairs (e.g. ``xlim``/``ylim``) back to tuples so they
-    compare equal to the original and match the renderer's expectations.
+    settings is serialized as a raw dict, so JSON round-trips coerce length-2
+    list pairs (e.g. ``xlim``/``ylim``) back to tuples so they compare equal
+    to the original and match the renderer's frame expectations.
     """
     if not data:
         return data

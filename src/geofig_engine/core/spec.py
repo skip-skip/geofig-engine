@@ -48,10 +48,8 @@ class FigureSpec:
         facet: Facet specification for subplot splitting.
         children: Child FigureSpecs representing linked axes. Each child is
                   self-contained with its own coord, transform, layers, and
-                  frame_config. Depth-1 only (children must not have children).
+                  settings. Depth-1 only (children must not have children).
         transform: LinkTransform mapping this spec's local space into world.
-        frame_config: Optional dict of frame drawing hints (title, label_policy,
-                      etc.), consumed by the renderer's implied-frame logic.
     """
 
     data: pd.DataFrame
@@ -65,7 +63,6 @@ class FigureSpec:
     facet: Facet = field(default_factory=FacetNull)
     children: tuple[FigureSpec, ...] = ()
     transform: LinkTransform = field(default_factory=LinkTransform)
-    frame_config: dict | None = None
     
     def __post_init__(self) -> None:
         """Validate spec on creation."""
@@ -121,11 +118,6 @@ def validate_figure_spec(spec: FigureSpec) -> None:
             f"got {type(spec.transform).__name__}"
         )
 
-    if spec.frame_config is not None and not isinstance(spec.frame_config, dict):
-        raise TypeError(
-            f"frame_config must be a dict or None, got {type(spec.frame_config).__name__}"
-        )
-
 
 def build_spec(
     data: pd.DataFrame,
@@ -139,7 +131,6 @@ def build_spec(
     facet: Facet | None = None,
     children: tuple[FigureSpec, ...] | None = None,
     transform: LinkTransform | None = None,
-    frame_config: dict | None = None,
 ) -> FigureSpec:
     """
     Factory function to create and validate a FigureSpec.
@@ -156,7 +147,6 @@ def build_spec(
         facet: Facet specification for subplot splitting.
         children: Child FigureSpecs representing linked axes.
         transform: LinkTransform mapping local space into world.
-        frame_config: Optional frame drawing hints.
 
     Returns:
         A validated FigureSpec instance.
@@ -177,7 +167,6 @@ def build_spec(
         facet=facet or FacetNull(),
         children=children or (),
         transform=transform or LinkTransform(),
-        frame_config=frame_config,
     )
 
 

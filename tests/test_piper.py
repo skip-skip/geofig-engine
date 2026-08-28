@@ -131,15 +131,14 @@ class TestBuildPiperSpecs:
         assert "x" in vm
         assert "y" in vm
 
-    def test_children_have_frame_config(self):
+    def test_children_have_settings(self):
         specs = build_piper_specs(_DATA)
         left = specs[0].children[0]
-        assert left.frame_config is not None
-        assert left.frame_config.get("title") == "LEFT TRIANGLE"
+        assert left.settings.get("title") == "LEFT TRIANGLE"
         dia = specs[0].children[2]
-        assert dia.frame_config["xlim"] == (0, 100)
-        assert dia.frame_config["ylim"] == (0, 100)
-        assert dia.frame_config["grid_step"] == 20
+        assert dia.settings["xlim"] == (0, 100)
+        assert dia.settings["ylim"] == (0, 100)
+        assert dia.settings["grid_step"] == 20
 
     def test_custom_title(self):
         specs = build_piper_specs(_DATA, title="My Piper")

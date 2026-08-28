@@ -93,12 +93,11 @@ def build_piper_specs(
     left = FigureSpec(
         data=aug,
         mappings=left_mmap,
-        settings={},
+        settings={"title": "LEFT TRIANGLE"},
         context={},
         template_name="piper",
         coord=TernaryCoord(channels=left_channels, handedness="left"),
         transform=LinkTransform().scale(0.5, 0.5),
-        frame_config={"title": "LEFT TRIANGLE"},
         layers=[LayerSpec(
             geom=GeomPoint(),
             stat=StatIdentity(),
@@ -109,12 +108,11 @@ def build_piper_specs(
     right = FigureSpec(
         data=aug,
         mappings=right_mmap,
-        settings={},
+        settings={"title": "RIGHT TRIANGLE"},
         context={},
         template_name="piper",
         coord=TernaryCoord(channels=right_channels, handedness="right"),
         transform=LinkTransform().scale(-0.5, 0.5).translate(1.0, 0.0),
-        frame_config={"title": "RIGHT TRIANGLE"},
         layers=[LayerSpec(
             geom=GeomPoint(),
             stat=StatIdentity(),
@@ -127,7 +125,13 @@ def build_piper_specs(
     diamond = FigureSpec(
         data=aug,
         mappings=dia_mmap,
-        settings={},
+        settings={
+            "title": "DIAMOND",
+            "xlim": (0, 100),
+            "ylim": (0, 100),
+            "grid_step": 20,
+            "tick_step": 20,
+        },
         context={},
         template_name="piper",
         coord=CoordCartesian(),
@@ -135,13 +139,6 @@ def build_piper_specs(
         .rotate(45.0)
         .scale(_SQRT2 / 400.0, dia_pct * _SQRT2 / 2.0)
         .translate(0.5, 0.0),
-        frame_config={
-            "title": "DIAMOND",
-            "xlim": (0, 100),
-            "ylim": (0, 100),
-            "grid_step": 20,
-            "tick_step": 20,
-        },
         layers=[LayerSpec(
             geom=GeomPoint(),
             stat=StatIdentity(),

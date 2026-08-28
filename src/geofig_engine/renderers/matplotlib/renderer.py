@@ -96,11 +96,13 @@ def _facet_panels(facet, data):
 # ---------------------------------------------------------------------------
 # Frame drawing: implied by child FigureSpec's coord type
 #
-# Each child FigureSpec carries a coord and frame_config. The renderer
-# auto-selects the frame drawing function based on isinstance checks.
-# Frame geometry is drawn in local space; the renderer stamps line artists
-# with the child's affine so they deform identically to data. Text labels
-# are placed world-side via _apply_matrix_pts so they remain upright.
+# Each child FigureSpec carries a coord and settings. The renderer auto-
+# selects the frame drawing function based on isinstance checks; frame hints
+# (title, xlim/ylim bounds, grid_step, tick_step, label_policy) are read from
+# the child's settings. Frame geometry is drawn in local space; the renderer
+# stamps line artists with the child's affine so they deform identically to
+# data. Text labels are placed world-side via _apply_matrix_pts so they
+# remain upright.
 # ---------------------------------------------------------------------------
 
 
@@ -126,15 +128,15 @@ SQRT3_2 = math.sqrt(3) / 2.0
 def _child_local_bbox(child):
     """Local-space bounding box corners for a child FigureSpec.
 
-    TernaryCoord → unit triangle; CoordCartesian with frame_config
+    TernaryCoord → unit triangle; CoordCartesian with settings
     ``xlim``/``ylim`` → that axis region (e.g. the diamond's [0,100]²);
     everything else → unit square.
     """
     coord = child.coord
     if isinstance(coord, TernaryCoord):
         return [(0, 0), (1, 0), (0.5, SQRT3_2), (0, 0)]
-    if isinstance(coord, CoordCartesian) and child.frame_config:
-        cfg = child.frame_config
+    if isinstance(coord, CoordCartesian) and child.settings:
+        cfg = child.settings
         if "xlim" in cfg and "ylim" in cfg:
             x0, x1 = cfg["xlim"]
             y0, y1 = cfg["ylim"]
@@ -142,13 +144,13 @@ def _child_local_bbox(child):
     return [(0, 0), (1, 0), (0, 1), (1, 1)]
 
 
-def _draw_ternary_frame(ax, matrix, coord, frame_config):
+def _draw_ternary_frame(ax, matrix, coord, settings):
     """Draw ternary triangle frame in local space, stamped by matrix.
 
     Reads ions from coord.channels, reversals from coord.handedness,
-    title from frame_config.
+    title from settings.
     """
-    cfg = frame_config or {}
+    cfg = settings or {}
     ions = list(coord.channels)
     handedness = coord.handedness
     title = cfg.get("title", "")
@@ -240,10 +242,10 @@ def _draw_ternary_frame(ax, matrix, coord, frame_config):
         _arrow(*mid_right, ions[2], rotation=-60, reverse=rev_right)
 
 
-def _draw_cartesian_axis(ax, matrix, frame_config):
+def _draw_cartesian_axis(ax, matrix, settings):
     """Draw a cartesian axis frame in local space, stamped by *matrix*.
 
-    Reads the axis region and styling from ``frame_config``:
+    Reads the axis region and styling from ``settings``:
       - ``xlim``/``ylim``: axis bounds in local space (default ``(0, 1)²``)
       - ``grid_step``: gridline spacing in both directions (default 0.2)
       - ``tick_step``: tick label spacing (default = grid_step)
@@ -255,9 +257,9 @@ def _draw_cartesian_axis(ax, matrix, frame_config):
     placed world-side via ``_apply_matrix_pts`` so they stay upright. This
     generalizes the Piper diamond (a cartesian child in ``[0,100]²`` rotated
     45°) as well as any rotated/translated cartesian child that opts into a
-    frame by supplying a ``frame_config``.
+    frame by supplying the ``xlim``/``ylim`` bounds in settings.
     """
-    cfg = frame_config or {}
+    cfg = settings or {}
     xlim = cfg.get("xlim", (0.0, 1.0))
     ylim = cfg.get("ylim", (0.0, 1.0))
     grid_step = cfg.get("grid_step", 0.2)
@@ -493,12 +495,16 @@ class MatplotlibRenderer(BaseRenderer):
 
     @staticmethod
     def _draw_implied_frame(ax, child: FigureSpec):
-        """Draw frame auto-selected from child's coord type."""
+        """Draw frame auto-selected from child's coord type + settings."""
         matrix = child.transform.matrix()
         if isinstance(child.coord, TernaryCoord):
-            _draw_ternary_frame(ax, matrix, child.coord, child.frame_config)
-        elif isinstance(child.coord, CoordCartesian) and child.frame_config:
-            _draw_cartesian_axis(ax, matrix, child.frame_config)
+            _draw_ternary_frame(ax, matrix, child.coord, child.settings)
+        elif (
+            isinstance(child.coord, CoordCartesian)
+            and "xlim" in child.settings
+            and "ylim" in child.settings
+        ):
+            _draw_cartesian_axis(ax, matrix, child.settings)
 
     def _apply_child_coord_transforms(self, child: FigureSpec) -> FigureSpec:
         """Apply each child's coord to its own layers' visual mappings."""

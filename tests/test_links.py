@@ -289,16 +289,15 @@ class TestFigureSpecChildren:
         )
         assert spec.transform == tf
 
-    def test_build_spec_accepts_frame_config(self):
+    def test_build_spec_accepts_frame_settings(self):
         spec = build_spec(
             data=pd.DataFrame({"x": [1]}),
             mappings={},
-            settings={},
+            settings={"title": "Test"},
             context={},
             template_name="t",
-            frame_config={"title": "Test"},
         )
-        assert spec.frame_config == {"title": "Test"}
+        assert spec.settings == {"title": "Test"}
 
     def test_invalid_transform_raises(self):
         with pytest.raises(TypeError, match="LinkTransform"):
@@ -311,15 +310,14 @@ class TestFigureSpecChildren:
                 transform="not_a_transform",
             )
 
-    def test_invalid_frame_config_raises(self):
-        with pytest.raises(TypeError, match="frame_config"):
+    def test_invalid_settings_raises(self):
+        with pytest.raises(TypeError, match="settings"):
             FigureSpec(
                 data=pd.DataFrame({"x": [1]}),
                 mappings={},
-                settings={},
+                settings=["not", "a", "dict"],
                 context={},
                 template_name="t",
-                frame_config=["not", "a", "dict"],
             )
 
 
@@ -340,12 +338,11 @@ class TestFigureSpecChildrenSerialization:
                 FigureSpec(
                     data=pd.DataFrame({"v": [1.0]}),
                     mappings={},
-                    settings={},
                     context={},
                     template_name="child",
                     coord=CoordCartesian(),
                     transform=LinkTransform().rotate(45).scale(1, 0.5),
-                    frame_config={"title": "LEFT"},
+                    settings={"title": "LEFT"},
                 ),
                 FigureSpec(
                     data=pd.DataFrame({"v": [1.0]}),
@@ -366,7 +363,7 @@ class TestFigureSpecChildrenSerialization:
         assert restored.children[0].transform == LinkTransform().rotate(45).scale(1, 0.5)
         assert type(restored.children[1].coord) is CoordPolar
         assert restored.children[1].transform.ops == (("translate", (-0.5, 0.0)),)
-        assert restored.children[0].frame_config == {"title": "LEFT"}
+        assert restored.children[0].settings == {"title": "LEFT"}
 
     def test_spec_with_children_json_roundtrip(self):
         spec = self._child_spec()

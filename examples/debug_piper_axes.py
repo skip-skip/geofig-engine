@@ -27,15 +27,11 @@ def build_empty_piper() -> FigureSpec:
         return {ch: pd.Series([], dtype=float) for ch in channels}
 
     left_child = FigureSpec(
-        data=empty_df, mappings={}, settings={}, context={},
+        data=empty_df, mappings={},
+        settings={"title": "LEFT TRIANGLE"}, context={},
         template_name="piper",
         coord=TernaryCoord(channels=left_channels, handedness="left"),
         transform=LinkTransform().scale(0.5, 0.5),
-        frame_config={
-            "title": "LEFT TRIANGLE",
-            "rev_bottom": True,
-            "rev_right": True,
-        },
         layers=[LayerSpec(
             geom=GeomPoint(), stat=StatIdentity(),
             visual_mapping=_empty_vm(left_channels), zorder=10,
@@ -43,14 +39,11 @@ def build_empty_piper() -> FigureSpec:
     )
 
     right_child = FigureSpec(
-        data=empty_df, mappings={}, settings={}, context={},
+        data=empty_df, mappings={},
+        settings={"title": "RIGHT TRIANGLE"}, context={},
         template_name="piper",
         coord=TernaryCoord(channels=right_channels, handedness="right"),
         transform=LinkTransform().scale(-0.5, 0.5).translate(1.0, 0.0),
-        frame_config={
-            "title": "RIGHT TRIANGLE",
-            "rev_left": True,
-        },
         layers=[LayerSpec(
             geom=GeomPoint(), stat=StatIdentity(),
             visual_mapping=_empty_vm(right_channels), zorder=10,
@@ -60,20 +53,21 @@ def build_empty_piper() -> FigureSpec:
     dia_pct = np.sqrt(3) / 200.0
     dia_scale = (np.sqrt(2) / 400.0, dia_pct * np.sqrt(2) / 2.0)
     diamond_child = FigureSpec(
-        data=empty_df, mappings={}, settings={}, context={},
-        template_name="piper",
-        coord=CoordCartesian(),
-        transform=LinkTransform()
-        .rotate(45.0)
-        .scale(*dia_scale)
-        .translate(0.5, 0.0),
-        frame_config={
+        data=empty_df, mappings={},
+        settings={
             "title": "DIAMOND",
             "xlim": (0, 100),
             "ylim": (0, 100),
             "grid_step": 20,
             "tick_step": 20,
         },
+        context={},
+        template_name="piper",
+        coord=CoordCartesian(),
+        transform=LinkTransform()
+        .rotate(45.0)
+        .scale(*dia_scale)
+        .translate(0.5, 0.0),
         layers=[LayerSpec(
             geom=GeomPoint(), stat=StatIdentity(),
             visual_mapping={"x": pd.Series([], dtype=float),
