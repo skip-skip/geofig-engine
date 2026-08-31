@@ -142,8 +142,8 @@ class TestBuildPiperSpecs:
         assert dia.settings["xlim"] == (0, 100)
         assert dia.settings["ylim"] == (0, 100)
         assert dia.settings["grid_step"] == 20
-        # The diamond does not opt into cartesian arrows by default.
-        assert dia.settings.get("axis_arrows", False) is False
+        # The diamond opts into cartesian axis arrows (all four edges).
+        assert dia.settings.get("axis_arrows", False) is True
         # Secondary axes for the diamond's upper edges (identity mapping here).
         assert dia.settings["secondary_x"]["range"] == [0, 100]
         assert dia.settings["secondary_y"]["range"] == [0, 100]

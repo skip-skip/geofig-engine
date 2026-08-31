@@ -126,6 +126,7 @@ def build_piper_specs(
         data=aug,
         mappings=dia_mmap,
         settings={
+            "axis_arrows": True,
             "xlim": (0, 100),
             "ylim": (0, 100),
             "grid_step": 20,
