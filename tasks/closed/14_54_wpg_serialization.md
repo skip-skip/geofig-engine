@@ -1,6 +1,6 @@
 # WP-G: Serializer — restore `settings["axis"]` and `figsize` tuples
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.54
 **Depends on**: 14_54_wpa_axis_format_model.md
 

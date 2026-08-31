@@ -1,6 +1,6 @@
 # WP-A: AxisFormat model + `parse_axis_settings` (core/axis.py)
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.54
 **Depends on**: none (first WP)
 

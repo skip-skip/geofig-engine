@@ -1,6 +1,6 @@
 # WP-F: Validate `settings["axis"]` in `validate_figure_spec`
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.54
 **Depends on**: 14_54_wpa_axis_format_model.md
 

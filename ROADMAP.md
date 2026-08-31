@@ -160,7 +160,66 @@ the child's `LinkTransform`, rotated per `label_policy`). Declared as structured
 
 ---
 
-## 📋 Phase 15 — Enhanced legend features
+## ✅ Phase 14.54 — Unified axis/frame rendering pipeline (909 tests)
+
+Unify top-level and child frame-drawing on a single shared `AxisFormat` model
+declared under `settings["axis"]`, so a top-level spec renders through the same
+functions and the same formatting spec as a nested child. Delivered across
+WP-A through WP-J.
+
+- **`AxisFormat` model** (`core/axis.py`) — frozen, matplotlib-free dataclass:
+  common fields (`title`, `xlabel`/`ylabel`, `limits`, `grid`, `grid_step`,
+  `tick_step`, `label_policy`, `xscale`/`yscale`, `time_format`, `tick_format`)
+  plus appearance-preserving style knobs and a per-coordinate `options` dict
+  (e.g. polar toggles `hide_spine`, `hide_angular_ticks`, `hide_radial_labels`,
+  `hide_radial_ticks`, `polar_tick_labels`). `parse_axis_settings(settings, coord)`
+  reads `settings["axis"]` (validated) with a legacy flat-key fallback
+  (`xlim`/`ylim`/`grid_step`/… mapped to the equal field/options), so explicit
+  and flat forms parse identically.
+- **Unified `_draw_frame` entry** — a single frame renderer consumed by BOTH the
+  top-level path and the child path. Top-level cartesian-with-limits and ternary
+  render through `_render_single_framed` (one child, identity transform);
+  top-level polar renders natively but still formats via `_draw_frame` →
+  `_draw_polar_frame`; the linked-axes children path drives `_draw_frame` per
+  child. Frame contents (triangle/grid/ticks/ion arrows, cartesian/ternary
+  tick+title text) stay world-side upright; only geometry is affined.
+- **Custom polar frame** — `_draw_polar_frame(ax, axis, spec)` instance method:
+  grid from `axis.grid` (`AxisFormat`-driven), `options` toggles for spine /
+  angular/radial ticks and labels, `tick_params(labelsize=axis.tick_fontsize)`.
+- **Top-level ≡ child unification** — `_render_single_framed` treats the top
+  level as one child with an identity transform, reusing
+  `_apply_child_coord_transforms` + `_draw_frame` + `_render_axes` +
+  `_children_world_limits`. Side effect: **top-level ternary now draws a frame**
+  (parity fix — previously it rendered frameless).
+- **Facet path** — `_render_faceted` parses `AxisFormat` once per panel and
+  applies per-panel native formatting (`_apply_axis_format_native`): title,
+  labels, limits, scales, grid, `time_format`; preserves `CoordFlipped` swap and
+  `CoordFixed` aspect. Facets stay native (no ternary/polar facet rewiring).
+- **`tick_format` capability** — format-spec style (`":g"`, `":.1f"`) applied to
+  numeric tick labels only; parser strips the leading `:` via `_tick_label`.
+- **Validation** — `_validate_axis_settings` (delegating to
+  `parse_axis_settings`) runs on `FigureSpec` construction, rejecting malformed
+  `limits`, non-positive `tick_step`/`grid_step`, bad `label_policy`/`tick_format`.
+- **Serialization** — `_settings_from_dict` restores `figsize` and
+  `settings["axis"]["limits"]` as tuples after JSON round-trips.
+- **Template migration** — per-template defaults moved from flat keys into
+  `settings["axis"]` (timeseries, bivariate, isotope, histogram, boxplot,
+  anp_agp, nagph_nag, npr_nnp, radar, pie); piper diamond uses
+  `axis.limits`/`grid_step`/`tick_step`. `_child_local_bbox` parses `AxisFormat`.
+  `figsize`/`y2scale`/`title`/`secondary_*` stay top-level.
+- **`y2scale` intentionally untouched** (dormant twin-axis scale).
+- **Backward compatibility note** — `parse_axis_settings` is strict: when a spec
+  declares `settings["axis"]`, the structured form wins over flat legacy keys;
+  tests that passed flat overrides were updated to the structured shape.
+
+### Verification
+
+- 909 tests pass (WP-A 30, WP-B 4, WP-C 5, WP-D 5, WP-E 3, WP-F 9, WP-G 4, plus
+  template/integration updates and the existing suite)
+- `hydro_demo.py` renders all 7 figures, appearance preserved
+- `debug_piper_axes.py` diamond unchanged (children path)
+
+---
 
 - **Multi-level grouped legends** — `subseries_col` pattern with section headers and aligned columns (from geochemplot's grouped-legend pattern)
 - **Dimension legend builder** — `build_dimension_legend()` standalone function from color_col + shape_col + linetype_col

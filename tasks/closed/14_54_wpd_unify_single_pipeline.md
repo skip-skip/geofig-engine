@@ -1,6 +1,6 @@
 # WP-D: Unify the top-level single path with the child pipeline
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.54
 **Depends on**: 14_54_wpb_child_frame_axis.md
 

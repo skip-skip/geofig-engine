@@ -1,6 +1,6 @@
 # WP-C: Custom polar frame `_draw_polar_frame` on AxisFormat
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.54
 **Depends on**: 14_54_wpa_axis_format_model.md
 
