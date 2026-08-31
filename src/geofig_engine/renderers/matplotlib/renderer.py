@@ -446,8 +446,67 @@ class MatplotlibRenderer(BaseRenderer):
             return self._render_stiff(spec)
         if not isinstance(spec.facet, FacetNull):
             return self._render_faceted(spec)
+        if self._is_framed_single(spec):
+            return self._render_single_framed(spec)
 
         return self._render_single(spec)
+
+    @staticmethod
+    def _is_framed_single(spec: FigureSpec) -> bool:
+        """Whether a top-level spec draws the custom shared frame.
+
+        Top-level specs with no declared frame (plain line/timeseries charts,
+        histograms, etc.) keep native matplotlib axes. A spec becomes "framed"
+        when it is ternary (a triangle frame) or cartesian with explicit
+        world limits — the same conditions under which ``_draw_frame`` draws.
+        """
+        if isinstance(spec.coord, TernaryCoord):
+            return True
+        if isinstance(spec.coord, CoordCartesian):
+            axis = parse_axis_settings(spec.settings, spec.coord)
+            return axis.xlim is not None and axis.ylim is not None
+        return False
+
+    def _render_single_framed(self, spec: FigureSpec):
+        """Render a top-level framed spec as one child with an identity transform.
+
+        Reuses the exact child machinery (``_apply_child_coord_transforms`` +
+        ``_draw_frame`` + ``_render_axes`` + ``_children_world_limits``) so
+        top-level cartesian/ternary render through the same code and the same
+        :class:`~geofig_engine.core.axis.AxisFormat` as nested children — the
+        "top-level ≡ child" unification. With the identity transform, local ==
+        world, so a top-level ternary spec finally draws its triangle.
+        """
+        figsize = spec.settings.get("figsize", (10, 6))
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.set_facecolor("none")
+        if not spec.layers:
+            raise ValueError("FigureSpec must define at least one layer")
+
+        spec = self._apply_child_coord_transforms(spec)
+        affine = _affine_from_matrix(spec.transform.matrix())
+
+        # Frame first (below data): identity affine (local == world).
+        snapshot = self._snapshot_artists(ax)
+        self._draw_frame(ax, spec)
+        for artist in self._new_artists(ax, snapshot):
+            if not isinstance(artist, matplotlib.text.Text):
+                artist.set_transform(affine + ax.transData)
+
+        self._render_axes(ax, spec, spec.data, layer_affine=lambda layer, a=affine: a)
+
+        xlim, ylim = self._children_world_limits([spec])
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+        ax.set_aspect("equal")
+
+        title = spec.settings.get("title")
+        if title:
+            fig.suptitle(title, fontsize=14, y=0.98)
+        ax.axis("off")
+
+        plt.close(fig)
+        return fig
 
     # ------------------------------------------------------------------
     # Single-axes (non-faceted)
@@ -468,6 +527,9 @@ class MatplotlibRenderer(BaseRenderer):
         spec = self._apply_coord_transform(spec)
 
         self._render_axes(ax, spec, spec.data)
+
+        if isinstance(coord, CoordPolar):
+            self._draw_frame(ax, spec)
 
         self._apply_settings(ax, fig, spec)
         plt.close(fig)
@@ -813,19 +875,6 @@ class MatplotlibRenderer(BaseRenderer):
                 ax.grid(True, zorder=0)
             else:
                 ax.grid(False)
-        if isinstance(coord, CoordPolar):
-            if spec.settings.get("hide_spine", False):
-                ax.spines['polar'].set_visible(False)
-            if spec.settings.get("hide_angular_ticks", False):
-                ax.tick_params(axis='x', length=0)
-            if spec.settings.get("hide_angular_labels", False):
-                ax.set_xticklabels([])
-            if spec.settings.get("hide_radial_labels", False):
-                ax.set_yticklabels([])
-            if spec.settings.get("hide_radial_ticks", False):
-                ax.set_yticks([])
-            if spec.settings.get("polar_tick_labels", False):
-                self._apply_polar_ticks(ax, spec)
         time_format = spec.settings.get("time_format")
         if time_format:
             ax.xaxis.set_major_formatter(DateFormatter(time_format))

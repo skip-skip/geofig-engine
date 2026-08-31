@@ -441,3 +441,119 @@ def test_polar_grid_toggled_from_axis():
         not gl.get_visible() for gl in gridlines_false
     ) or not gridlines_false
     assert gridlines_true and all(gl.get_visible() for gl in gridlines_true)
+
+
+# ---------------------------------------------------------------------------
+# Top-level unified single path (WP-D): render a single framed spec like a child
+# ---------------------------------------------------------------------------
+
+
+def _render_single_top(settings, coord=CoordCartesian(), layers=None):
+    """Render a top-level spec directly (through the unified framed path)."""
+    from geofig_engine.core.geom import GeomLine
+    from geofig_engine.core.layer import LayerSpec
+    from geofig_engine.core.stat import StatIdentity
+
+    if layers is None:
+        layers = [
+            LayerSpec(
+                geom=GeomLine(),
+                stat=StatIdentity(),
+                visual_mapping={
+                    "x": pd.Series([0.0, 50.0, 100.0]),
+                    "y": pd.Series([0.0, 50.0, 100.0]),
+                },
+            )
+        ]
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
+
+    spec = FigureSpec(
+        data=pd.DataFrame({"v": [0.0, 1.0, 2.0]}),
+        mappings={},
+        settings={"figsize": (8, 8), **settings},
+        context={},
+        template_name="test",
+        coord=coord,
+        layers=layers,
+    )
+    fig = MatplotlibRenderer().render(spec)
+    ax = fig.axes[0]
+    return ax
+
+
+def test_top_level_cartesian_framed_renders_via_draw_frame():
+    ax = _render_single_top(
+        {"axis": {"limits": [[0, 100], [0, 100]], "grid_step": 20, "tick_step": 20}}
+    )
+    texts = [t.get_text() for t in ax.texts]
+    assert "20" in texts and "80" in texts
+    assert ax.get_aspect() == 1
+    assert len(ax.lines) > 1
+
+
+def test_top_level_cartesian_flat_equals_child():
+    flat = _render_single_top({"xlim": (0, 100), "ylim": (0, 100), "grid_step": 20, "tick_step": 20})
+    child = _render_child({"xlim": (0, 100), "ylim": (0, 100), "grid_step": 20, "tick_step": 20})
+    assert sorted(t.get_text() for t in flat.texts) == sorted(
+        t.get_text() for t in child.texts
+    )
+    # Top-level adds its data line on top of the same 9 frame lines the child has.
+    assert len(flat.lines) == len(child.lines) + 1
+
+
+def test_top_level_cartesian_axis_form_equals_child():
+    top = _render_single_top(
+        {"axis": {"limits": [[0, 100], [0, 100]], "grid_step": 20, "tick_step": 20}}
+    )
+    child = _render_child({"axis": TICK_TEXT_AXIS_SETTINGS})
+    assert sorted(t.get_text() for t in top.texts) == sorted(
+        t.get_text() for t in child.texts
+    )
+
+
+def test_top_level_ternary_renders_triangle():
+    from geofig_engine.core.geom import GeomLine
+    from geofig_engine.core.layer import LayerSpec
+    from geofig_engine.core.stat import StatIdentity
+
+    coord = TernaryCoord(channels=("Mg", "Ca", "Na+K"), handedness="left")
+    layer = LayerSpec(
+        geom=GeomLine(),
+        stat=StatIdentity(),
+        visual_mapping={
+            "Mg": pd.Series([0.0, 0.5, 1.0]),
+            "Ca": pd.Series([0.0, 0.433, 0.0]),
+            "Na+K": pd.Series([1.0, 0.067, 0.0]),
+        },
+    )
+    ax = _render_single_top({}, coord=coord, layers=[layer])
+    # Ternary triangle produces grid lines + tick labels + ion arrows
+    assert len(ax.lines) > 1
+    texts = [t.get_text() for t in ax.texts]
+    assert any(t in ("20", "40", "60", "80") for t in texts)
+    assert ax.get_aspect() == 1
+
+
+def test_plain_single_stays_native_axes():
+    # A plain cartesian chart with no explicit limits keeps native matplotlib
+    # axes (not the custom off-axis frame).
+    from geofig_engine.core.geom import GeomLine
+    from geofig_engine.core.layer import LayerSpec
+    from geofig_engine.core.stat import StatIdentity
+
+    layers = [
+        LayerSpec(
+            geom=GeomLine(),
+            stat=StatIdentity(),
+            visual_mapping={
+                "x": pd.Series([0.0, 1.0, 2.0]),
+                "y": pd.Series([0.0, 1.0, 4.0]),
+            },
+        )
+    ]
+    ax = _render_single_top({"xlabel": "X AXIS"}, layers=layers)
+    assert ax.get_xlabel() == "X AXIS"
+    assert ax.axison is True
