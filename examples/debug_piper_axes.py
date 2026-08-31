@@ -28,7 +28,7 @@ def build_empty_piper() -> FigureSpec:
 
     left_child = FigureSpec(
         data=empty_df, mappings={},
-        settings={}, context={},
+        settings={"axis_arrows": True}, context={},
         template_name="piper",
         coord=TernaryCoord(channels=left_channels, handedness="left"),
         transform=LinkTransform().scale(0.5, 0.5),
@@ -40,7 +40,7 @@ def build_empty_piper() -> FigureSpec:
 
     right_child = FigureSpec(
         data=empty_df, mappings={},
-        settings={}, context={},
+        settings={"axis_arrows": True}, context={},
         template_name="piper",
         coord=TernaryCoord(channels=right_channels, handedness="right"),
         transform=LinkTransform().scale(-0.5, 0.5).translate(1.2, 0.1),

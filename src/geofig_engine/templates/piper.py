@@ -93,7 +93,7 @@ def build_piper_specs(
     left = FigureSpec(
         data=aug,
         mappings=left_mmap,
-        settings={},
+        settings={"axis_arrows": True},
         context={},
         template_name="piper",
         coord=TernaryCoord(channels=left_channels, handedness="left"),
@@ -108,7 +108,7 @@ def build_piper_specs(
     right = FigureSpec(
         data=aug,
         mappings=right_mmap,
-        settings={},
+        settings={"axis_arrows": True},
         context={},
         template_name="piper",
         coord=TernaryCoord(channels=right_channels, handedness="right"),

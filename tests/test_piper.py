@@ -133,15 +133,17 @@ class TestBuildPiperSpecs:
 
     def test_children_have_settings(self):
         specs = build_piper_specs(_DATA)
-        # Per-panel titles were dropped; left/right carry no settings.
+        # Per-panel titles were dropped; left/right opt into ternary axis arrows.
         left = specs[0].children[0]
         right = specs[0].children[1]
-        assert left.settings == {}
-        assert right.settings == {}
+        assert left.settings == {"axis_arrows": True}
+        assert right.settings == {"axis_arrows": True}
         dia = specs[0].children[2]
         assert dia.settings["xlim"] == (0, 100)
         assert dia.settings["ylim"] == (0, 100)
         assert dia.settings["grid_step"] == 20
+        # The diamond does not opt into cartesian arrows by default.
+        assert dia.settings.get("axis_arrows", False) is False
         # Secondary axes for the diamond's upper edges (identity mapping here).
         assert dia.settings["secondary_x"]["range"] == [0, 100]
         assert dia.settings["secondary_y"]["range"] == [0, 100]
