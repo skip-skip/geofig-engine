@@ -12,6 +12,7 @@ from typing import Any, Union
 
 import pandas as pd
 
+from geofig_engine.core.axis import parse_axis_settings
 from geofig_engine.core.coord import Coord, CoordCartesian
 from geofig_engine.core.facet import Facet, FacetNull
 from geofig_engine.core.layer import LayerSpec
@@ -80,6 +81,20 @@ def _validate_secondary_settings(settings) -> None:
     parse_secondary_settings(settings)
 
 
+def _validate_axis_settings(settings, coord=None) -> None:
+    """Raise :class:`ValueError` for any malformed axis declaration.
+
+    Delegates to :func:`~geofig_engine.core.axis.parse_axis_settings`, which
+    enforces ``limits`` shape (pair / pair-of-pairs), positive
+    ``grid_step``/``tick_step``, a valid ``label_policy`` enum, a valid
+    ``tick_format`` string, and recognized per-coordinate ``options`` /
+    appearance knobs. Legacy flat keys (``xlim``/``ylim``, ``grid``,
+    ``time_format``, polar toggles, ...) are validated through the same legacy
+    fallback. Passing ``coord`` lets coord-specific validation apply.
+    """
+    parse_axis_settings(settings, coord)
+
+
 def validate_figure_spec(spec: FigureSpec) -> None:
     """
     Validate a FigureSpec instance.
@@ -106,6 +121,7 @@ def validate_figure_spec(spec: FigureSpec) -> None:
 
     validate_dict(spec.settings, "settings")
     _validate_secondary_settings(spec.settings)
+    _validate_axis_settings(spec.settings, spec.coord)
     validate_dict(spec.context, "context")
     validate_string(spec.template_name, "template_name", allow_empty=False)
     validate_tuple(spec.iterator_key, "iterator_key", str, allow_empty=True)

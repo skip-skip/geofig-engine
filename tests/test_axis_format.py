@@ -623,3 +623,75 @@ def test_facet_layout_and_sharing_preserved():
     for ax in fig.axes:
         assert ax.get_shared_x_axes().joined(ax, fig.axes[0])
         assert ax.get_xlabel() == "X-LAB"
+
+
+# ---------------------------------------------------------------------------
+# Construction-time axis validation (WP-F): validate_figure_spec on settings
+# ---------------------------------------------------------------------------
+
+
+def _construction_spec(settings):
+    from geofig_engine.core.geom import GeomPoint
+    from geofig_engine.core.layer import LayerSpec
+    from geofig_engine.core.stat import StatIdentity
+
+    return FigureSpec(
+        data=pd.DataFrame({"x": [1.0], "y": [2.0]}),
+        mappings={},
+        settings=settings,
+        context={},
+        template_name="test",
+        coord=CoordCartesian(),
+        layers=[
+            LayerSpec(
+                geom=GeomPoint(),
+                stat=StatIdentity(),
+                visual_mapping={"x": pd.Series([1.0]), "y": pd.Series([2.0])},
+            )
+        ],
+    )
+
+
+@pytest.mark.parametrize(
+    "bad_axis",
+    [
+        {"limits": [0, 100]},
+        {"limits": [[0, 100]]},
+        {"limits": [[0, 100], [100]]},
+        {"limits": [[0, 100], [0, 100], [0, 100]]},
+    ],
+)
+def test_axis_limits_validation_at_construction(bad_axis):
+    with pytest.raises(ValueError):
+        _construction_spec({"axis": bad_axis})
+
+
+def test_bad_label_policy_raises_at_construction():
+    with pytest.raises(ValueError):
+        _construction_spec({"axis": {"label_policy": "slanted"}})
+
+
+def test_nonpositive_tick_step_raises_at_construction():
+    with pytest.raises(ValueError):
+        _construction_spec({"axis": {"tick_step": 0}})
+    with pytest.raises(ValueError):
+        _construction_spec({"axis": {"grid_step": -3}})
+
+
+def test_bad_tick_format_raises_at_construction():
+    with pytest.raises(ValueError):
+        _construction_spec({"axis": {"tick_format": 123}})
+
+
+def test_valid_axis_constructs_cleanly():
+    spec = _construction_spec(
+        {"axis": {"limits": [[0, 100], [0, 100]], "grid_step": 20, "tick_step": 20}}
+    )
+    assert spec is not None
+
+
+def test_legacy_flat_keys_construct_without_axis():
+    spec = _construction_spec(
+        {"xlim": (0, 100), "ylim": (0, 100), "grid_step": 20, "tick_step": 20}
+    )
+    assert spec is not None
