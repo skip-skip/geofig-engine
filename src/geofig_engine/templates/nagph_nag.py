@@ -11,9 +11,11 @@ from geofig_engine.utils.typing import SourceType
 NAGPH_NAG_DEFAULTS: dict[str, Any] = {
     "figsize": (8, 6),
     "title": "NAG pH vs NAG — Classification",
-    "grid": True,
-    "xlabel": "NAG pH",
-    "ylabel": "NAG (kg H\u2082SO\u2084/t)",
+    "axis": {
+        "grid": True,
+        "xlabel": "NAG pH",
+        "ylabel": "NAG (kg H\u2082SO\u2084/t)",
+    },
 }
 
 

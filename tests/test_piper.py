@@ -139,9 +139,8 @@ class TestBuildPiperSpecs:
         assert left.settings == {}
         assert right.settings == {}
         dia = specs[0].children[2]
-        assert dia.settings["xlim"] == (0, 100)
-        assert dia.settings["ylim"] == (0, 100)
-        assert dia.settings["grid_step"] == 20
+        assert dia.settings["axis"]["limits"] == [[0, 100], [0, 100]]
+        assert dia.settings["axis"]["grid_step"] == 20
         # Secondary axes for the diamond's upper edges (identity mapping here).
         assert dia.settings["secondary_x"]["range"] == [0, 100]
         assert dia.settings["secondary_y"]["range"] == [0, 100]

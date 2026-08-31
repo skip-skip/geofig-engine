@@ -62,7 +62,7 @@ class TestBivariateIntegration:
         template = bivariate(mapping={"x": "x", "y": "y"})
         specs = engine.build_specs_from_template(
             dataset, template,
-            settings={"title": "Test", "xlabel": "X", "ylabel": "Y", "grid": True},
+            settings={"axis": {"title": "Test", "xlabel": "X", "ylabel": "Y", "grid": True}},
         )
         renderer = MatplotlibRenderer()
         fig = renderer.render(specs[0])
@@ -106,7 +106,7 @@ class TestTimeseriesIntegration:
         dataset = make_dataset()
         template = timeseries(mapping={"x": "x", "y": "y"})
         specs = engine.build_specs_from_template(dataset, template)
-        assert specs[0].settings.get("time_format") == "%Y-%m-%d"
+        assert specs[0].settings["axis"]["time_format"] == "%Y-%m-%d"
 
 
 class TestIsotopeIntegration:

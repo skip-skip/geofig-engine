@@ -73,7 +73,7 @@ class TestAnpAgp:
     def test_default_settings(self):
         t = anp_agp()
         assert "figsize" in t.default_settings
-        assert "xlabel" in t.default_settings
+        assert "xlabel" in t.default_settings["axis"]
 
     def test_mapping_preserved(self):
         mapping = {"x": "agp", "y": "anp", "color": "type"}
@@ -105,7 +105,7 @@ class TestNagphNag:
     def test_default_settings(self):
         t = nagph_nag()
         assert "figsize" in t.default_settings
-        assert "xlabel" in t.default_settings
+        assert "xlabel" in t.default_settings["axis"]
 
     def test_mapping_preserved(self):
         mapping = {"x": "nag_ph", "y": "nag", "color": "type"}

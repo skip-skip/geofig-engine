@@ -17,11 +17,13 @@ from geofig_engine.utils.typing import SourceType
 
 TIMESERIES_DEFAULTS: dict[str, Any] = {
     "figsize": (10, 6),
-    "xscale": "linear",
-    "yscale": "linear",
     "y2scale": "linear",
-    "time_format": "%Y-%m-%d",
-    "grid": True,
+    "axis": {
+        "xscale": "linear",
+        "yscale": "linear",
+        "time_format": "%Y-%m-%d",
+        "grid": True,
+    },
 }
 
 

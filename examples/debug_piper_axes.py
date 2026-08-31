@@ -55,10 +55,11 @@ def build_empty_piper() -> FigureSpec:
     diamond_child = FigureSpec(
         data=empty_df, mappings={},
         settings={
-            "xlim": (0, 100),
-            "ylim": (0, 100),
-            "grid_step": 20,
-            "tick_step": 20,
+            "axis": {
+                "limits": [[0, 100], [0, 100]],
+                "grid_step": 20,
+                "tick_step": 20,
+            },
             "secondary_x": {"range": [100, 0], "label": "Anions (%)"},
             "secondary_y": {"range": [100, 0], "label": "Cations (%)"},
         },

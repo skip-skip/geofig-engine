@@ -11,9 +11,11 @@ from geofig_engine.utils.typing import SourceType
 NPR_NNP_DEFAULTS: dict[str, Any] = {
     "figsize": (8, 8),
     "title": "NPR vs NNP — ARD Classification",
-    "grid": True,
-    "xlabel": "NPR (Neutralisation Potential Ratio)",
-    "ylabel": "NNP (Net Neutralisation Potential)",
+    "axis": {
+        "grid": True,
+        "xlabel": "NPR (Neutralisation Potential Ratio)",
+        "ylabel": "NNP (Net Neutralisation Potential)",
+    },
 }
 
 

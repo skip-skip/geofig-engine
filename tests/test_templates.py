@@ -69,7 +69,7 @@ class TestBivariateFactory:
     def test_default_settings(self):
         template = bivariate()
         assert template.default_settings["figsize"] == (10, 6)
-        assert template.default_settings["grid"] is True
+        assert template.default_settings["axis"]["grid"] is True
 
 
 class TestTimeseriesFactory:
@@ -95,7 +95,7 @@ class TestTimeseriesFactory:
 
     def test_default_settings(self):
         template = timeseries()
-        assert "time_format" in template.default_settings
+        assert "time_format" in template.default_settings["axis"]
 
 
 class TestIsotopeFactory:
@@ -147,7 +147,7 @@ class TestPieTemplate:
     def test_default_settings(self):
         t = pie(mapping={"x": "cat", "y": "val"})
         assert t.default_settings["figsize"] == (8, 8)
-        assert t.default_settings.get("polar_tick_labels") is True
+        assert t.default_settings["axis"]["options"]["polar_tick_labels"] is True
 
 
 class TestRadarTemplate:

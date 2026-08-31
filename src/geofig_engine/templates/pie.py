@@ -10,16 +10,20 @@ from geofig_engine.utils.typing import SourceType
 
 PIE_DEFAULTS: dict[str, Any] = {
     "figsize": (8, 8),
-    "xscale": "linear",
-    "yscale": "linear",
-    "grid": False,
-    "hide_spine": True,
-    "hide_angular_ticks": True,
-    "hide_radial_labels": True,
-    "hide_radial_ticks": True,
-    "polar_tick_labels": True,
-    "xlabel": "",
-    "ylabel": "",
+    "axis": {
+        "xscale": "linear",
+        "yscale": "linear",
+        "grid": False,
+        "xlabel": "",
+        "ylabel": "",
+        "options": {
+            "hide_spine": True,
+            "hide_angular_ticks": True,
+            "hide_radial_labels": True,
+            "hide_radial_ticks": True,
+            "polar_tick_labels": True,
+        },
+    },
 }
 
 

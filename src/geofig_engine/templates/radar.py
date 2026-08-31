@@ -11,14 +11,18 @@ from geofig_engine.utils.typing import SourceType
 
 RADAR_DEFAULTS: dict[str, Any] = {
     "figsize": (8, 8),
-    "xscale": "linear",
-    "yscale": "linear",
-    "grid": True,
-    "hide_spine": True,
-    "hide_angular_ticks": True,
-    "polar_tick_labels": True,
-    "xlabel": "",
-    "ylabel": "",
+    "axis": {
+        "xscale": "linear",
+        "yscale": "linear",
+        "grid": True,
+        "xlabel": "",
+        "ylabel": "",
+        "options": {
+            "hide_spine": True,
+            "hide_angular_ticks": True,
+            "polar_tick_labels": True,
+        },
+    },
 }
 
 

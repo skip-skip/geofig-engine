@@ -141,18 +141,18 @@ def _tick_label(value: float, fmt: str) -> str:
 def _child_local_bbox(child):
     """Local-space bounding box corners for a child FigureSpec.
 
-    TernaryCoord → unit triangle; CoordCartesian with settings
-    ``xlim``/``ylim`` → that axis region (e.g. the diamond's [0,100]²);
-    everything else → unit square.
+    TernaryCoord → unit triangle; CoordCartesian with axis ``limits`` (structured
+    ``axis.limits`` or legacy flat ``xlim``/``ylim``) → that region (e.g. the
+    diamond's [0,100]²); everything else → unit square.
     """
     coord = child.coord
     if isinstance(coord, TernaryCoord):
         return [(0, 0), (1, 0), (0.5, SQRT3_2), (0, 0)]
-    if isinstance(coord, CoordCartesian) and child.settings:
-        cfg = child.settings
-        if "xlim" in cfg and "ylim" in cfg:
-            x0, x1 = cfg["xlim"]
-            y0, y1 = cfg["ylim"]
+    if isinstance(coord, CoordCartesian):
+        axis = parse_axis_settings(child.settings, coord)
+        if axis.xlim is not None and axis.ylim is not None:
+            x0, x1 = axis.xlim
+            y0, y1 = axis.ylim
             return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
     return [(0, 0), (1, 0), (0, 1), (1, 1)]
 
