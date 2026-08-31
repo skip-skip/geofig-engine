@@ -24,7 +24,7 @@ Selector = Union[str, Sequence[str], Dict[str, Any]]
 SourceType = Union[DimensionSelector, str, Sequence[str], Any]
 
 # Constants
-ALLOWED_TARGETS = {"x", "y", "y2", "color", "marker", "size", "style", "alpha", "width"}
+ALLOWED_TARGETS = {"x", "y", "x2", "y2", "color", "marker", "size", "style", "alpha", "width"}
 VISUAL_ATTRIBUTES = ALLOWED_TARGETS  # Alias for clarity
 
 # Validation constants
@@ -37,6 +37,7 @@ class Channel(Enum):
     """Standard channels for visual elements. Values match mapping keys."""
     X = "x"
     Y = "y"
+    X2 = "x2"
     Y2 = "y2"
     COLOR = "color"
     MARKER = "marker"
@@ -71,6 +72,13 @@ class Mapping(Enum):
         allowed_types=(DimensionSelector, str, Sequence, int, float),
         enforce_alignment=True,
         required=True,
+    )
+    X2 = MappingData(
+        name="x2",
+        channel=Channel.X2,
+        allowed_types=(DimensionSelector, str, Sequence, int, float),
+        enforce_alignment=False,
+        required=False,
     )
     Y2 = MappingData(
         name="y2",

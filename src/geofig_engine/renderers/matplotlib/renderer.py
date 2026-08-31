@@ -615,8 +615,21 @@ class MatplotlibRenderer(BaseRenderer):
             for layer in child.layers:
                 if layer.geom.name == "function_line":
                     continue
-                x = _filter_series(layer.visual_mapping.get("x"), rows)
-                y = _filter_series(layer.visual_mapping.get("y"), rows)
+                vm = layer.visual_mapping
+                x = _filter_series(vm.get("x"), rows)
+                y = _filter_series(vm.get("y"), rows)
+                if not isinstance(x, pd.Series):
+                    x = _filter_series(vm.get("x2"), rows)
+                    if isinstance(x, pd.Series):
+                        sec = parse_secondary_settings(child.settings).get("x")
+                        if sec is not None:
+                            x = x.map(sec.inv)
+                if not isinstance(y, pd.Series):
+                    y = _filter_series(vm.get("y2"), rows)
+                    if isinstance(y, pd.Series):
+                        sec = parse_secondary_settings(child.settings).get("y")
+                        if sec is not None:
+                            y = y.map(sec.inv)
                 if not isinstance(x, pd.Series) or not isinstance(y, pd.Series):
                     continue
                 if not (pd.api.types.is_numeric_dtype(x) and pd.api.types.is_numeric_dtype(y)):
