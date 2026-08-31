@@ -147,7 +147,8 @@ class TestFrameImplication:
             ),
         ]))
         ax = fig.axes[0]
-        # Ternary frame produces grid lines + tick labels + title + ion arrows
+        # Ternary frame produces grid lines + tick labels + title + ion labels
+        # (arrows are opt-in via axis_arrows, off here).
         assert len(ax.lines) > 1
         texts = [t.get_text() for t in ax.texts]
         assert "TEST TRIANGLE" in texts

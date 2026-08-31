@@ -361,6 +361,15 @@ def test_cartesian_frame_axis_arrows():
     assert count(ax_on) == 4
 
 
+def test_cartesian_x_and_y_arrows_present():
+    # Base frame (no secondary axes): exactly 2 arrows when on, 0 when off.
+    ax_off = _render_child(TICK_TEXT_SETTINGS)
+    ax_on = _render_child({**TICK_TEXT_SETTINGS, "axis_arrows": True})
+    count = lambda ax: sum(1 for t in ax.texts if isinstance(t, matplotlib.text.Annotation))
+    assert count(ax_off) == 0
+    assert count(ax_on) == 2
+
+
 def test_cartesian_arrow_points_to_ascending_when_limits_descending():
     import matplotlib.pyplot as plt
 
@@ -555,6 +564,29 @@ def test_polar_radial_arrow_opt_in_points_outward():
     fig_on.clf()
 
 
+def test_polar_radial_arrow_independent_of_hide_toggles():
+    from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
+
+    renderer = MatplotlibRenderer()
+    fig, ax = _frame_polar_axes()
+    renderer._draw_frame(
+        ax,
+        _polar_spec(
+            {
+                "axis_arrows": True,
+                "hide_spine": True,
+                "hide_radial_ticks": True,
+            }
+        ),
+    )
+    count = lambda ax: sum(1 for t in ax.texts if isinstance(t, matplotlib.text.Annotation))
+    # The arrow is drawn regardless of the polar hide toggles.
+    assert count(ax) == 1
+    assert not ax.spines["polar"].get_visible()
+    assert ax.get_yticks().size == 0
+    fig.clf()
+
+
 # ---------------------------------------------------------------------------
 # Top-level unified single path (WP-D): render a single framed spec like a child
 # ---------------------------------------------------------------------------
@@ -632,7 +664,8 @@ def test_top_level_ternary_renders_triangle():
         },
     )
     ax = _render_single_top({}, coord=coord, layers=[layer])
-    # Ternary triangle produces grid lines + tick labels + ion arrows
+    # Ternary triangle produces grid lines + tick labels + ion labels (arrows
+    # are opt-in via axis_arrows, off here).
     assert len(ax.lines) > 1
     texts = [t.get_text() for t in ax.texts]
     assert any(t in ("20", "40", "60", "80") for t in texts)
@@ -670,6 +703,45 @@ def test_ternary_ion_labels_are_standalone_and_arrows_opt_in():
     assert count(ax_off) == 0
     # Three edges -> three arrows when opted in.
     assert count(ax_on) == 3
+
+
+def test_ternary_arrows_point_toward_ascending_value():
+    from geofig_engine.core.geom import GeomLine
+    from geofig_engine.core.layer import LayerSpec
+    from geofig_engine.core.stat import StatIdentity
+
+    coord = TernaryCoord(channels=("Mg", "Ca", "Na+K"), handedness="left")
+    layer = LayerSpec(
+        geom=GeomLine(),
+        stat=StatIdentity(),
+        visual_mapping={
+            "Mg": pd.Series([0.5], dtype=float),
+            "Ca": pd.Series([0.3], dtype=float),
+            "Na+K": pd.Series([0.2], dtype=float),
+        },
+    )
+    ax = _render_single_top({"axis_arrows": True}, coord=coord, layers=[layer])
+    anns = [t for t in ax.texts if isinstance(t, matplotlib.text.Annotation)]
+    assert len(anns) == 3
+    # The annotate head (xy) is the high-value end; the tail (xyann) the low
+    # end. Triangle vertices: base-left (0,0), base-right (1,0), apex (0.5,h).
+    # Ascending edges:
+    #   - bottom: (0,0) -> (1,0): horizontal, gains x only,
+    #   - left:   (0,0) -> apex: gains both x and y,
+    #   - right:  (1,0) -> apex: gains y only.
+    horizontal = 0
+    rising = 0
+    for a in anns:
+        head = np.asarray(a.xy, dtype=float)
+        tail = np.asarray(a.xyann, dtype=float)
+        delta = head - tail
+        if abs(delta[1]) < 1e-9:
+            horizontal += 1
+            assert delta[0] > 0  # bottom edge points toward increasing x
+        if delta[1] > 1e-9:
+            rising += 1
+    assert horizontal == 1  # exactly the bottom (flattened to the base) edge
+    assert rising == 2  # left and right edges both rise toward the apex
 
 
 def test_plain_single_stays_native_axes():
