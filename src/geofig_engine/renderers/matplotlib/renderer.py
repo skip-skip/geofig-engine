@@ -823,17 +823,25 @@ class MatplotlibRenderer(BaseRenderer):
         return None
 
     def _apply_settings(self, ax, fig, spec):
-        """Apply global settings to a single Axes."""
+        """Apply global settings to a single Axes, via AxisFormat."""
+        axis = parse_axis_settings(spec.settings, spec.coord)
+        self._apply_axis_format_native(ax, fig, spec, axis)
+
+    def _apply_axis_format_native(self, ax, fig, spec, axis: AxisFormat):
+        """Apply an :class:`AxisFormat` to a native (non-stamped) Axes.
+
+        Reads the same shared formatting model the unified frame pipeline uses
+        (title/labels/limits/scales/grid/time_format), so the native single path
+        and the faceted panel path consume the exact same :class:`AxisFormat`
+        as the affine-stamped child frames (which use :meth:`_draw_frame`).
+        Facet panels are native subplot axes, so this thin native adapter emits
+        plain matplotlib mutators rather than stamped custom-frame artists.
+        """
         coord = spec.coord
-        title = spec.settings.get("title")
-        if title:
-            ax.set_title(title)
-        xlabel = spec.settings.get("xlabel")
-        if xlabel is None:
-            xlabel = self._channel_label(spec, "x")
-        ylabel = spec.settings.get("ylabel")
-        if ylabel is None:
-            ylabel = self._channel_label(spec, "y")
+        if axis.title:
+            ax.set_title(axis.title)
+        xlabel = axis.xlabel if axis.xlabel is not None else self._channel_label(spec, "x")
+        ylabel = axis.ylabel if axis.ylabel is not None else self._channel_label(spec, "y")
         if isinstance(coord, CoordFlipped):
             if ylabel:
                 ax.set_xlabel(ylabel)
@@ -844,8 +852,8 @@ class MatplotlibRenderer(BaseRenderer):
                 ax.set_xlabel(xlabel)
             if ylabel:
                 ax.set_ylabel(ylabel)
-        xlim = spec.settings.get("xlim")
-        ylim = spec.settings.get("ylim")
+        xlim = axis.xlim
+        ylim = axis.ylim
         if isinstance(coord, CoordFlipped):
             if ylim:
                 ax.set_xlim(ylim)
@@ -856,8 +864,8 @@ class MatplotlibRenderer(BaseRenderer):
                 ax.set_xlim(xlim)
             if ylim:
                 ax.set_ylim(ylim)
-        xscale = spec.settings.get("xscale")
-        yscale = spec.settings.get("yscale")
+        xscale = axis.xscale
+        yscale = axis.yscale
         if isinstance(coord, CoordFlipped):
             if yscale and yscale != ax.get_xscale():
                 ax.set_xscale(yscale)
@@ -870,14 +878,13 @@ class MatplotlibRenderer(BaseRenderer):
                 ax.set_yscale(yscale)
         if isinstance(coord, CoordFixed):
             ax.set_aspect(coord.params.get("ratio", 1.0))
-        if "grid" in spec.settings:
-            if spec.settings["grid"]:
+        if axis.grid is not None:
+            if axis.grid:
                 ax.grid(True, zorder=0)
             else:
                 ax.grid(False)
-        time_format = spec.settings.get("time_format")
-        if time_format:
-            ax.xaxis.set_major_formatter(DateFormatter(time_format))
+        if axis.time_format:
+            ax.xaxis.set_major_formatter(DateFormatter(axis.time_format))
         figname = spec.settings.get("figname")
         if figname:
             fig.figname = figname
@@ -1060,13 +1067,16 @@ class MatplotlibRenderer(BaseRenderer):
         # Compute global limits for fixed/partially-fixed scales
         glims = self._compute_facet_limits(spec, panels, scales)
 
+        # One AxisFormat drives every faceted panel (native subplot axes).
+        axis = parse_axis_settings(spec.settings, spec.coord)
+
         if isinstance(facet, FacetWrap):
             axes_flat = axes.flat
             for idx, item in enumerate(panels):
                 ax = axes_flat[idx]
                 subset, ctx = item
                 self._render_axes(ax, spec, subset)
-                self._apply_settings(ax, fig, spec)
+                self._apply_axis_format_native(ax, fig, spec, axis)
                 self._apply_facet_panel(ax, ctx, glims, facet.scales)
                 ax.set_title(", ".join(f"{k}={v}" for k, v in ctx.items()), fontsize=10)
             for idx in range(len(panels), len(axes_flat)):
@@ -1081,7 +1091,7 @@ class MatplotlibRenderer(BaseRenderer):
                         continue
                     subset, ctx = item
                     self._render_axes(ax, spec, subset)
-                    self._apply_settings(ax, fig, spec)
+                    self._apply_axis_format_native(ax, fig, spec, axis)
                     self._apply_facet_panel(ax, ctx, glims, facet.scales)
                     if ri == 0:
                         ax.set_title(ctx.get(facet.params["col"], ""), fontsize=10)

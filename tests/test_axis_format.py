@@ -557,3 +557,69 @@ def test_plain_single_stays_native_axes():
     ax = _render_single_top({"xlabel": "X AXIS"}, layers=layers)
     assert ax.get_xlabel() == "X AXIS"
     assert ax.axison is True
+
+
+# ---------------------------------------------------------------------------
+# Facet panels consume AxisFormat (WP-E): per-panel native formatting
+# ---------------------------------------------------------------------------
+
+
+def _render_facet(settings, scales="fixed"):
+    from geofig_engine.core.facet import FacetWrap
+    from geofig_engine.core.geom import GeomPoint
+    from geofig_engine.core.layer import LayerSpec
+    from geofig_engine.core.stat import StatIdentity
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
+
+    data = pd.DataFrame({"x": [1, 2, 3, 4], "y": [5, 6, 7, 8], "g": ["A", "A", "B", "B"]})
+    spec = FigureSpec(
+        data=data,
+        mappings={},
+        settings={"figsize": (10, 6), **settings},
+        context={},
+        template_name="test",
+        facet=FacetWrap(by="g", scales=scales),
+        layers=[
+            LayerSpec(
+                geom=GeomPoint(),
+                stat=StatIdentity(),
+                visual_mapping={"x": data["x"], "y": data["y"]},
+            )
+        ],
+    )
+    fig = MatplotlibRenderer().render(spec)
+    return fig
+
+
+def test_facet_panels_formatted_from_axis_format():
+    fig = _render_facet(
+        {"axis": {"xlabel": "X-LAB", "ylabel": "Y-LAB", "grid": True}}
+    )
+    assert len(fig.axes) == 2
+    for ax in fig.axes:
+        assert ax.get_xlabel() == "X-LAB"
+        assert ax.get_ylabel() == "Y-LAB"
+        assert any(gl.get_visible() for gl in ax.get_xgridlines())
+
+
+def test_facet_flat_and_axis_limits_parity():
+    flat = _render_facet({"xlim": (0, 10), "ylim": (0, 10)}, scales="free")
+    axis_form = _render_facet(
+        {"axis": {"limits": [[0, 10], [0, 10]]}}, scales="free"
+    )
+    for a, b in zip(flat.axes, axis_form.axes):
+        assert a.get_xlim() == b.get_xlim()
+        assert a.get_ylim() == b.get_ylim()
+
+
+def test_facet_layout_and_sharing_preserved():
+    fig = _render_facet({"axis": {"xlabel": "X-LAB"}})
+    # Same two panels, x shared (fixed scales), each carries the AxisFormat label.
+    assert len(fig.axes) == 2
+    for ax in fig.axes:
+        assert ax.get_shared_x_axes().joined(ax, fig.axes[0])
+        assert ax.get_xlabel() == "X-LAB"
