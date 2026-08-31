@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import matplotlib
+
 from geofig_engine.core.axis import AxisFormat, parse_axis_settings, VALID_LABEL_POLICIES
 from geofig_engine.core.coord import CoordCartesian, CoordPolar, TernaryCoord
 from geofig_engine.core.spec import FigureSpec
@@ -296,6 +298,31 @@ def test_tick_format_changes_tick_labels():
     assert "20" in plain_texts
     assert "20.0" in form_texts
     assert "20" not in form_texts and "20.0" not in plain_texts
+
+
+def test_draw_axis_arrow_helper():
+    from geofig_engine.renderers.matplotlib.renderer import _draw_axis_arrow
+
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+    identity = np.eye(3)
+    _draw_axis_arrow(
+        ax,
+        identity,
+        (0.0, 0.0),
+        (1.0, 0.0),
+        (1.0, 0.0),
+        label="X",
+        label_fs=7,
+    )
+    _draw_axis_arrow(ax, identity, (0.0, 0.0), (0.0, 1.0), (0.0, 1.0))
+    # Two arrows → two annotate artists.
+    assert len(ax.texts) >= 2
+    assert any(isinstance(t, matplotlib.text.Annotation) for t in ax.texts)
+    labels = {t.get_text() for t in ax.texts}
+    assert "X" in labels
+    plt.close(fig)
 
 
 def test_secondary_axis_titles_from_flat_keys():

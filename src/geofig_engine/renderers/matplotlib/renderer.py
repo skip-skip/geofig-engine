@@ -138,6 +138,67 @@ def _tick_label(value: float, fmt: str) -> str:
     return f"{value:{spec}}"
 
 
+def _draw_axis_arrow(
+    ax,
+    matrix: np.ndarray,
+    start_local,
+    end_local,
+    local_vec,
+    style: str = "<|-",
+    lw: float = 1.0,
+    offset: float = 0.0,
+    label: str | None = None,
+    label_fs: float | None = None,
+    label_policy: str = "upright",
+):
+    """Draw a direction arrow parallel to an axis, pointing toward increasing values.
+
+    ``start_local`` / ``end_local`` are the axis's low-value and high-value
+    local-space endpoints (callers order them low→high so the arrowhead always
+    lands on the high-value end — the "axis values must be sorted" rule).
+    Both endpoints are mapped to world space via ``matrix`` so the arrow deforms
+    identically to framed geometry, and the arrowhead (``style``) is drawn at the
+    high-value end with ``ax.annotate``.
+
+    ``offset`` is a perpendicular displacement (local units) applied to both
+    endpoints so the arrow sits parallel to, but clear of, the axis/its ticks.
+    An optional ``label`` is placed at the midpoint and rotated with
+    :func:`~geofig_engine.core.link.label_rotation` using ``local_vec`` (the
+    local tangent of the edge), so it stays parallel under ``"parallel"`` policy.
+    """
+    start_arr = np.asarray([start_local, end_local], dtype=float)
+    if offset:
+        u = start_arr[1] - start_arr[0]
+        norm = np.hypot(u[0], u[1])
+        if norm:
+            perp = np.array([-u[1], u[0]]) * (offset / norm)
+            start_arr = start_arr + perp
+
+    world = _apply_matrix_pts(matrix, start_arr)
+    ax.annotate(
+        "",
+        xy=world[1],
+        xytext=world[0],
+        arrowprops=dict(arrowstyle=style, color="black", lw=lw),
+        annotation_clip=False,
+    )
+
+    if label:
+        wmid = _apply_matrix_pts(matrix, [(start_arr[0] + start_arr[1]) / 2.0])[0]
+        rot = label_rotation(tuple(local_vec), matrix, policy=label_policy)
+        ax.text(
+            wmid[0],
+            wmid[1],
+            label,
+            ha="center",
+            va="center",
+            rotation=rot,
+            fontsize=label_fs,
+            bbox=dict(facecolor="white", edgecolor="none", pad=1),
+            clip_on=False,
+        )
+
+
 def _child_local_bbox(child):
     """Local-space bounding box corners for a child FigureSpec.
 
