@@ -144,7 +144,7 @@ def _draw_axis_arrow(
     start_local,
     end_local,
     local_vec,
-    style: str = "<|-",
+    style: str = "-|>",
     lw: float = 1.0,
     label: str | None = None,
     label_fs: float | None = None,
