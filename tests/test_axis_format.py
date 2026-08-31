@@ -339,6 +339,85 @@ def test_secondary_axis_titles_from_flat_keys():
     assert "Cations (%)" in texts
 
 
+def test_cartesian_frame_axis_arrows():
+    ax_off = _render_child(
+        {
+            **TICK_TEXT_SETTINGS,
+            "secondary_x": {"range": [100, 0]},
+            "secondary_y": {"range": [100, 0]},
+        }
+    )
+    ax_on = _render_child(
+        {
+            **TICK_TEXT_SETTINGS,
+            "axis_arrows": True,
+            "secondary_x": {"range": [100, 0]},
+            "secondary_y": {"range": [100, 0]},
+        }
+    )
+    count = lambda ax: sum(1 for t in ax.texts if isinstance(t, matplotlib.text.Annotation))
+    assert count(ax_off) == 0
+    # Primary x, primary y, secondary x, secondary y → four arrows.
+    assert count(ax_on) == 4
+
+
+def test_cartesian_arrow_points_to_ascending_when_limits_descending():
+    import matplotlib.pyplot as plt
+
+    from geofig_engine.core.coord import CoordCartesian
+    from geofig_engine.core.geom import GeomPoint
+    from geofig_engine.core.layer import LayerSpec
+    from geofig_engine.core.link import LinkTransform
+    from geofig_engine.core.stat import StatIdentity
+    from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
+
+    empty = pd.DataFrame({"v": []}, dtype=float)
+    # x declared descending (100 -> 0): arrow must still point toward the
+    # higher numeric value (from low x to high x in local space).
+    child = FigureSpec(
+        data=empty,
+        mappings={},
+        settings={"xlim": (10, 0), "ylim": (0, 10), "grid_step": 2, "tick_step": 2, "axis_arrows": True},
+        context={},
+        template_name="test",
+        coord=CoordCartesian(),
+        transform=LinkTransform(),
+        layers=[
+            LayerSpec(
+                geom=GeomPoint(),
+                stat=StatIdentity(),
+                visual_mapping={"x": pd.Series([], dtype=float), "y": pd.Series([], dtype=float)},
+                zorder=10,
+            )
+        ],
+    )
+    parent = FigureSpec(
+        data=empty,
+        mappings={},
+        settings={"figsize": (10, 8)},
+        context={},
+        template_name="test",
+        children=(child,),
+    )
+    ax = MatplotlibRenderer().render(parent).axes[0]
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 10)
+    ax.figure.canvas.draw()
+    x_coords = []
+    for a in (t for t in ax.texts if isinstance(t, matplotlib.text.Annotation)):
+        pad = a.arrow_patch
+        dc = ax.transData.inverted().transform(
+            pad.get_transform().transform(pad.get_path().vertices)
+        )
+        xs = dc[:, 0]
+        # Focus on the bottom-edge x axis arrow: its path is the one whose
+        # y-extent stays below the frame (near y=0) but spans most of x.
+        if xs.max() - xs.min() > 5:
+            x_coords.append((xs.min(), xs.max()))
+    assert x_coords, "no x-axis arrow found"
+    assert all(lo < hi for lo, hi in x_coords)
+
+
 # ---------------------------------------------------------------------------
 # Custom polar frame (WP-C): _draw_polar_frame on AxisFormat
 # ---------------------------------------------------------------------------

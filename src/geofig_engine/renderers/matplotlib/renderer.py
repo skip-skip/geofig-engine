@@ -146,7 +146,6 @@ def _draw_axis_arrow(
     local_vec,
     style: str = "<|-",
     lw: float = 1.0,
-    offset: float = 0.0,
     label: str | None = None,
     label_fs: float | None = None,
     label_policy: str = "upright",
@@ -155,24 +154,18 @@ def _draw_axis_arrow(
 
     ``start_local`` / ``end_local`` are the axis's low-value and high-value
     local-space endpoints (callers order them low→high so the arrowhead always
-    lands on the high-value end — the "axis values must be sorted" rule).
-    Both endpoints are mapped to world space via ``matrix`` so the arrow deforms
-    identically to framed geometry, and the arrowhead (``style``) is drawn at the
-    high-value end with ``ax.annotate``.
+    lands on the high-value end — the "axis values must be sorted" rule). Callers
+    displace these endpoints to set the arrow's offset from the axis (e.g. below
+    the bottom edge, left of the left edge) before passing them. Both endpoints
+    are mapped to world space via ``matrix`` so the arrow deforms identically to
+    framed geometry, and the arrowhead (``style``) is drawn at the high-value end
+    with ``ax.annotate``.
 
-    ``offset`` is a perpendicular displacement (local units) applied to both
-    endpoints so the arrow sits parallel to, but clear of, the axis/its ticks.
     An optional ``label`` is placed at the midpoint and rotated with
     :func:`~geofig_engine.core.link.label_rotation` using ``local_vec`` (the
     local tangent of the edge), so it stays parallel under ``"parallel"`` policy.
     """
     start_arr = np.asarray([start_local, end_local], dtype=float)
-    if offset:
-        u = start_arr[1] - start_arr[0]
-        norm = np.hypot(u[0], u[1])
-        if norm:
-            perp = np.array([-u[1], u[0]]) * (offset / norm)
-            start_arr = start_arr + perp
 
     world = _apply_matrix_pts(matrix, start_arr)
     ax.annotate(
@@ -447,6 +440,44 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
         wt = _apply_matrix_pts(matrix, [((x0 + x1) / 2.0, y1 + 0.12 * (y1 - y0))])[0]
         ax.text(wt[0], wt[1], title, ha="center", va="bottom", fontsize=title_fs,
                 fontweight="bold", clip_on=False)
+
+    # -- axis direction arrows (opt-in) --
+    if axis.show_arrows():
+        # Primary axes: point toward ascending numeric values regardless of
+        # declaration order ("axis values must be sorted"). Offsets place the
+        # arrows outside the box (below the bottom edge / left of the left
+        # edge), matching the tick-label offset ``d``.
+        if x0 != x1:
+            _draw_axis_arrow(
+                ax, matrix,
+                (min(x0, x1), y0 - d), (max(x0, x1), y0 - d),
+                (1.0, 0.0), lw=frame_lw,
+            )
+        if y0 != y1:
+            _draw_axis_arrow(
+                ax, matrix,
+                (x0 - d, min(y0, y1)), (x0 - d, max(y0, y1)),
+                (0.0, 1.0), lw=frame_lw,
+            )
+        # Secondary axes: point toward ascending secondary values, offset
+        # outside the opposite edge (above the top / right of the right edge).
+        if "x" in secondary:
+            sec = secondary["x"]
+            slo, shi = min(sec.range), max(sec.range)
+            _draw_axis_arrow(
+                ax, matrix,
+                (sec.inv(slo), y1 + d), (sec.inv(shi), y1 + d),
+                (1.0, 0.0), lw=frame_lw,
+            )
+        if "y" in secondary:
+            sec = secondary["y"]
+            slo, shi = min(sec.range), max(sec.range)
+            _draw_axis_arrow(
+                ax, matrix,
+                (x1 + d, sec.inv(slo)), (x1 + d, sec.inv(shi)),
+                (0.0, 1.0), lw=frame_lw,
+            )
+
 
 
 def _frame_settings_dict(axis: AxisFormat) -> dict:
