@@ -1,6 +1,6 @@
 # WP-I: Tests for the unified axis/frame pipeline
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.54
 **Depends on**: 14_54_wpa..14_54_wph
 
@@ -47,9 +47,9 @@ the **same functions and spec** as a child.
 
 ## Verification
 
-- [ ] `python -m pytest tests/ -q` — all pass (849 + new)
-- [ ] `python examples/hydro_demo.py` — 7 figures render, appearance preserved
-- [ ] `python examples/debug_piper_axes.py` — diamond unchanged (children path)
+- [x] `python -m pytest tests/ -q` — all pass (909)
+- [x] `python examples/hydro_demo.py` — 7 figures render, appearance preserved
+- [x] `python examples/debug_piper_axes.py` — diamond unchanged (children path)
 
 ## Files
 
