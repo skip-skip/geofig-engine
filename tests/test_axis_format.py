@@ -180,6 +180,16 @@ def test_axis_arrows_model_and_parse(coord):
         parse_axis_settings({"axis_arrows": 1}, coord)
 
 
+def test_axis_arrow_offset_model_and_parse(coord):
+    assert parse_axis_settings({}, coord).axis_arrow_offset is None
+    assert parse_axis_settings({"axis_arrow_offset": 1.5}, coord).axis_arrow_offset == 1.5
+    assert AxisFormat(axis_arrow_offset=1.5).axis_arrow_offset == 1.5
+    with pytest.raises(ValueError):
+        AxisFormat(axis_arrow_offset="nope")
+    with pytest.raises(ValueError):
+        parse_axis_settings({"axis_arrow_offset": "nope"}, coord)
+
+
 @pytest.mark.parametrize("coord", [CoordCartesian(), CoordPolar(), TernaryCoord()])
 def test_legacy_invalid_cases_raise(coord):
     with pytest.raises(ValueError):
@@ -368,6 +378,43 @@ def test_cartesian_x_and_y_arrows_present():
     count = lambda ax: sum(1 for t in ax.texts if isinstance(t, matplotlib.text.Annotation))
     assert count(ax_off) == 0
     assert count(ax_on) == 2
+
+
+def test_cartesian_arrow_offset_default_and_override():
+    from geofig_engine.core.coord import CoordCartesian
+    from geofig_engine.core.geom import GeomLine
+    from geofig_engine.core.layer import LayerSpec
+    from geofig_engine.core.stat import StatIdentity
+
+    default_layer = lambda: [
+        LayerSpec(
+            geom=GeomLine(),
+            stat=StatIdentity(),
+            visual_mapping={"x": pd.Series([], dtype=float), "y": pd.Series([], dtype=float)},
+        )
+    ]
+
+    def bottom_arrow_y(settings):
+        ax = _render_single_top(settings, coord=CoordCartesian(), layers=default_layer())
+        anns = [t for t in ax.texts if isinstance(t, matplotlib.text.Annotation)]
+        ys = []
+        for a in anns:
+            st = np.asarray(a.xyann, dtype=float)
+            en = np.asarray(a.xy, dtype=float)
+            # Bottom-edge arrow: horizontal (equal y) and below the box (y<0).
+            if abs(en[1] - st[1]) < 1e-9 and en[1] < 0:
+                ys.append(float(en[1]))
+        assert len(ys) == 1, f"expected one bottom arrow, got {ys}"
+        return ys[0]
+
+    base = {"xlim": (0, 100), "ylim": (0, 100), "tick_step": 20, "axis_arrows": True}
+    default_y = bottom_arrow_y(base)
+    explicit_y = bottom_arrow_y({**base, "axis_arrow_offset": 20.0})
+    # Default multiplier (2*d = 2*5) places the arrow beyond the tick-label
+    # strip (tick offset d = 100/20 = 5), and an explicit offset overrides it.
+    assert default_y == -10.0
+    assert explicit_y == -20.0
+    assert explicit_y < default_y
 
 
 def test_cartesian_arrow_points_to_ascending_when_limits_descending():
@@ -768,12 +815,13 @@ def test_ternary_arrows_point_toward_ascending_value_right_handed():
     ax = _render_single_top({"axis_arrows": True}, coord=coord, layers=[layer])
     anns = [t for t in ax.texts if isinstance(t, matplotlib.text.Annotation)]
     assert len(anns) == 3
-    # For a RIGHT-handed (anion) triangle the reversal flags are
-    # rev_bottom=False, rev_left=True, rev_right=False, so the increasing
-    # (100%) corner is:
-    #   - bottom: base-right -> arrow points RIGHT (increasing x),
-    #   - left:   base-left -> arrow falls toward the base-left,
-    #   - right:  apex -> arrow rises toward the apex.
+    # Both cation and anion triangles read with the same (non-mirrored) value
+    # pattern, so the right-handed triangle shares the left-handed reversals
+    # (rev_bottom=True, rev_left=False, rev_right=True). The increasing (100%)
+    # corner per edge:
+    #   - bottom: base-left -> arrow points LEFT (decreasing x),
+    #   - left:   apex -> arrow rises toward the apex,
+    #   - right:  base-right -> arrow falls toward the base-right.
     horizontal = 0
     rising = 0
     falling = 0
@@ -783,14 +831,14 @@ def test_ternary_arrows_point_toward_ascending_value_right_handed():
         delta = head - tail
         if abs(delta[1]) < 1e-9:
             horizontal += 1
-            assert delta[0] > 0  # bottom edge points toward base-right (increasing x)
+            assert delta[0] < 0  # bottom edge points toward base-left (increasing x reversed)
         if delta[1] > 1e-9:
-            rising += 1  # right edge rises toward the apex
+            rising += 1  # left edge rises toward the apex
         if delta[1] < -1e-9:
-            falling += 1  # left edge falls toward the base-left
+            falling += 1  # right edge falls toward the base-right
     assert horizontal == 1  # exactly the bottom (flattened to the base) edge
-    assert rising == 1  # only the right edge rises toward the apex
-    assert falling == 1  # the left edge falls toward its 100% corner
+    assert rising == 1  # only the left edge rises toward the apex
+    assert falling == 1  # the right edge falls toward its 100% corner
 
 
 def test_plain_single_stays_native_axes():

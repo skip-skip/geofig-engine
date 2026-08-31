@@ -137,6 +137,7 @@ class AxisFormat:
     )
     frame_linewidth: float = 1.0
     label_offset: float | None = None
+    axis_arrow_offset: float | None = None
 
     # Per-coordinate extension
     options: dict[str, Any] = field(default_factory=dict)
@@ -188,6 +189,10 @@ class AxisFormat:
             raise ValueError(f"grid_style must be a dict, got {self.grid_style!r}")
         if self.label_offset is not None:
             object.__setattr__(self, "label_offset", _scalar(self.label_offset, "label_offset"))
+        if self.axis_arrow_offset is not None:
+            object.__setattr__(
+                self, "axis_arrow_offset", _scalar(self.axis_arrow_offset, "axis_arrow_offset")
+            )
 
         if not isinstance(self.options, dict):
             raise ValueError(f"options must be a dict, got {self.options!r}")
@@ -292,5 +297,6 @@ def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
         yscale=_pick("yscale"),
         time_format=_pick("time_format"),
         tick_format=_pick("tick_format", default=":g"),
+        axis_arrow_offset=_pick("axis_arrow_offset"),
         options=options,
     )

@@ -126,6 +126,11 @@ def _affine_from_matrix(matrix: np.ndarray) -> Affine2D:
 
 SQRT3_2 = math.sqrt(3) / 2.0
 
+# Default perpendicular offset for axis arrows, expressed as a multiple of the
+# tick-label offset so arrows sit clearly beyond the label strip when no
+# explicit ``axis_arrow_offset`` is configured.
+_ARROW_OFFSET_MULT = 2.0
+
 
 def _tick_label(value: float, fmt: str) -> str:
     """Format a numeric tick label with a format-spec string.
@@ -228,9 +233,16 @@ def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
     grid_style = axis.grid_style
     tick_fmt = axis.tick_format
 
-    rev_bottom = handedness == "left"
-    rev_left = handedness == "right"
-    rev_right = handedness == "left"
+    # Value-range reversal per edge (drives both tick labels and arrows so they
+    # stay consistent). Both the cation (left) and anion (right) triangles read
+    # with the same non-mirrored pattern, so the reversal flags do not depend on
+    # handedness (which only mirrors the physical placement of the triangle):
+    #   base edge   -> increasing toward the base-left corner (100% there)
+    #   left edge   -> increasing toward the apex
+    #   right edge  -> increasing toward the base-right corner
+    rev_bottom = True
+    rev_left = False
+    rev_right = True
 
     # -- triangle outline (local space) --
     tri_local = [(0, 0), (1, 0), (0.5, SQRT3_2), (0, 0)]
@@ -308,7 +320,7 @@ def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
     # edge is given by the same rev_* flags that orient the tick labels, so the
     # arrow always agrees with the displayed scale regardless of handedness.
     if axis.show_arrows():
-        arrow_off = 0.06
+        arrow_off = axis.axis_arrow_offset if axis.axis_arrow_offset is not None else 0.06
         apex_off = (arrow_off * cos30, arrow_off * 0.5)
 
         # Bottom edge (parallel axis base-left -> base-right).
@@ -417,6 +429,11 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     if d is None:
         d = 1.0 if x1 - x0 == 1.0 else (x1 - x0) / 20.0
 
+    # -- axis-arrow offset from the edge (default past the tick-label strip) --
+    d_arrow = axis.axis_arrow_offset
+    if d_arrow is None:
+        d_arrow = _ARROW_OFFSET_MULT * d
+
     # -- tick labels on bottom edge (world-side text) --
     # X-axis ticks at tick_step along the bottom (y0) edge, interior only.
     for tx in np.arange(x0, x1 + 0.5 * tick_step, tick_step):
@@ -483,17 +500,17 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
         # Primary axes: point toward ascending numeric values regardless of
         # declaration order ("axis values must be sorted"). Offsets place the
         # arrows outside the box (below the bottom edge / left of the left
-        # edge), matching the tick-label offset ``d``.
+        # edge), beyond the tick-label strip (``d_arrow``).
         if x0 != x1:
             _draw_axis_arrow(
                 ax, matrix,
-                (min(x0, x1), y0 - d), (max(x0, x1), y0 - d),
+                (min(x0, x1), y0 - d_arrow), (max(x0, x1), y0 - d_arrow),
                 (1.0, 0.0), lw=frame_lw,
             )
         if y0 != y1:
             _draw_axis_arrow(
                 ax, matrix,
-                (x0 - d, min(y0, y1)), (x0 - d, max(y0, y1)),
+                (x0 - d_arrow, min(y0, y1)), (x0 - d_arrow, max(y0, y1)),
                 (0.0, 1.0), lw=frame_lw,
             )
         # Secondary axes: point toward ascending secondary values, offset
@@ -503,7 +520,7 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
             slo, shi = min(sec.range), max(sec.range)
             _draw_axis_arrow(
                 ax, matrix,
-                (sec.inv(slo), y1 + d), (sec.inv(shi), y1 + d),
+                (sec.inv(slo), y1 + d_arrow), (sec.inv(shi), y1 + d_arrow),
                 (1.0, 0.0), lw=frame_lw,
             )
         if "y" in secondary:
@@ -511,7 +528,7 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
             slo, shi = min(sec.range), max(sec.range)
             _draw_axis_arrow(
                 ax, matrix,
-                (x1 + d, sec.inv(slo)), (x1 + d, sec.inv(shi)),
+                (x1 + d_arrow, sec.inv(slo)), (x1 + d_arrow, sec.inv(shi)),
                 (0.0, 1.0), lw=frame_lw,
             )
 
@@ -1079,10 +1096,13 @@ class MatplotlibRenderer(BaseRenderer):
             r_lo, r_hi = ax.get_ylim()
             if r_hi - r_lo > 1e-9:
                 theta0 = math.pi / 2.0
+                # ``axis_arrow_offset`` adds radial inset (fraction of range) to
+                # the arrow's endpoints along the ray, defaulting to no change.
+                k = axis.axis_arrow_offset if axis.axis_arrow_offset is not None else 0.0
                 _draw_axis_arrow(
                     ax, np.eye(3),
-                    (theta0, r_lo + 0.10 * (r_hi - r_lo)),
-                    (theta0, 0.92 * r_hi),
+                    (theta0, r_lo + (0.10 + k) * (r_hi - r_lo)),
+                    (theta0, r_hi * max(0.0, 0.92 - k)),
                     (0.0, 1.0), lw=axis.frame_linewidth,
                 )
 
