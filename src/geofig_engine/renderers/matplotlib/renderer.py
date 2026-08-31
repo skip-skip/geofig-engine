@@ -17,6 +17,7 @@ import matplotlib.text
 
 from matplotlib.transforms import Affine2D, IdentityTransform
 
+from geofig_engine.core.axis import AxisFormat, parse_axis_settings
 from geofig_engine.core.coord import CoordCartesian, CoordFlipped, CoordFixed, CoordPolar, StiffCoord, TernaryCoord
 from geofig_engine.core.facet import FacetGrid, FacetNull, FacetWrap
 from geofig_engine.core.layer import LayerSpec
@@ -126,6 +127,17 @@ def _affine_from_matrix(matrix: np.ndarray) -> Affine2D:
 SQRT3_2 = math.sqrt(3) / 2.0
 
 
+def _tick_label(value: float, fmt: str) -> str:
+    """Format a numeric tick label with a format-spec string.
+
+    ``fmt`` is a matplotlib-style format spec such as ``":g"`` or ``":.1f"``
+    (the leading ``:`` is optional). The default ``":g"`` reproduces the
+    current ``f"{x:g}"`` output for numeric tick labels.
+    """
+    spec = fmt[1:] if fmt.startswith(":") else fmt
+    return f"{value:{spec}}"
+
+
 def _child_local_bbox(child):
     """Local-space bounding box corners for a child FigureSpec.
 
@@ -145,17 +157,22 @@ def _child_local_bbox(child):
     return [(0, 0), (1, 0), (0, 1), (1, 1)]
 
 
-def _draw_ternary_frame(ax, matrix, coord, settings):
+def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
     """Draw ternary triangle frame in local space, stamped by matrix.
 
-    Reads ions from coord.channels, reversals from coord.handedness,
-    title from settings.
+    Reads ions from coord.channels, reversals from coord.handedness, and all
+    styling/formatting from the parsed :class:`AxisFormat` (``axis``).
     """
-    cfg = settings or {}
     ions = list(coord.channels)
     handedness = coord.handedness
-    title = cfg.get("title", "")
-    label_policy = cfg.get("label_policy", "upright")
+    title = axis.title
+    label_policy = axis.label_policy
+    tick_fs = axis.tick_fontsize
+    ion_fs = axis.label_fontsize
+    title_fs = axis.title_fontsize
+    frame_lw = axis.frame_linewidth
+    grid_style = axis.grid_style
+    tick_fmt = axis.tick_format
 
     rev_bottom = handedness == "left"
     rev_left = handedness == "right"
@@ -164,7 +181,7 @@ def _draw_ternary_frame(ax, matrix, coord, settings):
     # -- triangle outline (local space) --
     tri_local = [(0, 0), (1, 0), (0.5, SQRT3_2), (0, 0)]
     tri_arr = np.array(tri_local, dtype=float)
-    ax.plot(tri_arr[:, 0], tri_arr[:, 1], color="black", linewidth=1.0, zorder=2)
+    ax.plot(tri_arr[:, 0], tri_arr[:, 1], color="black", linewidth=frame_lw, zorder=2)
 
     # -- internal grid at 20/40/60/80% (local space) --
     for t in [0.2, 0.4, 0.6, 0.8]:
@@ -173,8 +190,9 @@ def _draw_ternary_frame(ax, matrix, coord, settings):
         family3 = [(t * 0.5, t * SQRT3_2), (1 - t * 0.5, t * SQRT3_2)]
         for fam in (family1, family2, family3):
             fam_arr = np.array(fam, dtype=float)
-            ax.plot(fam_arr[:, 0], fam_arr[:, 1], color="gray", linewidth=0.3,
-                    linestyle=":", zorder=1)
+            ax.plot(fam_arr[:, 0], fam_arr[:, 1], color=grid_style.get("color", "gray"),
+                    linewidth=grid_style.get("linewidth", 0.3),
+                    linestyle=grid_style.get("linestyle", ":"), zorder=1)
 
     # -- tick labels at 20/40/60/80% (world-side text) --
     for tick_val in [0.2, 0.4, 0.6, 0.8]:
@@ -186,14 +204,14 @@ def _draw_ternary_frame(ax, matrix, coord, settings):
         right_lbl = inv if rev_right else tick_str
 
         wb = _apply_matrix_pts(matrix, [(tick_val, -0.03)])[0]
-        ax.text(wb[0], wb[1], bottom_lbl, ha="center", va="top", fontsize=5,
+        ax.text(wb[0], wb[1], bottom_lbl, ha="center", va="top", fontsize=tick_fs,
                 rotation=label_rotation((1, 0), matrix, policy=label_policy),
                 clip_on=False)
 
         wl = _apply_matrix_pts(matrix, [(
             tick_val * 0.5 - 0.026, tick_val * SQRT3_2 + 0.015
         )])[0]
-        ax.text(wl[0], wl[1], left_lbl, ha="center", va="center", fontsize=5,
+        ax.text(wl[0], wl[1], left_lbl, ha="center", va="center", fontsize=tick_fs,
                 rotation=label_rotation(
                     (0.5, SQRT3_2), matrix, policy=label_policy),
                 clip_on=False)
@@ -201,7 +219,7 @@ def _draw_ternary_frame(ax, matrix, coord, settings):
         wr = _apply_matrix_pts(matrix, [(
             1 - tick_val * 0.5 + 0.026, tick_val * SQRT3_2 + 0.015
         )])[0]
-        ax.text(wr[0], wr[1], right_lbl, ha="center", va="center", fontsize=5,
+        ax.text(wr[0], wr[1], right_lbl, ha="center", va="center", fontsize=tick_fs,
                 rotation=label_rotation(
                     (-0.5, SQRT3_2), matrix, policy=label_policy),
                 clip_on=False)
@@ -209,7 +227,7 @@ def _draw_ternary_frame(ax, matrix, coord, settings):
     # -- edge title (world-side text) --
     if title:
         wt = _apply_matrix_pts(matrix, [(0.5, SQRT3_2 + 0.12)])[0]
-        ax.text(wt[0], wt[1], title, ha="center", va="bottom", fontsize=7,
+        ax.text(wt[0], wt[1], title, ha="center", va="bottom", fontsize=title_fs,
                 fontweight="bold", clip_on=False)
 
     # -- ion edge labels with arrows (world-side annotations) --
@@ -229,12 +247,12 @@ def _draw_ternary_frame(ax, matrix, coord, settings):
             wxy = _apply_matrix_pts(matrix, [(x + dx, y + dy)])[0]
             wxyt = _apply_matrix_pts(matrix, [(x - dx, y - dy)])[0]
             ax.annotate('', xy=wxy, xytext=wxyt,
-                        arrowprops=dict(arrowstyle=style, color='black', lw=1.0),
+                        arrowprops=dict(arrowstyle=style, color='black', lw=frame_lw),
                         annotation_clip=False)
             wpt = _apply_matrix_pts(matrix, [(x, y)])[0]
             rot = label_rotation((1, 0), matrix, policy=label_policy)
             ax.text(wpt[0], wpt[1], text, ha='center', va='center',
-                    rotation=rot, fontsize=7,
+                    rotation=rot, fontsize=ion_fs,
                     bbox=dict(facecolor='white', edgecolor='none', pad=1),
                     clip_on=False)
 
@@ -243,18 +261,19 @@ def _draw_ternary_frame(ax, matrix, coord, settings):
         _arrow(*mid_right, ions[2], rotation=-60, reverse=rev_right)
 
 
-def _draw_cartesian_axis(ax, matrix, settings):
+def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     """Draw a cartesian axis frame in local space, stamped by *matrix*.
 
-    Reads the axis region and styling from ``settings``:
-      - ``xlim``/``ylim``: axis bounds in local space (default ``(0, 1)²``)
+    Reads the axis region and styling from a parsed
+    :class:`~geofig_engine.core.axis.AxisFormat`:
+      - ``limits``: axis bounds in local space (default ``(0, 1)²``)
       - ``grid_step``: gridline spacing in both directions (default 0.2)
       - ``tick_step``: tick label spacing (default = grid_step)
       - ``label_policy``: "upright" or "parallel" (default "upright")
       - ``title``: world-side label above the box
-      - ``secondary_x``/``secondary_y``: optional dicts declaring extra scales
-        drawn along the top (secondary x) and right (secondary y) edges, mapped
-        linearly onto the primary ``xlim``/``ylim`` ranges (see
+      - ``tick_format``: format-spec for numeric tick labels
+      - ``secondary_x``/``secondary_y``: extra scales drawn along the top/right
+        edges, mapped linearly onto the primary ``limits`` (see
         :mod:`geofig_engine.core.secondary_axis`).
 
     All geometry (box + gridlines) is drawn in local space and later stamped
@@ -262,17 +281,24 @@ def _draw_cartesian_axis(ax, matrix, settings):
     placed world-side via ``_apply_matrix_pts`` so they stay upright. This
     generalizes the Piper diamond (a cartesian child in ``[0,100]²`` rotated
     45°) as well as any rotated/translated cartesian child that opts into a
-    frame by supplying the ``xlim``/``ylim`` bounds in settings.
+    frame by supplying its bounds.
     """
-    cfg = settings or {}
-    xlim = cfg.get("xlim", (0.0, 1.0))
-    ylim = cfg.get("ylim", (0.0, 1.0))
-    grid_step = cfg.get("grid_step", 0.2)
-    tick_step = cfg.get("tick_step", grid_step)
-    label_policy = cfg.get("label_policy", "upright")
-    title = cfg.get("title", "")
+    xlim = axis.xlim if axis.xlim is not None else (0.0, 1.0)
+    ylim = axis.ylim if axis.ylim is not None else (0.0, 1.0)
+    grid_step = axis.grid_step if axis.grid_step is not None else 0.2
+    tick_step = axis.tick_step if axis.tick_step is not None else grid_step
+    label_policy = axis.label_policy
+    title = axis.title
+    tick_fs = axis.tick_fontsize
+    title_fs = axis.title_fontsize
+    frame_lw = axis.frame_linewidth
+    grid_style = axis.grid_style
+    tick_fmt = axis.tick_format
 
-    secondary = parse_secondary_settings(cfg)
+    secondary = parse_secondary_settings(
+        _frame_settings_dict(axis),
+        defaults={"tick_step": tick_step, "label_policy": label_policy},
+    )
 
     x0, x1 = xlim
     y0, y1 = ylim
@@ -280,27 +306,33 @@ def _draw_cartesian_axis(ax, matrix, settings):
     # -- outline (local space) --
     box = [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]
     box_arr = np.array(box, dtype=float)
-    ax.plot(box_arr[:, 0], box_arr[:, 1], color="black", linewidth=1.0, zorder=2)
+    ax.plot(box_arr[:, 0], box_arr[:, 1], color="black", linewidth=frame_lw, zorder=2)
 
     # -- internal grid (local space) --
     xs = list(np.arange(x0 + grid_step, x1, grid_step))
     ys = list(np.arange(y0 + grid_step, y1, grid_step))
     for gx in xs:
         g = [(gx, y0), (gx, y1)]
-        ax.plot([g[0][0], g[1][0]], [g[0][1], g[1][1]], color="gray",
-                linewidth=0.3, linestyle=":", zorder=1)
+        ax.plot([g[0][0], g[1][0]], [g[0][1], g[1][1]], color=grid_style.get("color", "gray"),
+                linewidth=grid_style.get("linewidth", 0.3), linestyle=grid_style.get("linestyle", ":"),
+                zorder=1)
     for gy in ys:
-        ax.plot([x0, x1], [gy, gy], color="gray", linewidth=0.3,
-                linestyle=":", zorder=1)
+        ax.plot([x0, x1], [gy, gy], color=grid_style.get("color", "gray"),
+                linewidth=grid_style.get("linewidth", 0.3), linestyle=grid_style.get("linestyle", ":"),
+                zorder=1)
+
+    # -- tick-label offset from the edge (default derived from limits size) --
+    d = axis.label_offset
+    if d is None:
+        d = 1.0 if x1 - x0 == 1.0 else (x1 - x0) / 20.0
 
     # -- tick labels on bottom edge (world-side text) --
     # X-axis ticks at tick_step along the bottom (y0) edge, interior only.
-    d = 1.0 if x1 - x0 == 1.0 else (x1 - x0) / 20.0
     for tx in np.arange(x0, x1 + 0.5 * tick_step, tick_step):
         if x0 - 1e-9 <= tx <= x0 + 1e-9 or x1 - 1e-9 <= tx <= x1 + 1e-9:
             continue
         w = _apply_matrix_pts(matrix, [(tx, y0 - d)])[0]
-        ax.text(w[0], w[1], f"{tx:g}", ha="center", va="top", fontsize=5,
+        ax.text(w[0], w[1], _tick_label(tx, tick_fmt), ha="center", va="top", fontsize=tick_fs,
                 rotation=label_rotation((1, 0), matrix, policy=label_policy),
                 clip_on=False)
 
@@ -309,51 +341,93 @@ def _draw_cartesian_axis(ax, matrix, settings):
         if y0 - 1e-9 <= ty <= y0 + 1e-9 or y1 - 1e-9 <= ty <= y1 + 1e-9:
             continue
         w = _apply_matrix_pts(matrix, [(x0 - d, ty)])[0]
-        ax.text(w[0], w[1], f"{ty:g}", ha="right", va="center", fontsize=5,
+        ax.text(w[0], w[1], _tick_label(ty, tick_fmt), ha="right", va="center", fontsize=tick_fs,
                 rotation=label_rotation((0, 1), matrix, policy=label_policy),
                 clip_on=False)
 
     # -- tick labels on top edge from secondary x (world-side text) --
     if "x" in secondary:
-        axis = secondary["x"]
-        for sv, lx in axis.tick_coordinates():
+        sec = secondary["x"]
+        for sv, lx in sec.tick_coordinates():
             if x0 - 1e-9 <= lx <= x0 + 1e-9 or x1 - 1e-9 <= lx <= x1 + 1e-9:
                 continue
             w = _apply_matrix_pts(matrix, [(lx, y1 + d)])[0]
-            ax.text(w[0], w[1], f"{sv:g}", ha="center", va="bottom", fontsize=5,
-                    rotation=label_rotation((1, 0), matrix, policy=axis.label_policy),
+            ax.text(w[0], w[1], _tick_label(sv, tick_fmt), ha="center", va="bottom", fontsize=tick_fs,
+                    rotation=label_rotation((1, 0), matrix, policy=sec.label_policy),
                     clip_on=False)
 
     # -- tick labels on right edge from secondary y (world-side text) --
     if "y" in secondary:
-        axis = secondary["y"]
-        for sv, ly in axis.tick_coordinates():
+        sec = secondary["y"]
+        for sv, ly in sec.tick_coordinates():
             if y0 - 1e-9 <= ly <= y0 + 1e-9 or y1 - 1e-9 <= ly <= y1 + 1e-9:
                 continue
             w = _apply_matrix_pts(matrix, [(x1 + d, ly)])[0]
-            ax.text(w[0], w[1], f"{sv:g}", ha="left", va="center", fontsize=5,
-                    rotation=label_rotation((0, 1), matrix, policy=axis.label_policy),
+            ax.text(w[0], w[1], _tick_label(sv, tick_fmt), ha="left", va="center", fontsize=tick_fs,
+                    rotation=label_rotation((0, 1), matrix, policy=sec.label_policy),
                     clip_on=False)
 
     # -- secondary axis titles (world-side text, beyond the tick labels) --
     if "x" in secondary and secondary["x"].label:
-        axis = secondary["x"]
+        sec = secondary["x"]
         wt = _apply_matrix_pts(matrix, [((x0 + x1) / 2.0, y1 + 0.20 * (y1 - y0))])[0]
-        ax.text(wt[0], wt[1], axis.label, ha="center", va="bottom", fontsize=6,
-                rotation=label_rotation((1, 0), matrix, policy=axis.label_policy),
+        ax.text(wt[0], wt[1], sec.label, ha="center", va="bottom", fontsize=6,
+                rotation=label_rotation((1, 0), matrix, policy=sec.label_policy),
                 clip_on=False)
     if "y" in secondary and secondary["y"].label:
-        axis = secondary["y"]
+        sec = secondary["y"]
         wt = _apply_matrix_pts(matrix, [(x1 + 0.20 * (x1 - x0), (y0 + y1) / 2.0)])[0]
-        ax.text(wt[0], wt[1], axis.label, ha="left", va="center", fontsize=6,
-                rotation=label_rotation((0, 1), matrix, policy=axis.label_policy),
+        ax.text(wt[0], wt[1], sec.label, ha="left", va="center", fontsize=6,
+                rotation=label_rotation((0, 1), matrix, policy=sec.label_policy),
                 clip_on=False)
 
     # -- edge title (world-side text) --
     if title:
         wt = _apply_matrix_pts(matrix, [((x0 + x1) / 2.0, y1 + 0.12 * (y1 - y0))])[0]
-        ax.text(wt[0], wt[1], title, ha="center", va="bottom", fontsize=7,
+        ax.text(wt[0], wt[1], title, ha="center", va="bottom", fontsize=title_fs,
                 fontweight="bold", clip_on=False)
+
+
+def _frame_settings_dict(axis: AxisFormat) -> dict:
+    """Reconstruct a flat settings-style dict from an AxisFormat.
+
+    Used to feed ``parse_secondary_settings`` (which reads flat top-level keys)
+    while letting AxisFormat be the single source of format truth for the frame
+    pipeline. The secondary ``range``/``label``/``position`` declarations live
+    in ``axis.options``; common fallbacks come from the actual parsed values.
+    """
+    out: dict = {
+        "xlim": (0.0, 1.0) if axis.xlim is None else axis.xlim,
+        "ylim": (0.0, 1.0) if axis.ylim is None else axis.ylim,
+    }
+    if axis.grid_step is not None:
+        out["grid_step"] = axis.grid_step
+    if axis.tick_step is not None:
+        out["tick_step"] = axis.tick_step
+    if axis.label_policy != "upright":
+        out["label_policy"] = axis.label_policy
+    for key in ("secondary_x", "secondary_y"):
+        if key in axis.options:
+            out[key] = axis.options[key]
+    return out
+
+
+def _with_flat_secondary(axis: AxisFormat, settings: dict) -> AxisFormat:
+    """Merge flat ``secondary_x``/``secondary_y`` settings keys into ``options``.
+
+    Before templates migrate to ``settings["axis"]["options"]`` (WP-H), the
+    secondary-axis declarations are flat top-level settings keys on a child.
+    This keeps them reachable by the unified pipeline while ``AxisFormat``
+    remains the single format source. Existing ``options`` entries win over the
+    flat fallback.
+    """
+    options = dict(axis.options)
+    for key in ("secondary_x", "secondary_y"):
+        if key in settings and key not in options:
+            options[key] = settings[key]
+    if not options:
+        return axis
+    return dataclasses.replace(axis, options=options)
 
 
 _ARTIST_CONTAINERS = ("lines", "collections", "patches", "texts", "images")
@@ -518,7 +592,7 @@ class MatplotlibRenderer(BaseRenderer):
             # Draw frame first (below data): line geometry in local space,
             # stamped with the child's affine. Text labels placed world-side.
             snapshot = self._snapshot_artists(ax)
-            self._draw_implied_frame(ax, child)
+            self._draw_frame(ax, child)
             for artist in self._new_artists(ax, snapshot):
                 if not isinstance(artist, matplotlib.text.Text):
                     artist.set_transform(affine + ax.transData)
@@ -538,18 +612,34 @@ class MatplotlibRenderer(BaseRenderer):
         plt.close(fig)
         return fig
 
-    @staticmethod
-    def _draw_implied_frame(ax, child: FigureSpec):
-        """Draw frame auto-selected from child's coord type + settings."""
-        matrix = child.transform.matrix()
-        if isinstance(child.coord, TernaryCoord):
-            _draw_ternary_frame(ax, matrix, child.coord, child.settings)
+    def _draw_frame(self, ax, spec: FigureSpec, matrix=None):
+        """Draw the frame for *spec*, stamped by *matrix*.
+
+        *matrix* maps the spec's local space into world display space. When
+        ``None`` (or for a top-level spec), it defaults to ``spec.transform``
+        and finally the identity, so local = world.
+
+        This is the single frame-drawing entry used by BOTH the top-level path
+        and the child path. It dispatches on the spec's coord type to the
+        per-coordinate drawers, all consuming the shared formatted
+        :class:`~geofig_engine.core.axis.AxisFormat` — the "same function calls
+        + same formatting spec" core of the unified pipeline.
+        """
+        if matrix is None:
+            matrix = spec.transform.matrix()
+        matrix = matrix if matrix is not None else np.eye(3)
+        axis = parse_axis_settings(spec.settings, spec.coord)
+        if isinstance(spec.coord, TernaryCoord):
+            _draw_ternary_frame(ax, axis, matrix, spec.coord)
         elif (
-            isinstance(child.coord, CoordCartesian)
-            and "xlim" in child.settings
-            and "ylim" in child.settings
+            isinstance(spec.coord, CoordCartesian)
+            and axis.xlim is not None
+            and axis.ylim is not None
         ):
-            _draw_cartesian_axis(ax, matrix, child.settings)
+            axis = _with_flat_secondary(axis, spec.settings)
+            _draw_cartesian_axis(ax, axis, matrix)
+        elif isinstance(spec.coord, CoordPolar):
+            _draw_polar_frame(ax, axis)  # WP-C
 
     def _apply_child_coord_transforms(self, child: FigureSpec) -> FigureSpec:
         """Apply each child's coord (and secondary-axis channels) to its layers."""

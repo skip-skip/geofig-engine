@@ -6,10 +6,13 @@ frame pipeline: structured ``settings["axis"]`` parsing, the legacy flat-key
 fallback, appearance knobs, and validation.
 """
 
+import numpy as np
+import pandas as pd
 import pytest
 
 from geofig_engine.core.axis import AxisFormat, parse_axis_settings, VALID_LABEL_POLICIES
 from geofig_engine.core.coord import CoordCartesian, CoordPolar, TernaryCoord
+from geofig_engine.core.spec import FigureSpec
 
 
 @pytest.fixture(params=[CoordCartesian(), CoordPolar(), TernaryCoord()])
@@ -217,3 +220,114 @@ def test_no_matplotlib_import():
             if node.module:
                 imports.append(node.module)
     assert not any(name.split(".")[0] == "matplotlib" for name in imports)
+
+
+# ---------------------------------------------------------------------------
+# Unified frame rendering (WP-B): _draw_frame + drawers on AxisFormat
+# ---------------------------------------------------------------------------
+
+
+def _child_frame_spec(settings):
+    """A cartesian child with empty point layers, diamond-stamped."""
+    from geofig_engine.core.geom import GeomPoint
+    from geofig_engine.core.layer import LayerSpec
+    from geofig_engine.core.link import LinkTransform
+    from geofig_engine.core.stat import StatIdentity
+
+    empty = pd.DataFrame({"v": []}, dtype=float)
+    dia_pct = np.sqrt(3) / 200.0
+    dia_scale = (np.sqrt(2) / 400.0, dia_pct * np.sqrt(2) / 2.0)
+    return FigureSpec(
+        data=empty,
+        mappings={},
+        settings=settings,
+        context={},
+        template_name="test",
+        coord=CoordCartesian(),
+        transform=LinkTransform().rotate(45.0).scale(*dia_scale).translate(0.6, 0.0),
+        layers=[
+            LayerSpec(
+                geom=GeomPoint(),
+                stat=StatIdentity(),
+                visual_mapping={"x": pd.Series([], dtype=float), "y": pd.Series([], dtype=float)},
+                zorder=10,
+            )
+        ],
+    )
+
+
+def _render_child(settings):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
+
+    parent = FigureSpec(
+        data=pd.DataFrame({"v": []}, dtype=float),
+        mappings={},
+        settings={"figsize": (10, 8)},
+        context={},
+        template_name="test",
+        children=(_child_frame_spec(settings),),
+    )
+    fig = MatplotlibRenderer().render(parent)
+    ax = fig.axes[0]
+    return ax
+
+
+TICK_TEXT_SETTINGS = {
+    "xlim": (0, 100),
+    "ylim": (0, 100),
+    "grid_step": 20,
+    "tick_step": 20,
+}
+
+TICK_TEXT_AXIS_SETTINGS = {
+    "limits": [[0, 100], [0, 100]],
+    "grid_step": 20,
+    "tick_step": 20,
+}
+
+
+def test_child_frame_renders_via_draw_frame():
+    ax = _render_child(TICK_TEXT_SETTINGS)
+    texts = [t.get_text() for t in ax.texts]
+    # Interior ticks at 20/40/60/80 on both edges.
+    assert "20" in texts and "80" in texts
+
+
+def test_flat_and_axis_frame_parity():
+    flat = _render_child(TICK_TEXT_SETTINGS)
+    axis_form = _render_child({"axis": TICK_TEXT_AXIS_SETTINGS})
+    assert sorted(t.get_text() for t in flat.texts) == sorted(
+        t.get_text() for t in axis_form.texts
+    )
+
+
+def test_tick_format_changes_tick_labels():
+    plain = _render_child(TICK_TEXT_SETTINGS)
+    formatted = _render_child(
+        {"axis": {**TICK_TEXT_AXIS_SETTINGS, "tick_format": ":.1f"}}
+    )
+    plain_texts = {t.get_text() for t in plain.texts}
+    form_texts = {t.get_text() for t in formatted.texts}
+    assert "20" in plain_texts
+    assert "20.0" in form_texts
+    assert "20" not in form_texts and "20.0" not in plain_texts
+
+
+def test_secondary_axis_titles_from_axis_options():
+    ax = _render_child(
+        {
+            "axis": {
+                "limits": [[0, 100], [0, 100]],
+                "options": {
+                    "secondary_x": {"range": [100, 0], "label": "Anions (%)"},
+                    "secondary_y": {"range": [100, 0], "label": "Cations (%)"},
+                },
+            }
+        }
+    )
+    texts = [t.get_text() for t in ax.texts]
+    assert "Anions (%)" in texts
+    assert "Cations (%)" in texts
