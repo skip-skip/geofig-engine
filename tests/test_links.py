@@ -20,7 +20,7 @@ from geofig_engine.core.coord import CoordCartesian, CoordPolar
 from geofig_engine.core.geom import GeomPoint
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.core.link import LinkTransform, label_rotation
-from geofig_engine.core.spec import FigureSpec, build_spec
+from geofig_engine.core.spec import FigureSpec, build_spec, validate_figure_spec
 from geofig_engine.core.stat import StatIdentity
 from geofig_engine.serialize import (
     figure_spec_from_dict,
@@ -381,3 +381,60 @@ class TestFigureSpecChildrenSerialization:
         del d["children"]
         restored = figure_spec_from_dict(d)
         assert restored.children == ()
+
+
+class TestSecondaryAxisSettingsLinkSerialization:
+    """Phase 14.53 WP-F: secondary-axis settings serialization + validation."""
+
+    def _spec(self, settings):
+        return FigureSpec(
+            data=pd.DataFrame({"x": [1, 2], "y": [3, 4]}),
+            mappings={},
+            settings=settings,
+            context={},
+            template_name="test",
+        )
+
+    def test_secondary_range_survives_dict_roundtrip_as_tuple(self):
+        spec = self._spec({
+            "xlim": (0, 100),
+            "ylim": (0, 100),
+            "secondary_x": {"range": [0, 100], "label": "Anions (%)"},
+            "secondary_y": {"range": [100, 0], "tick_step": 20},
+        })
+        restored = figure_spec_from_dict(figure_spec_to_dict(spec))
+        assert restored.settings["secondary_x"]["range"] == (0, 100)
+        assert restored.settings["secondary_y"]["range"] == (100, 0)
+        assert restored.settings["secondary_x"]["label"] == "Anions (%)"
+        assert restored.settings["secondary_y"]["tick_step"] == 20
+
+    def test_secondary_range_survives_json_roundtrip_as_tuple(self):
+        spec = self._spec({
+            "xlim": (0, 50),
+            "secondary_x": {"range": [50, 0], "label_policy": "upright"},
+            "secondary_y": {"range": [0, 100], "position": "right"},
+        })
+        restored = spec_from_json(spec_to_json(spec))
+        assert restored.settings["secondary_x"]["range"] == (50, 0)
+        assert restored.settings["secondary_y"]["range"] == (0, 100)
+
+    def test_valid_secondary_settings_pass_validation(self):
+        spec = self._spec({
+            "xlim": (0, 100),
+            "ylim": (0, 100),
+            "secondary_x": {"range": [0, 100], "tick_step": 20},
+            "secondary_y": {"range": [100, 0]},
+        })
+        validate_figure_spec(spec)
+
+    def test_missing_secondary_range_raises(self):
+        with pytest.raises(ValueError):
+            validate_figure_spec(self._spec({"secondary_x": {"tick_step": 20}}))
+
+    def test_non_mapping_secondary_declaration_raises(self):
+        with pytest.raises(ValueError):
+            validate_figure_spec(self._spec({"secondary_x": [0, 100]}))
+
+    def test_degenerate_secondary_range_raises(self):
+        with pytest.raises(ValueError):
+            validate_figure_spec(self._spec({"secondary_y": {"range": [50, 50]}}))
