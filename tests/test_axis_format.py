@@ -331,3 +331,113 @@ def test_secondary_axis_titles_from_axis_options():
     texts = [t.get_text() for t in ax.texts]
     assert "Anions (%)" in texts
     assert "Cations (%)" in texts
+
+
+# ---------------------------------------------------------------------------
+# Custom polar frame (WP-C): _draw_polar_frame on AxisFormat
+# ---------------------------------------------------------------------------
+
+
+def _polar_spec(settings):
+    from geofig_engine.core.geom import GeomLine
+    from geofig_engine.core.layer import LayerSpec
+    from geofig_engine.core.stat import StatIdentity
+
+    return FigureSpec(
+        data=pd.DataFrame({"v": [1.0, 2.0, 3.0]}),
+        mappings={},
+        settings=settings,
+        context={},
+        template_name="test",
+        coord=CoordPolar(),
+        layers=[
+            LayerSpec(
+                geom=GeomLine(),
+                stat=StatIdentity(),
+                visual_mapping={
+                    "x": pd.Series([0.0, np.pi / 2, np.pi]),
+                    "y": pd.Series([1.0, 2.0, 1.0]),
+                    "label": pd.Series(["A", "B", "C"]),
+                },
+            )
+        ],
+    )
+
+
+def _frame_polar_axes():
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(subplot_kw={"projection": "polar"})
+    return fig, ax
+
+
+@pytest.mark.parametrize("axis_form", [False, True])
+def test_polar_frame_hides_spine(axis_form):
+    from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
+
+    settings = {"hide_spine": True, "grid": False}
+    if axis_form:
+        settings = {
+            "axis": {"grid": False, "options": {"hide_spine": True}}
+        }
+    fig, ax = _frame_polar_axes()
+    renderer = MatplotlibRenderer()
+    renderer._draw_frame(ax, _polar_spec(settings))
+    assert not ax.spines["polar"].get_visible()
+    fig.clf()
+
+
+def test_polar_frame_polar_tick_labels_mapping():
+    from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
+
+    fig, ax = _frame_polar_axes()
+    renderer = MatplotlibRenderer()
+    renderer._draw_frame(
+        ax,
+        _polar_spec(
+            {"axis": {"options": {"polar_tick_labels": True}}}
+        ),
+    )
+    labels = [t.get_text() for t in ax.get_xticklabels()]
+    assert any(lbl == "A" for lbl in labels)
+    assert any(lbl == "C" for lbl in labels)
+    fig.clf()
+
+
+def test_polar_frame_hide_radial_ticks():
+    from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
+
+    fig, ax = _frame_polar_axes()
+    renderer = MatplotlibRenderer()
+    renderer._draw_frame(
+        ax,
+        _polar_spec(
+            {"axis": {"options": {"hide_radial_ticks": True}}}
+        ),
+    )
+    assert ax.get_yticks().size == 0
+    fig.clf()
+
+
+def test_polar_grid_toggled_from_axis():
+    from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
+
+    renderer = MatplotlibRenderer()
+
+    fig_g, ax_g = _frame_polar_axes()
+    renderer._draw_frame(ax_g, _polar_spec({"axis": {"grid": False}}))
+    gridlines_false = list(ax_g.yaxis.get_gridlines())
+    fig_g.clf()
+
+    fig_t, ax_t = _frame_polar_axes()
+    renderer._draw_frame(ax_t, _polar_spec({"axis": {"grid": True}}))
+    gridlines_true = list(ax_t.yaxis.get_gridlines())
+    fig_t.clf()
+
+    assert any(
+        not gl.get_visible() for gl in gridlines_false
+    ) or not gridlines_false
+    assert gridlines_true and all(gl.get_visible() for gl in gridlines_true)

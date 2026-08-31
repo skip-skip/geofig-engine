@@ -639,7 +639,7 @@ class MatplotlibRenderer(BaseRenderer):
             axis = _with_flat_secondary(axis, spec.settings)
             _draw_cartesian_axis(ax, axis, matrix)
         elif isinstance(spec.coord, CoordPolar):
-            _draw_polar_frame(ax, axis)  # WP-C
+            self._draw_polar_frame(ax, axis, spec)
 
     def _apply_child_coord_transforms(self, child: FigureSpec) -> FigureSpec:
         """Apply each child's coord (and secondary-axis channels) to its layers."""
@@ -844,6 +844,47 @@ class MatplotlibRenderer(BaseRenderer):
                 ax.set_xticks(unique["x"].values)
                 ax.set_xticklabels(unique["label"].values)
                 return
+
+    def _draw_polar_frame(self, ax, axis: AxisFormat, spec):
+        """Apply AxisFormat-driven polar frame formatting to a polar Axes.
+
+        Pie/radar render sectors/lines through matplotlib's native polar
+        projection on *ax* (that projection is the only way sectors/radar lines
+        are drawn), so this drives the tick/grid/label formatting from the
+        shared :class:`~geofig_engine.core.axis.AxisFormat` + its polar
+        ``options``. Option semantics match the legacy flat-key behavior, so
+        both a top-level polar spec and a polar child route here through the
+        unified ``_draw_frame`` entry with identical results.
+
+        Angular tick positions/labels come from the layer's x/label mapping via
+        :meth:`_apply_polar_ticks`; the radial threshold grid is per
+        ``axis.grid`` / ``axis.grid_style`` / ``axis.grid_step``.
+        """
+        options = axis.options
+
+        # Radial grid toggled from the common axis spec (native polar grid).
+        if axis.grid is not None:
+            if axis.grid:
+                ax.grid(True, zorder=0)
+            else:
+                ax.grid(False)
+
+        if options.get("hide_spine", False):
+            ax.spines["polar"].set_visible(False)
+        if options.get("hide_angular_ticks", False):
+            ax.tick_params(axis="x", length=0)
+        if options.get("hide_angular_labels", False):
+            ax.set_xticklabels([])
+        if options.get("hide_radial_labels", False):
+            ax.set_yticklabels([])
+        if options.get("hide_radial_ticks", False):
+            ax.set_yticks([])
+        if options.get("polar_tick_labels", False):
+            self._apply_polar_ticks(ax, spec)
+            try:
+                ax.tick_params(labelsize=axis.tick_fontsize)
+            except TypeError:
+                pass
 
     # ------------------------------------------------------------------
     # Stiff diagram (single-sample 6-axis polygon)
