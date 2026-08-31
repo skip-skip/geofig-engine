@@ -607,6 +607,39 @@ def test_top_level_ternary_renders_triangle():
     assert ax.get_aspect() == 1
 
 
+def test_ternary_ion_labels_are_standalone_and_arrows_opt_in():
+    from geofig_engine.core.geom import GeomLine
+    from geofig_engine.core.layer import LayerSpec
+    from geofig_engine.core.stat import StatIdentity
+
+    def render(settings):
+        coord = TernaryCoord(channels=("Mg", "Ca", "Na+K"), handedness="left")
+        layer = LayerSpec(
+            geom=GeomLine(),
+            stat=StatIdentity(),
+            visual_mapping={
+                "Mg": pd.Series([0.5], dtype=float),
+                "Ca": pd.Series([0.3], dtype=float),
+                "Na+K": pd.Series([0.2], dtype=float),
+            },
+        )
+        return _render_single_top(settings, coord=coord, layers=[layer])
+
+    ax_off = render({})
+    ax_on = render({"axis_arrows": True})
+
+    count = lambda ax: sum(1 for t in ax.texts if isinstance(t, matplotlib.text.Annotation))
+    labels = lambda ax: [t.get_text() for t in ax.texts]
+
+    # Ion labels are plain text, always present, independent of arrows.
+    for ax in (ax_off, ax_on):
+        text_labels = labels(ax)
+        assert "Mg" in text_labels and "Ca" in text_labels and "Na+K" in text_labels
+    assert count(ax_off) == 0
+    # Three edges -> three arrows when opted in.
+    assert count(ax_on) == 3
+
+
 def test_plain_single_stays_native_axes():
     # A plain cartesian chart with no explicit limits keeps native matplotlib
     # axes (not the custom off-axis frame).

@@ -284,7 +284,8 @@ def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
         ax.text(wt[0], wt[1], title, ha="center", va="bottom", fontsize=title_fs,
                 fontweight="bold", clip_on=False)
 
-    # -- ion edge labels with arrows (world-side annotations) --
+    # -- ion edge labels (world-side text, always drawn) --
+    # Standalone labels at each edge midpoint; independent of any arrows.
     if len(ions) == 3:
         offset = 0.12
         cos30 = SQRT3_2
@@ -292,27 +293,40 @@ def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
         mid_base = (0.5, -offset)
         mid_right = (0.75 + offset * cos30, SQRT3_2 / 2.0 + offset * 0.5)
 
-        def _arrow(x, y, text, rotation=0, reverse=False):
-            length = 0.5
-            angle_rad = math.radians(rotation)
-            dx = (length / 2) * math.cos(angle_rad)
-            dy = (length / 2) * math.sin(angle_rad)
-            style = '-|>' if reverse else '<|-'
-            wxy = _apply_matrix_pts(matrix, [(x + dx, y + dy)])[0]
-            wxyt = _apply_matrix_pts(matrix, [(x - dx, y - dy)])[0]
-            ax.annotate('', xy=wxy, xytext=wxyt,
-                        arrowprops=dict(arrowstyle=style, color='black', lw=frame_lw),
-                        annotation_clip=False)
-            wpt = _apply_matrix_pts(matrix, [(x, y)])[0]
-            rot = label_rotation((1, 0), matrix, policy=label_policy)
-            ax.text(wpt[0], wpt[1], text, ha='center', va='center',
-                    rotation=rot, fontsize=ion_fs,
+        for anchor, text in ((mid_base, ions[0]), (mid_left, ions[1]), (mid_right, ions[2])):
+            wp = _apply_matrix_pts(matrix, [anchor])[0]
+            ax.text(wp[0], wp[1], text, ha='center', va='center',
+                    rotation=label_rotation((1, 0), matrix, policy=label_policy),
+                    fontsize=ion_fs,
                     bbox=dict(facecolor='white', edgecolor='none', pad=1),
                     clip_on=False)
 
-        _arrow(*mid_left, ions[1], rotation=60, reverse=rev_left)
-        _arrow(*mid_base, ions[0], rotation=0, reverse=rev_bottom)
-        _arrow(*mid_right, ions[2], rotation=-60, reverse=rev_right)
+    # -- axis direction arrows (opt-in) --
+    # Point toward ascending values along each edge (sorted rule), parallel to
+    # the edge via the WP-B helper, offset just outside the triangle.
+    if axis.show_arrows():
+        arrow_off = 0.06
+        # Outward unit normals for each edge:
+        #   bottom (dir (1,0)) -> (0,-1)
+        #   left   (dir (0.5,SQRT3_2)) -> (-SQRT3_2, 0.5)
+        #   right  (dir (-0.5,SQRT3_2)) -> (SQRT3_2, 0.5)
+        _draw_axis_arrow(
+            ax, matrix,
+            (0.0, -arrow_off), (1.0, -arrow_off),
+            (1.0, 0.0), lw=frame_lw,
+        )
+        _draw_axis_arrow(
+            ax, matrix,
+            (-arrow_off * cos30, arrow_off * 0.5),
+            (0.5 - arrow_off * cos30, SQRT3_2 + arrow_off * 0.5),
+            (0.5, SQRT3_2), lw=frame_lw,
+        )
+        _draw_axis_arrow(
+            ax, matrix,
+            (1.0 + arrow_off * cos30, arrow_off * 0.5),
+            (0.5 + arrow_off * cos30, SQRT3_2 + arrow_off * 0.5),
+            (-0.5, SQRT3_2), lw=frame_lw,
+        )
 
 
 def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
