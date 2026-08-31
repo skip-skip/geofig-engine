@@ -81,8 +81,10 @@ def main() -> None:
     specs = engine.build_specs_from_layers(
         ds, layers,
         settings={
-            "title": "1 – Quadrants + 1:1 line (zorder demo)",
-            "xlabel": "X", "ylabel": "Y",
+            "axis": {
+                "title": "1 – Quadrants + 1:1 line (zorder demo)",
+                "xlabel": "X", "ylabel": "Y",
+            },
             "figsize": (8, 6),
         },
     )
@@ -127,8 +129,10 @@ def main() -> None:
     specs = engine.build_specs_from_layers(
         ds, layers,
         settings={
-            "title": "2 – Threshold bands with annotation",
-            "xlabel": "X", "ylabel": "Y",
+            "axis": {
+                "title": "2 – Threshold bands with annotation",
+                "xlabel": "X", "ylabel": "Y",
+            },
             "figsize": (8, 6),
         },
     )
@@ -158,8 +162,10 @@ def main() -> None:
     specs = engine.build_specs_from_layers(
         ds, layers,
         settings={
-            "title": "3 – Rotated text with bounding boxes",
-            "xlabel": "X", "ylabel": "Y",
+            "axis": {
+                "title": "3 – Rotated text with bounding boxes",
+                "xlabel": "X", "ylabel": "Y",
+            },
             "figsize": (8, 6),
         },
     )
@@ -185,8 +191,10 @@ def main() -> None:
     specs = engine.build_specs_from_layers(
         ds, layers,
         settings={
-            "title": "4 – Two-point abline (purple dash-dot)",
-            "xlabel": "X", "ylabel": "Y",
+            "axis": {
+                "title": "4 – Two-point abline (purple dash-dot)",
+                "xlabel": "X", "ylabel": "Y",
+            },
             "figsize": (8, 6),
         },
     )
@@ -219,9 +227,11 @@ def main() -> None:
         ds_polar, layers,
         coord=CoordPolar(),
         settings={
-            "title": "5 – Polar text (auto-aligned by coord)",
+            "axis": {
+                "title": "5 – Polar text (auto-aligned by coord)",
+                "options": {"polar_tick_labels": True},
+            },
             "figsize": (6, 6),
-            "polar_tick_labels": True,
         },
     )
     fig = renderer.render(specs[0])

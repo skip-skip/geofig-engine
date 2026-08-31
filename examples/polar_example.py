@@ -141,9 +141,11 @@ def main() -> None:
     specs = engine.build_specs_from_layers(
         scat_ds, layers,
         settings={
-            "title": "Polar Scatter",
-            "xlabel": "Angle (rad)",
-            "ylabel": "Radius",
+            "axis": {
+                "title": "Polar Scatter",
+                "xlabel": "Angle (rad)",
+                "ylabel": "Radius",
+            },
         },
         coord=CoordPolar(),
     )

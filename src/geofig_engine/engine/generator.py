@@ -339,13 +339,39 @@ class FigureEngine:
         resolved = {}
 
         for key, value in settings.items():
-            if isinstance(value, str):
-                try:
-                    resolved[key] = value.format(**context)
-                except KeyError:
-                    resolved[key] = value
+            if key == "axis" and isinstance(value, dict):
+                resolved["axis"] = self._resolve_axis_dict(value, context)
+            elif isinstance(value, str):
+                resolved[key] = self._resolve_string(value, context)
             else:
                 resolved[key] = value
 
+        return resolved
+
+    @staticmethod
+    def _resolve_string(value: str, context: dict[str, Any]) -> str:
+        try:
+            return value.format(**context)
+        except KeyError:
+            return value
+
+    def _resolve_axis_dict(
+        self, axis: dict[str, Any], context: dict[str, Any]
+    ) -> dict[str, Any]:
+        resolved: dict[str, Any] = {}
+        for key, value in axis.items():
+            if isinstance(value, dict):
+                resolved[key] = {
+                    k: (
+                        self._resolve_string(v, context)
+                        if isinstance(v, str)
+                        else v
+                    )
+                    for k, v in value.items()
+                }
+            elif isinstance(value, str):
+                resolved[key] = self._resolve_string(value, context)
+            else:
+                resolved[key] = value
         return resolved
     

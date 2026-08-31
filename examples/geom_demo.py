@@ -55,7 +55,7 @@ def main() -> None:
     )
     specs = engine.build_specs_from_template(
         ds, template,
-        settings={"title": "Grouped Box Plot", "xlabel": "Category", "ylabel": "Value"},
+        settings={"axis": {"title": "Grouped Box Plot", "xlabel": "Category", "ylabel": "Value"}},
     )
     fig = renderer.render(specs[0])
     fig.savefig(str(out / "01_grouped_box.png"))
@@ -72,7 +72,7 @@ def main() -> None:
     ]
     specs = engine.build_specs_from_layers(
         ds, violin_layers,
-        settings={"title": "Grouped Violin Plot", "xlabel": "Category", "ylabel": "Value"},
+        settings={"axis": {"title": "Grouped Violin Plot", "xlabel": "Category", "ylabel": "Value"}},
     )
     fig = renderer.render(specs[0])
     fig.savefig(str(out / "02_grouped_violin.png"))
@@ -111,9 +111,11 @@ def main() -> None:
     specs = engine.build_specs_from_layers(
         bar_ds, bar_layers,
         settings={
-            "title": "Grouped Bar Chart",
-            "xlabel": "Category",
-            "ylabel": "Mean Value",
+            "axis": {
+                "title": "Grouped Bar Chart",
+                "xlabel": "Category",
+                "ylabel": "Mean Value",
+            },
             "xticks": (list(range(1, 1 + len(cat_order))), cat_order),
         },
     )
@@ -134,7 +136,7 @@ def main() -> None:
     ]
     specs = engine.build_specs_from_layers(
         step_ds, step_layers,
-        settings={"title": "Step Line Plot", "xlabel": "Index", "ylabel": "Value"},
+        settings={"axis": {"title": "Step Line Plot", "xlabel": "Index", "ylabel": "Value"}},
     )
     fig = renderer.render(specs[0])
     fig.savefig(str(out / "04_step_line.png"))
@@ -148,7 +150,7 @@ def main() -> None:
     )
     specs = engine.build_specs_from_template(
         ds, tmpl,
-        settings={"title": "Histogram (Density)", "xlabel": "Value", "ylabel": "Density"},
+        settings={"axis": {"title": "Histogram (Density)", "xlabel": "Value", "ylabel": "Density"}},
     )
     fig = renderer.render(specs[0])
     fig.savefig(str(out / "05_histogram_density.png"))
@@ -163,9 +165,11 @@ def main() -> None:
     specs = engine.build_specs_from_template(
         ds, tmpl,
         settings={
-            "title": "Histogram (Cumulative Density)",
-            "xlabel": "Value",
-            "ylabel": "Cumulative Density",
+            "axis": {
+                "title": "Histogram (Cumulative Density)",
+                "xlabel": "Value",
+                "ylabel": "Cumulative Density",
+            },
         },
     )
     fig = renderer.render(specs[0])

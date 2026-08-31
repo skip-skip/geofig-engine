@@ -30,7 +30,7 @@ template = isotope(functions=selected_function_ids, mapping={"x": "Oxygen 18", "
 render_template(
     dataset=dataset,
     template=template,
-    settings={"title": "Deuterium vs Oxygen 18", "figsize": (8, 5)},
+    settings={"axis": {"title": "Deuterium vs Oxygen 18"}, "figsize": (8, 5)},
     savedir=output_dir,
 )
 print(f"Done. See generated figures in {output_dir}.")

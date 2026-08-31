@@ -43,13 +43,13 @@ layers = [
 ]
 template = FigureTemplate(
     layers=layers,
-    default_settings={"figsize": (10, 6), "xscale": "linear", "yscale": "linear", "grid": True},
+    default_settings={"axis": {"xscale": "linear", "yscale": "linear", "grid": True}, "figsize": (10, 6)},
 )
 
 specs, figures, legend_fig = render_template(
     dataset=dataset,
     template=template,
-    settings={"xlabel": "Time", "ylabel": "Temperature"},
+    settings={"axis": {"xlabel": "Time", "ylabel": "Temperature"}},
     facet=FacetWrap(by="period"),
     savedir=output_dir,
 )

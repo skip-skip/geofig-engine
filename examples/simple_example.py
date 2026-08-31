@@ -30,7 +30,7 @@ def main() -> None:
     specs, figures, legend_fig = render_template(
         dataset=dataset,
         template=template,
-        settings={"xlabel": "X value", "ylabel": "Y value"},
+        settings={"axis": {"xlabel": "X value", "ylabel": "Y value"}},
         iterators=iterator,
         savedir=output_dir,
     )

@@ -80,7 +80,7 @@ def build_empty_piper() -> FigureSpec:
 
     return FigureSpec(
         data=empty_df, mappings={},
-        settings={"figsize": (10, 8), "title": "Piper Axes Debug (no data)"},
+        settings={"figsize": (10, 8), "axis": {"title": "Piper Axes Debug (no data)"}},
         context={}, template_name="piper",
         children=(left_child, right_child, diamond_child),
     )

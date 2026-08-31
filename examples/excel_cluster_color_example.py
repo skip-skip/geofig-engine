@@ -56,9 +56,11 @@ specs, figures, legend_fig = render_template(
     dataset=dataset,
     template=template,
     settings={
-        "xlabel": "sulfate_mg_L",
-        "ylabel": "{y}",
-        "title": "{y} vs sulfate_mg_L",
+        "axis": {
+            "xlabel": "sulfate_mg_L",
+            "ylabel": "{y}",
+            "title": "{y} vs sulfate_mg_L",
+        },
         "figsize": (8, 5),
     },
     iterators=iters,
