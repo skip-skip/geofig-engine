@@ -157,11 +157,25 @@ def test_xlim_ylim_properties():
         {"tick_format": None},  # not a string
         {"grid_style": "nope"},  # not a dict
         {"options": "nope"},  # not a dict
+        {"axis_arrows": "nope"},  # not a bool
     ],
 )
 def test_invalid_axis_raises(axis):
     with pytest.raises(ValueError):
         AxisFormat(**axis)
+
+
+@pytest.mark.parametrize("coord", [CoordCartesian(), CoordPolar(), TernaryCoord()])
+def test_axis_arrows_model_and_parse(coord):
+    assert parse_axis_settings({}, coord).show_arrows() is False
+    assert parse_axis_settings({"axis_arrows": True}, coord).show_arrows() is True
+    assert parse_axis_settings({"axis_arrows": False}, coord).show_arrows() is False
+    assert parse_axis_settings({"axis_arrows": None}, coord).show_arrows() is False
+    assert AxisFormat(axis_arrows=True).show_arrows() is True
+    with pytest.raises(ValueError):
+        AxisFormat(axis_arrows="nope")
+    with pytest.raises(ValueError):
+        parse_axis_settings({"axis_arrows": 1}, coord)
 
 
 @pytest.mark.parametrize("coord", [CoordCartesian(), CoordPolar(), TernaryCoord()])

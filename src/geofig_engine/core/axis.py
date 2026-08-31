@@ -13,6 +13,7 @@ flat top-level settings keys::
         "grid": True,
         "grid_step": 20,
         "tick_step": 10,
+        "axis_arrows": True,
         "label_policy": "upright",
         "tick_format": ":g",
         # per-coordinate extension (polar toggles, etc.):
@@ -116,6 +117,7 @@ class AxisFormat:
     grid: bool | None = None
     grid_step: float | None = None
     tick_step: float | None = None
+    axis_arrows: bool | None = None
     label_policy: str = "upright"
     xscale: str | None = None
     yscale: str | None = None
@@ -159,6 +161,8 @@ class AxisFormat:
             object.__setattr__(self, "grid_step", _positive(self.grid_step, "grid_step"))
         if self.tick_step is not None:
             object.__setattr__(self, "tick_step", _positive(self.tick_step, "tick_step"))
+        if self.axis_arrows is not None:
+            object.__setattr__(self, "axis_arrows", _bool_value(self.axis_arrows, "axis_arrows"))
 
         object.__setattr__(self, "label_policy", _policy_value(self.label_policy))
         for attr in ("xscale", "yscale", "time_format"):
@@ -227,15 +231,19 @@ class AxisFormat:
         """Per-coordinate extension lookup (e.g. ``axis.option("hide_spine")``)."""
         return self.options.get(key, default)
 
+    def show_arrows(self) -> bool:
+        """Effective axis-direction-arrow flag (``False`` when unset or None)."""
+        return bool(self.axis_arrows)
+
 
 def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
     """Read axis-formatting into an :class:`AxisFormat`, validated.
 
     Reads flat top-level keys from ``settings`` (``title``, ``xlabel``,
     ``ylabel``, ``xlim``/``ylim``, ``grid``, ``grid_step``, ``tick_step``,
-    ``label_policy``, ``xscale``/``yscale``, ``time_format``, ``tick_format``,
-    polar toggles, ...) and maps them into the equivalent :class:`AxisFormat`
-    fields / ``options``.
+    ``axis_arrows``, ``label_policy``, ``xscale``/``yscale``, ``time_format``,
+    ``tick_format``, polar toggles, ...) and maps them into the equivalent
+    :class:`AxisFormat` fields / ``options``.
 
     ``coord`` is currently informational context for any future coord-specific
     defaults/validation; the common parse stays coord-agnostic.
@@ -278,6 +286,7 @@ def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
         grid=_pick("grid"),
         grid_step=_pick("grid_step"),
         tick_step=_pick("tick_step"),
+        axis_arrows=_pick("axis_arrows"),
         label_policy=_pick("label_policy", default="upright"),
         xscale=_pick("xscale"),
         yscale=_pick("yscale"),
