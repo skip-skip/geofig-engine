@@ -725,23 +725,72 @@ def test_ternary_arrows_point_toward_ascending_value():
     assert len(anns) == 3
     # The annotate head (xy) is the high-value end; the tail (xyann) the low
     # end. Triangle vertices: base-left (0,0), base-right (1,0), apex (0.5,h).
-    # Ascending edges:
-    #   - bottom: (0,0) -> (1,0): horizontal, gains x only,
-    #   - left:   (0,0) -> apex: gains both x and y,
-    #   - right:  (1,0) -> apex: gains y only.
+    # For a LEFT-handed (cation) triangle the reversal flags are
+    # rev_bottom=True, rev_left=False, rev_right=True, so the increasing
+    # (100%) corner is:
+    #   - bottom: base-left -> arrow points LEFT (decreasing x),
+    #   - left:   apex -> arrow rises toward the apex,
+    #   - right:  base-right -> arrow falls toward the base-right (y only).
     horizontal = 0
     rising = 0
+    falling = 0
     for a in anns:
         head = np.asarray(a.xy, dtype=float)
         tail = np.asarray(a.xyann, dtype=float)
         delta = head - tail
         if abs(delta[1]) < 1e-9:
             horizontal += 1
-            assert delta[0] > 0  # bottom edge points toward increasing x
+            assert delta[0] < 0  # bottom edge points toward base-left (increasing x reversed)
         if delta[1] > 1e-9:
-            rising += 1
+            rising += 1  # left edge rises toward the apex
+        if delta[1] < -1e-9:
+            falling += 1  # right edge falls toward the base-right
     assert horizontal == 1  # exactly the bottom (flattened to the base) edge
-    assert rising == 2  # left and right edges both rise toward the apex
+    assert rising == 1  # only the left edge rises toward the apex
+    assert falling == 1  # the right edge falls toward its 100% corner
+
+
+def test_ternary_arrows_point_toward_ascending_value_right_handed():
+    from geofig_engine.core.geom import GeomLine
+    from geofig_engine.core.layer import LayerSpec
+    from geofig_engine.core.stat import StatIdentity
+
+    coord = TernaryCoord(channels=("SO4", "Cl", "HCO3"), handedness="right")
+    layer = LayerSpec(
+        geom=GeomLine(),
+        stat=StatIdentity(),
+        visual_mapping={
+            "SO4": pd.Series([0.5], dtype=float),
+            "Cl": pd.Series([0.3], dtype=float),
+            "HCO3": pd.Series([0.2], dtype=float),
+        },
+    )
+    ax = _render_single_top({"axis_arrows": True}, coord=coord, layers=[layer])
+    anns = [t for t in ax.texts if isinstance(t, matplotlib.text.Annotation)]
+    assert len(anns) == 3
+    # For a RIGHT-handed (anion) triangle the reversal flags are
+    # rev_bottom=False, rev_left=True, rev_right=False, so the increasing
+    # (100%) corner is:
+    #   - bottom: base-right -> arrow points RIGHT (increasing x),
+    #   - left:   base-left -> arrow falls toward the base-left,
+    #   - right:  apex -> arrow rises toward the apex.
+    horizontal = 0
+    rising = 0
+    falling = 0
+    for a in anns:
+        head = np.asarray(a.xy, dtype=float)
+        tail = np.asarray(a.xyann, dtype=float)
+        delta = head - tail
+        if abs(delta[1]) < 1e-9:
+            horizontal += 1
+            assert delta[0] > 0  # bottom edge points toward base-right (increasing x)
+        if delta[1] > 1e-9:
+            rising += 1  # right edge rises toward the apex
+        if delta[1] < -1e-9:
+            falling += 1  # left edge falls toward the base-left
+    assert horizontal == 1  # exactly the bottom (flattened to the base) edge
+    assert rising == 1  # only the right edge rises toward the apex
+    assert falling == 1  # the left edge falls toward its 100% corner
 
 
 def test_plain_single_stays_native_axes():

@@ -302,31 +302,54 @@ def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
                     clip_on=False)
 
     # -- axis direction arrows (opt-in) --
-    # Point toward ascending values along each edge (sorted rule), parallel to
-    # the edge via the WP-B helper, offset just outside the triangle.
+    # Each arrow runs parallel to its edge and points toward the direction in
+    # which the edge's parallel axis increases in value (toward the edge's
+    # 100% corner), offset just outside the triangle. The high-value corner per
+    # edge is given by the same rev_* flags that orient the tick labels, so the
+    # arrow always agrees with the displayed scale regardless of handedness.
     if axis.show_arrows():
         arrow_off = 0.06
-        # Outward unit normals for each edge:
-        #   bottom (dir (1,0)) -> (0,-1)
-        #   left   (dir (0.5,SQRT3_2)) -> (-SQRT3_2, 0.5)
-        #   right  (dir (-0.5,SQRT3_2)) -> (SQRT3_2, 0.5)
-        _draw_axis_arrow(
-            ax, matrix,
-            (0.0, -arrow_off), (1.0, -arrow_off),
-            (1.0, 0.0), lw=frame_lw,
-        )
-        _draw_axis_arrow(
-            ax, matrix,
-            (-arrow_off * cos30, arrow_off * 0.5),
-            (0.5 - arrow_off * cos30, SQRT3_2 + arrow_off * 0.5),
-            (0.5, SQRT3_2), lw=frame_lw,
-        )
-        _draw_axis_arrow(
-            ax, matrix,
-            (1.0 + arrow_off * cos30, arrow_off * 0.5),
-            (0.5 + arrow_off * cos30, SQRT3_2 + arrow_off * 0.5),
-            (-0.5, SQRT3_2), lw=frame_lw,
-        )
+        apex_off = (arrow_off * cos30, arrow_off * 0.5)
+
+        # Bottom edge (parallel axis base-left -> base-right).
+        if rev_bottom:
+            _draw_axis_arrow(ax, matrix, (1.0, -arrow_off), (0.0, -arrow_off),
+                             (1.0, 0.0), lw=frame_lw)
+        else:
+            _draw_axis_arrow(ax, matrix, (0.0, -arrow_off), (1.0, -arrow_off),
+                             (1.0, 0.0), lw=frame_lw)
+
+        # Left edge (parallel axis base-left -> apex): toward apex by default.
+        if rev_left:
+            _draw_axis_arrow(
+                ax, matrix,
+                (0.5 - arrow_off * cos30, SQRT3_2 + arrow_off * 0.5),
+                (-apex_off[0], apex_off[1]),
+                (0.5, SQRT3_2), lw=frame_lw,
+            )
+        else:
+            _draw_axis_arrow(
+                ax, matrix,
+                (-apex_off[0], apex_off[1]),
+                (0.5 - arrow_off * cos30, SQRT3_2 + arrow_off * 0.5),
+                (0.5, SQRT3_2), lw=frame_lw,
+            )
+
+        # Right edge (parallel axis base-right -> apex): toward apex by default.
+        if rev_right:
+            _draw_axis_arrow(
+                ax, matrix,
+                (0.5 + arrow_off * cos30, SQRT3_2 + arrow_off * 0.5),
+                (1.0 + apex_off[0], apex_off[1]),
+                (-0.5, SQRT3_2), lw=frame_lw,
+            )
+        else:
+            _draw_axis_arrow(
+                ax, matrix,
+                (1.0 + apex_off[0], apex_off[1]),
+                (0.5 + arrow_off * cos30, SQRT3_2 + arrow_off * 0.5),
+                (-0.5, SQRT3_2), lw=frame_lw,
+            )
 
 
 def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
