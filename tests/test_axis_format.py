@@ -523,6 +523,38 @@ def test_polar_grid_toggled():
     assert gridlines_true and all(gl.get_visible() for gl in gridlines_true)
 
 
+def test_polar_radial_arrow_opt_in_points_outward():
+    from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
+
+    def render(settings):
+        fig, ax = _frame_polar_axes()
+        MatplotlibRenderer()._draw_frame(ax, _polar_spec(settings))
+        ax.set_ylim(0, 1)
+        ax.figure.canvas.draw()
+        return fig, ax
+
+    count = lambda ax: sum(1 for t in ax.texts if isinstance(t, matplotlib.text.Annotation))
+
+    fig_off, ax_off = render({})
+    assert count(ax_off) == 0
+    fig_off.clf()
+
+    fig_on, ax_on = render({"axis_arrows": True})
+    assert count(ax_on) == 1
+    ann = next(t for t in ax_on.texts if isinstance(t, matplotlib.text.Annotation))
+    dc = ax_on.transData.inverted().transform(
+        ann.arrow_patch.get_transform().transform(ann.arrow_patch.get_path().vertices)
+    )
+    # Filter to stem points near the north ray (theta ~ pi/2) within the radial
+    # plot, ignoring arrowhead wings and clipping artifacts. The remaining
+    # points span increasing radius r -> outward along the ray.
+    mask = (np.abs(dc[:, 0] - np.pi / 2) < 0.5) & (dc[:, 1] <= 1.0)
+    stem = dc[mask]
+    assert stem.shape[0] >= 2
+    assert stem[:, 1].max() > stem[:, 1].min()
+    fig_on.clf()
+
+
 # ---------------------------------------------------------------------------
 # Top-level unified single path (WP-D): render a single framed spec like a child
 # ---------------------------------------------------------------------------

@@ -1047,6 +1047,22 @@ class MatplotlibRenderer(BaseRenderer):
             except TypeError:
                 pass
 
+        # -- radial axis direction arrow (opt-in) --
+        # Polar has no local-space affine stamp (native theta/r data space), so
+        # call the shared helper with an identity matrix: annotate in data coords
+        # along a chosen reference ray (north, theta = pi/2), pointing outward
+        # (ascending radius r).
+        if axis.show_arrows():
+            r_lo, r_hi = ax.get_ylim()
+            if r_hi - r_lo > 1e-9:
+                theta0 = math.pi / 2.0
+                _draw_axis_arrow(
+                    ax, np.eye(3),
+                    (theta0, r_lo + 0.10 * (r_hi - r_lo)),
+                    (theta0, 0.92 * r_hi),
+                    (0.0, 1.0), lw=axis.frame_linewidth,
+                )
+
     # ------------------------------------------------------------------
     # Stiff diagram (single-sample 6-axis polygon)
     # ------------------------------------------------------------------
