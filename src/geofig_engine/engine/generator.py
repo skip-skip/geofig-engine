@@ -28,6 +28,31 @@ from geofig_engine.utils.validation import validate_dict
 from geofig_engine.utils.typing import Mapping
 
 
+def _merge_settings(base: Mapping, override: Mapping) -> dict[str, Any]:
+    """Merge *override* into *base*, deep-merging the ``axis`` declaration.
+
+    The structured ``axis`` sub-dict (and its nested ``options``) is merged
+    per-field, so a partial override like ``{"axis": {"title": ...}}`` keeps the
+    template/config's remaining axis defaults (grid, labels, polar options)
+    instead of replacing the whole mapping.  Every other key is a shallow
+    top-level merge.
+    """
+    out = dict(base)
+    override_axis = dict(override).get("axis")
+    if isinstance(override_axis, dict):
+        merged_axis = dict(out.get("axis") or {})
+        for key, value in override_axis.items():
+            if isinstance(merged_axis.get(key), dict) and isinstance(value, dict):
+                merged_axis[key] = {**merged_axis[key], **value}
+            else:
+                merged_axis[key] = value
+        out["axis"] = merged_axis
+    for key, value in dict(override).items():
+        if key != "axis":
+            out[key] = value
+    return out
+
+
 @dataclass(frozen=True)
 class EngineConfig:
     """Configuration for the FigEngine orchestration layer."""
@@ -62,7 +87,7 @@ class FigureEngine:
         if isinstance(iterators, DimensionIterator):
             iterators = [iterators]
 
-        final_settings = {**self.config.default_settings, **(settings or {})}
+        final_settings = _merge_settings(self.config.default_settings, settings or {})
         final_context = {**self.config.default_context}
 
         results = expand(dataset, iterators or [])
@@ -103,7 +128,7 @@ class FigureEngine:
         facet: Facet | None = None,
     ) -> list[FigureSpec]:
         """Build FigureSpecs from a FigureTemplate."""
-        merged_settings = {**template.default_settings, **(settings or {})}
+        merged_settings = _merge_settings(template.default_settings, settings or {})
         return self.build_specs_from_layers(
             dataset=dataset,
             layers=template.layers,

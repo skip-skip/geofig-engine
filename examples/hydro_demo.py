@@ -134,7 +134,7 @@ def main() -> None:
     tmpl = nagph_nag(mapping={"x": "nag_ph", "y": "nag", "color": "type"})
     specs = engine.build_specs_from_template(
         cls_ds, tmpl,
-        settings={"title": "5 – NAG pH vs NAG Classification"},
+        settings={"axis": {"title": "5 – NAG pH vs NAG Classification"}},
     )
     fig = renderer.render(specs[0])
     fig.savefig(out / "05_nagph_nag.png", dpi=150)
@@ -147,7 +147,7 @@ def main() -> None:
     tmpl = anp_agp(mapping={"x": "agp", "y": "anp", "color": "type"})
     specs = engine.build_specs_from_template(
         cls_ds, tmpl,
-        settings={"title": "6 – ANP vs AGP Classification"},
+        settings={"axis": {"title": "6 – ANP vs AGP Classification"}},
     )
     fig = renderer.render(specs[0])
     fig.savefig(out / "06_anp_agp.png", dpi=150)
@@ -161,7 +161,7 @@ def main() -> None:
                    npr_crit=3, nnp_crit=20)
     specs = engine.build_specs_from_template(
         cls_ds, tmpl,
-        settings={"title": "7 – NPR vs NNP ARD Classification"},
+        settings={"axis": {"title": "7 – NPR vs NNP ARD Classification"}},
     )
     fig = renderer.render(specs[0])
     fig.savefig(out / "07_npr_nnp.png", dpi=150)

@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from geofig_engine.core.geom import GeomAbline, GeomHSpan, GeomPoint, GeomText, GeomVSpan
 from geofig_engine.templates import npr_nnp, anp_agp, nagph_nag
@@ -35,7 +36,7 @@ class TestNprNnp:
     def test_default_settings(self):
         t = npr_nnp()
         assert t.default_settings["figsize"] == (8, 8)
-        assert "title" in t.default_settings
+        assert "title" in t.default_settings["axis"]
 
     def test_mapping_preserved(self):
         mapping = {"x": "npr", "y": "nnp", "color": "group"}
@@ -112,3 +113,48 @@ class TestNagphNag:
         t = nagph_nag(mapping=mapping)
         point_layer = [l for l in t.layers if isinstance(l.geom, GeomPoint)][0]
         assert point_layer.mapping["y"] == "nag"
+
+
+class TestClassificationTitleRenders:
+    """Regression: classification titles must render, not be dropped.
+
+    These templates declare their default title under ``settings["axis"]``.
+    The native render path applies it via :class:`AxisFormat`; if an override
+    or parse regression drops the title (flat top-level ``title`` vs.
+    ``axis["title"]``), this fails.
+    """
+
+    _COLS = {
+        "agp": [2.0, 4.0, 6.0, 8.0],
+        "anp": [30.0, 50.0, 80.0, 120.0],
+        "npr": [1.0, 2.0, 3.0, 4.0],
+        "nnp": [10.0, 20.0, 30.0, 40.0],
+        "nag_ph": [2.0, 4.0, 6.0, 8.0],
+        "nag": [30.0, 60.0, 120.0, 200.0],
+        "type": ["a", "b", "a", "b"],
+    }
+
+    @pytest.mark.parametrize(
+        "factory,mapping",
+        [
+            (npr_nnp, {"x": "npr", "y": "nnp", "color": "type"}),
+            (anp_agp, {"x": "agp", "y": "anp", "color": "type"}),
+            (nagph_nag, {"x": "nag_ph", "y": "nag", "color": "type"}),
+        ],
+    )
+    def test_default_title_renders(self, factory, mapping):
+        import matplotlib
+
+        matplotlib.use("Agg")
+        from geofig_engine.core.dataset import Dataset
+        from geofig_engine.engine import FigureEngine
+        from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
+
+        df = pd.DataFrame(self._COLS)
+        specs = FigureEngine().build_specs_from_template(
+            Dataset(df, "npr"), factory(mapping=mapping)
+        )
+        ax = MatplotlibRenderer().render(specs[0]).axes[0]
+        expected = specs[0].settings["axis"]["title"]
+        assert expected
+        assert ax.get_title() == expected
