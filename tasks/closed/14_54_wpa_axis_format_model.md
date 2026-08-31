@@ -9,9 +9,11 @@
 Introduce a single, shared, declarative axis-formatting model consumed by the
 **unified frame-drawing pipeline**. Both the top-level path and the linked-axes
 child-frame path use the exact same functions and the exact same formatting
-specification. Formatting is declared under a structured `settings["axis"]`
-dict, following the `SecondaryAxis` precedent (frozen dataclass + pure parser +
-validation + tuple round-trip serialization).
+specification. Formatting is read from **flat top-level settings keys**
+(`title`, `xlabel`/`ylabel`, `xlim`/`ylim`, `grid`, `grid_step`, `tick_step`,
+`label_policy`, `xscale`/`yscale`, `time_format`, `tick_format`, polar toggles)
+and parsed into the model, following the `SecondaryAxis` precedent (frozen
+dataclass + pure parser + validation + tuple round-trip serialization).
 
 The model is a **common core + per-coordinate `options` extension**, so each
 coordinate type (cartesian, ternary, polar) can carry unique declarations while
@@ -56,13 +58,12 @@ Per-coordinate extension:
 `ValueError` like `SecondaryAxis`.
 
 **`parse_axis_settings(settings, coord) -> AxisFormat`** — pure reader:
-- If `settings.get("axis")` is a mapping, build from it (validated).
-- Otherwise fall back to the current legacy flat keys so existing templates and
-  tests keep working: `title`, `xlabel`, `ylabel`, `xlim`, `ylim`, `grid`,
-  `grid_step`, `tick_step`, `label_policy`, `xscale`, `yscale`, `time_format`,
-  and polar `hide_spine`/`hide_angular_ticks`/`hide_angular_labels`/
-  `hide_radial_labels`/`hide_radial_ticks`/`polar_tick_labels` (mapped into
-  `options`).
+- Reads only flat top-level keys from `settings`: `title`, `xlabel`, `ylabel`,
+  `xlim`, `ylim`, `grid`, `grid_step`, `tick_step`, `label_policy`, `xscale`,
+  `yscale`, `time_format`, `tick_format`, and polar
+  `hide_spine`/`hide_angular_ticks`/`hide_angular_labels`/`hide_radial_labels`/
+  `hide_radial_ticks`/`polar_tick_labels` (mapped into `options`).
+- `xlim`/`ylim` (both present) become the `limits` `(xlim, ylim)` pair.
 - `coord` provides context for coord-specific defaults/validation, but the
   common parse stays coord-agnostic.
 
@@ -73,13 +74,13 @@ and reused by the frame renderer (WP-B, WP-C) and the unified single path
 ## Acceptance criteria
 
 - [ ] `parse_axis_settings({}, coord)` returns a valid `AxisFormat` with defaults (no crash)
-- [ ] Explicit `settings["axis"]` and the equivalent legacy flat keys produce **equal** `AxisFormat` instances
-- [ ] Polar-specific legacy keys map into `AxisFormat.options`
-- [ ] Malformed `limits` / negative `tick_step` / bad `label_policy` raise `ValueError`
+- [ ] Flat top-level keys parse into the equal `AxisFormat` fields / `options`
+- [ ] Polar-specific flat keys map into `AxisFormat.options`
+- [ ] Malformed `xlim`/`ylim` / negative `tick_step` / bad `label_policy` raise `ValueError`
 - [ ] `tick_format` defaults to `":g"`; appearance knobs have the native-match defaults
 - [ ] No matplotlib imports in `core/axis.py`
 
 ## Files
 
 - `src/geofig_engine/core/axis.py` (new)
-- `tests/test_axis_format.py` (new, model/parse/validation/parity)
+- `tests/test_axis_format.py` (new, model/parse/validation)

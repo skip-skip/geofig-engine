@@ -1,4 +1,4 @@
-"""
+﻿"""
 Engine orchestration for FigEngine.
 
 This module builds renderer-ready FigureSpec objects from Dataset,
@@ -26,31 +26,6 @@ from geofig_engine.renderers.matplotlib.legend import LegendAccumulator
 from geofig_engine.templates.base import FigureTemplate
 from geofig_engine.utils.validation import validate_dict
 from geofig_engine.utils.typing import Mapping
-
-
-def _merge_settings(base: Mapping, override: Mapping) -> dict[str, Any]:
-    """Merge *override* into *base*, deep-merging the ``axis`` declaration.
-
-    The structured ``axis`` sub-dict (and its nested ``options``) is merged
-    per-field, so a partial override like ``{"axis": {"title": ...}}`` keeps the
-    template/config's remaining axis defaults (grid, labels, polar options)
-    instead of replacing the whole mapping.  Every other key is a shallow
-    top-level merge.
-    """
-    out = dict(base)
-    override_axis = dict(override).get("axis")
-    if isinstance(override_axis, dict):
-        merged_axis = dict(out.get("axis") or {})
-        for key, value in override_axis.items():
-            if isinstance(merged_axis.get(key), dict) and isinstance(value, dict):
-                merged_axis[key] = {**merged_axis[key], **value}
-            else:
-                merged_axis[key] = value
-        out["axis"] = merged_axis
-    for key, value in dict(override).items():
-        if key != "axis":
-            out[key] = value
-    return out
 
 
 @dataclass(frozen=True)
@@ -87,7 +62,7 @@ class FigureEngine:
         if isinstance(iterators, DimensionIterator):
             iterators = [iterators]
 
-        final_settings = _merge_settings(self.config.default_settings, settings or {})
+        final_settings = {**self.config.default_settings, **(settings or {})}
         final_context = {**self.config.default_context}
 
         results = expand(dataset, iterators or [])
@@ -128,7 +103,7 @@ class FigureEngine:
         facet: Facet | None = None,
     ) -> list[FigureSpec]:
         """Build FigureSpecs from a FigureTemplate."""
-        merged_settings = _merge_settings(template.default_settings, settings or {})
+        merged_settings = {**template.default_settings, **(settings or {})}
         return self.build_specs_from_layers(
             dataset=dataset,
             layers=template.layers,
@@ -339,39 +314,12 @@ class FigureEngine:
         resolved = {}
 
         for key, value in settings.items():
-            if key == "axis" and isinstance(value, dict):
-                resolved["axis"] = self._resolve_axis_dict(value, context)
-            elif isinstance(value, str):
-                resolved[key] = self._resolve_string(value, context)
+            if isinstance(value, str):
+                try:
+                    resolved[key] = value.format(**context)
+                except KeyError:
+                    resolved[key] = value
             else:
                 resolved[key] = value
 
         return resolved
-
-    @staticmethod
-    def _resolve_string(value: str, context: dict[str, Any]) -> str:
-        try:
-            return value.format(**context)
-        except KeyError:
-            return value
-
-    def _resolve_axis_dict(
-        self, axis: dict[str, Any], context: dict[str, Any]
-    ) -> dict[str, Any]:
-        resolved: dict[str, Any] = {}
-        for key, value in axis.items():
-            if isinstance(value, dict):
-                resolved[key] = {
-                    k: (
-                        self._resolve_string(v, context)
-                        if isinstance(v, str)
-                        else v
-                    )
-                    for k, v in value.items()
-                }
-            elif isinstance(value, str):
-                resolved[key] = self._resolve_string(value, context)
-            else:
-                resolved[key] = value
-        return resolved
-    

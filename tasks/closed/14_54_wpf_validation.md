@@ -1,4 +1,4 @@
-# WP-F: Validate `settings["axis"]` in `validate_figure_spec`
+# WP-F: Validate flat axis keys in `validate_figure_spec`
 
 **Status**: complete
 **Phase**: 14.54
@@ -7,7 +7,7 @@
 ## Description
 
 Surface axis-format validation at `FigureSpec` construction time so a malformed
-`settings["axis"]` declaration fails fast with a clear error — mirroring the
+flat axis-key declaration fails fast with a clear error — mirroring the
 existing `_validate_secondary_settings` hook. Currently the only axis validation
 is the secondary-axis check; all other axis keys (`xlim`/`ylim`, `grid`,
 `grid_step`, `tick_step`, `label_policy`, `title`, `xscale`, `yscale`,
@@ -18,8 +18,8 @@ is the secondary-axis check; all other axis keys (`xlim`/`ylim`, `grid`,
 ### `src/geofig_engine/core/spec.py`
 
 - Add `_validate_axis_settings(settings, coord=None)` that delegates to
-  `parse_axis_settings(...)`, which enforces: `limits` pair/pair-of-pairs,
-  positive `grid_step`/`tick_step`, valid `label_policy` enum, valid
+  `parse_axis_settings(...)`, which enforces: `xlim`/`ylim` pairs of real
+  numbers, positive `grid_step`/`tick_step`, valid `label_policy` enum, valid
   `tick_format` string, and (when present) recognized `options` and appearance
   knobs.
 - Call it from `validate_figure_spec` alongside `_validate_secondary_settings`
@@ -28,10 +28,10 @@ is the secondary-axis check; all other axis keys (`xlim`/`ylim`, `grid`,
 
 ## Acceptance criteria
 
-- [ ] `FigureSpec(settings={"axis": ...})` with a bad `limits` raises `ValueError` at construction
+- [ ] `FigureSpec(settings={"xlim": [...], "ylim": [...]})` with a bad `xlim`/`ylim` raises `ValueError` at construction
 - [ ] Bad `label_policy` / non-positive `tick_step` / bad `tick_format` raise `ValueError`
-- [ ] A valid `settings["axis"]` (and legacy flat keys with no `axis`) constructs without error
-- [ ] Existing templates/specs without an `axis` key are unaffected
+- [ ] A valid flat-key declaration constructs without error
+- [ ] Existing templates/specs are unaffected
 
 ## Files
 

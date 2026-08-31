@@ -13,12 +13,13 @@ and close the WP-A..J task files.
 
 - Grep for consistency: no leftover `settings` reads of flat axis keys in the
   renderer that should have migrated to `AxisFormat`; the single and child paths
-  call the same `_draw_frame`; no reference to a `settings["axis"]` field that
-  doesn't exist in `AxisFormat`.
+  call the same `_draw_frame`; no flat axis key that doesn't exist in
+  `AxisFormat`.
 - `ROADMAP.md`: add a `## ✅ Phase 14.54 — Unified axis/frame rendering pipeline`
   section documenting:
-  - `AxisFormat` model (`core/axis.py` + `settings["axis"]`) with common +
-    per-coord `options` + appearance knobs.
+  - `AxisFormat` model (`core/axis.py`) with common + per-coord `options` +
+    appearance knobs, parsed from flat top-level settings keys (no nested
+    `settings["axis"]`).
   - Unified `_draw_frame` entry used by BOTH top-level and child specs
     (cartesian/ternary/polar).
   - Custom polar frame.
@@ -27,7 +28,7 @@ and close the WP-A..J task files.
   - Facet path consuming `AxisFormat` per panel.
   - `tick_format` capability, validation, serialization tuple restoration
     (incl. `figsize`).
-  - Template migration to `settings["axis"]`.
+  - Template defaults stay flat (no `settings["axis"]`).
   - Note `y2scale` intentionally left untouched.
 - Move WP-A..J task files from `tasks/open/` to `tasks/closed/`.
 

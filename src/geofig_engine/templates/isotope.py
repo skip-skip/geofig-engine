@@ -21,11 +21,9 @@ from geofig_engine.utils.typing import SourceType
 
 ISOTOPE_DEFAULTS: dict[str, Any] = {
     "figsize": (10, 6),
-    "axis": {
-        "xscale": "linear",
-        "yscale": "linear",
-        "grid": True,
-    },
+    "xscale": "linear",
+    "yscale": "linear",
+    "grid": True,
 }
 
 ACCEPTED_CATEGORIES: list[str] = ["water_isotope"]

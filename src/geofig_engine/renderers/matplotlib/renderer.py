@@ -141,9 +141,9 @@ def _tick_label(value: float, fmt: str) -> str:
 def _child_local_bbox(child):
     """Local-space bounding box corners for a child FigureSpec.
 
-    TernaryCoord → unit triangle; CoordCartesian with axis ``limits`` (structured
-    ``axis.limits`` or legacy flat ``xlim``/``ylim``) → that region (e.g. the
-    diamond's [0,100]²); everything else → unit square.
+    TernaryCoord → unit triangle; CoordCartesian with axis ``limits`` (flat
+    ``xlim``/``ylim`` via AxisFormat) → that region (e.g. the diamond's
+    [0,100]²); everything else → unit square.
     """
     coord = child.coord
     if isinstance(coord, TernaryCoord):
@@ -415,8 +415,7 @@ def _frame_settings_dict(axis: AxisFormat) -> dict:
 def _with_flat_secondary(axis: AxisFormat, settings: dict) -> AxisFormat:
     """Merge flat ``secondary_x``/``secondary_y`` settings keys into ``options``.
 
-    Before templates migrate to ``settings["axis"]["options"]`` (WP-H), the
-    secondary-axis declarations are flat top-level settings keys on a child.
+    The secondary-axis declarations are flat top-level settings keys on a child.
     This keeps them reachable by the unified pipeline while ``AxisFormat``
     remains the single format source. Existing ``options`` entries win over the
     flat fallback.

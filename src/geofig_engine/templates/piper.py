@@ -126,11 +126,10 @@ def build_piper_specs(
         data=aug,
         mappings=dia_mmap,
         settings={
-            "axis": {
-                "limits": [[0, 100], [0, 100]],
-                "grid_step": 20,
-                "tick_step": 20,
-            },
+            "xlim": (0, 100),
+            "ylim": (0, 100),
+            "grid_step": 20,
+            "tick_step": 20,
             "secondary_x": {"range": [0, 100], "label": "Anions (%)"},
             "secondary_y": {"range": [0, 100], "label": "Cations (%)"},
         },

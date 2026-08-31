@@ -36,7 +36,7 @@ class TestNprNnp:
     def test_default_settings(self):
         t = npr_nnp()
         assert t.default_settings["figsize"] == (8, 8)
-        assert "title" in t.default_settings["axis"]
+        assert "title" in t.default_settings
 
     def test_mapping_preserved(self):
         mapping = {"x": "npr", "y": "nnp", "color": "group"}
@@ -74,7 +74,7 @@ class TestAnpAgp:
     def test_default_settings(self):
         t = anp_agp()
         assert "figsize" in t.default_settings
-        assert "xlabel" in t.default_settings["axis"]
+        assert "xlabel" in t.default_settings
 
     def test_mapping_preserved(self):
         mapping = {"x": "agp", "y": "anp", "color": "type"}
@@ -106,7 +106,7 @@ class TestNagphNag:
     def test_default_settings(self):
         t = nagph_nag()
         assert "figsize" in t.default_settings
-        assert "xlabel" in t.default_settings["axis"]
+        assert "xlabel" in t.default_settings
 
     def test_mapping_preserved(self):
         mapping = {"x": "nag_ph", "y": "nag", "color": "type"}
@@ -118,10 +118,10 @@ class TestNagphNag:
 class TestClassificationTitleRenders:
     """Regression: classification titles must render, not be dropped.
 
-    These templates declare their default title under ``settings["axis"]``.
-    The native render path applies it via :class:`AxisFormat`; if an override
-    or parse regression drops the title (flat top-level ``title`` vs.
-    ``axis["title"]``), this fails.
+    These templates declare their default title as a flat top-level
+    ``title`` setting. The native render path applies it via
+    :class:`AxisFormat`; if an override or parse regression drops the title
+    (a regression in the flat top-level ``title`` handling), this fails.
     """
 
     _COLS = {
@@ -155,6 +155,6 @@ class TestClassificationTitleRenders:
             Dataset(df, "npr"), factory(mapping=mapping)
         )
         ax = MatplotlibRenderer().render(specs[0]).axes[0]
-        expected = specs[0].settings["axis"]["title"]
+        expected = specs[0].settings["title"]
         assert expected
         assert ax.get_title() == expected

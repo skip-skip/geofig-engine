@@ -81,10 +81,8 @@ def main() -> None:
     specs = engine.build_specs_from_layers(
         ds, layers,
         settings={
-            "axis": {
-                "title": "1 – Quadrants + 1:1 line (zorder demo)",
-                "xlabel": "X", "ylabel": "Y",
-            },
+            "title": "1 – Quadrants + 1:1 line (zorder demo)",
+            "xlabel": "X", "ylabel": "Y",
             "figsize": (8, 6),
         },
     )
@@ -129,10 +127,8 @@ def main() -> None:
     specs = engine.build_specs_from_layers(
         ds, layers,
         settings={
-            "axis": {
-                "title": "2 – Threshold bands with annotation",
-                "xlabel": "X", "ylabel": "Y",
-            },
+            "title": "2 – Threshold bands with annotation",
+            "xlabel": "X", "ylabel": "Y",
             "figsize": (8, 6),
         },
     )
@@ -162,10 +158,8 @@ def main() -> None:
     specs = engine.build_specs_from_layers(
         ds, layers,
         settings={
-            "axis": {
-                "title": "3 – Rotated text with bounding boxes",
-                "xlabel": "X", "ylabel": "Y",
-            },
+            "title": "3 – Rotated text with bounding boxes",
+            "xlabel": "X", "ylabel": "Y",
             "figsize": (8, 6),
         },
     )
@@ -191,10 +185,8 @@ def main() -> None:
     specs = engine.build_specs_from_layers(
         ds, layers,
         settings={
-            "axis": {
-                "title": "4 – Two-point abline (purple dash-dot)",
-                "xlabel": "X", "ylabel": "Y",
-            },
+            "title": "4 – Two-point abline (purple dash-dot)",
+            "xlabel": "X", "ylabel": "Y",
             "figsize": (8, 6),
         },
     )
@@ -227,10 +219,8 @@ def main() -> None:
         ds_polar, layers,
         coord=CoordPolar(),
         settings={
-            "axis": {
-                "title": "5 – Polar text (auto-aligned by coord)",
-                "options": {"polar_tick_labels": True},
-            },
+            "title": "5 – Polar text (auto-aligned by coord)",
+            "polar_tick_labels": True,
             "figsize": (6, 6),
         },
     )

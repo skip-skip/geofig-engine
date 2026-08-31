@@ -55,11 +55,10 @@ def build_empty_piper() -> FigureSpec:
     diamond_child = FigureSpec(
         data=empty_df, mappings={},
         settings={
-            "axis": {
-                "limits": [[0, 100], [0, 100]],
-                "grid_step": 20,
-                "tick_step": 20,
-            },
+            "xlim": [0, 100],
+            "ylim": [0, 100],
+            "grid_step": 20,
+            "tick_step": 20,
             "secondary_x": {"range": [100, 0], "label": "Anions (%)"},
             "secondary_y": {"range": [100, 0], "label": "Cations (%)"},
         },
@@ -80,7 +79,7 @@ def build_empty_piper() -> FigureSpec:
 
     return FigureSpec(
         data=empty_df, mappings={},
-        settings={"figsize": (10, 8), "axis": {"title": "Piper Axes Debug (no data)"}},
+        settings={"figsize": (10, 8), "title": "Piper Axes Debug (no data)"},
         context={}, template_name="piper",
         children=(left_child, right_child, diamond_child),
     )

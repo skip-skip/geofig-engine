@@ -38,10 +38,8 @@ specs, figures, legend_fig = render_template(
     dataset=dataset,
     template=template,
     settings={
-        "axis": {
-            "xlabel": "Time",
-            "ylabel": "{y}",
-        },
+        "xlabel": "Time",
+        "ylabel": "{y}",
         "figsize": (8, 5),
         "figname": "timeseries_{y}",
     },

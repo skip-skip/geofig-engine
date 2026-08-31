@@ -46,7 +46,7 @@ triangle. Native-axes mutators for cartesian/ternary are retired in favor of
 ## Acceptance criteria
 
 - [ ] A top-level `TernaryCoord` spec renders the same framed triangle (outline, grid, 20/40/60/80 ticks, ion arrows) as a child ternary
-- [ ] A top-level cartesian spec with `settings["axis"]` renders through `_draw_frame`, not native ticks
+- [ ] A top-level cartesian spec with flat axis keys (`xlim`/`ylim`) renders through `_draw_frame`, not native ticks
 - [ ] Appearance is preserved for existing templates (defaults preserved; only light test updates — see WP-I)
 - [ ] Single and child paths call the same `_draw_frame` + `_render_axes` + world-limit code
 - [ ] Full existing suite passes (with the light test updates in WP-I)

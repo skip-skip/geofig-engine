@@ -3,21 +3,21 @@ AxisFormat: declarative axis-formatting spec for the unified frame pipeline.
 
 A single, shared formatting model consumed by the **unified frame-drawing
 pipeline** (Phase 14.54). Both the top-level path and the linked-axes
-child-frame path use the exact same formatting specification, declared under a
-structured ``settings["axis"]`` dict::
+child-frame path use the exact same formatting specification, declared with
+flat top-level settings keys::
 
     settings = {
-        "axis": {
-            "title": "My plot",
-            "limits": [[0, 100], [0, 100]],
-            "grid": True,
-            "grid_step": 20,
-            "tick_step": 10,
-            "label_policy": "upright",
-            "tick_format": ":g",
-            # per-coordinate extension:
-            "options": {"hide_spine": True, "polar_tick_labels": ...},
-        }
+        "title": "My plot",
+        "xlim": (0, 100),
+        "ylim": (0, 100),
+        "grid": True,
+        "grid_step": 20,
+        "tick_step": 10,
+        "label_policy": "upright",
+        "tick_format": ":g",
+        # per-coordinate extension (polar toggles, etc.):
+        "hide_spine": True,
+        "polar_tick_labels": True,
     }
 
 The model is a **common core + per-coordinate ``options`` extension**: each
@@ -231,16 +231,14 @@ class AxisFormat:
 def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
     """Read axis-formatting into an :class:`AxisFormat`, validated.
 
-    Priority:
-    1. ``settings["axis"]`` — a structured mapping (validated directly).
-    2. Legacy flat keys at ``settings`` top level (``xlim``, ``ylim``,
-       ``grid_step``, ``tick_step``, ``label_policy``, polar toggles, etc.)
-       mapped into the equivalent :class:`AxisFormat` fields / ``options``.
+    Reads flat top-level keys from ``settings`` (``title``, ``xlabel``,
+    ``ylabel``, ``xlim``/``ylim``, ``grid``, ``grid_step``, ``tick_step``,
+    ``label_policy``, ``xscale``/``yscale``, ``time_format``, ``tick_format``,
+    polar toggles, ...) and maps them into the equivalent :class:`AxisFormat`
+    fields / ``options``.
 
     ``coord`` is currently informational context for any future coord-specific
-    defaults/validation; the common parse stays coord-agnostic. Either way the
-    result is an equal :class:`AxisFormat` for an explicit ``axis`` mapping and
-    its equivalent flat keys.
+    defaults/validation; the common parse stays coord-agnostic.
 
     Args:
         settings: A spec's ``settings`` dict (may be None).
@@ -253,12 +251,7 @@ def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
         ValueError: For malformed declarations (bad limits/tick_step/policies).
     """
     cfg = dict(settings or {})
-    raw = cfg.get("axis")
 
-    if isinstance(raw, Mapping):
-        return AxisFormat(**dict(raw))
-
-    # Legacy flat-key fallback.
     def _pick(*names, default=None):
         for name in names:
             if name in cfg:

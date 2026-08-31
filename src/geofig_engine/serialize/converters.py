@@ -515,21 +515,6 @@ def _settings_from_dict(data):
         and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in figsize)
     ):
         result["figsize"] = tuple(figsize)
-    # settings["axis"]["limits"] is a pair of (x, y) pairs; restore tuples.
-    axis = result.get("axis")
-    if isinstance(axis, dict):
-        limits = axis.get("limits")
-        if isinstance(limits, list) and len(limits) == 2:
-            restored = []
-            ok = True
-            for pair in limits:
-                if isinstance(pair, list) and len(pair) == 2:
-                    restored.append(tuple(pair))
-                else:
-                    ok = False
-                    break
-            if ok:
-                axis["limits"] = tuple(restored)
     for axis_key in ("secondary_x", "secondary_y"):
         axis = result.get(axis_key)
         if isinstance(axis, dict):

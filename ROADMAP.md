@@ -160,11 +160,11 @@ the child's `LinkTransform`, rotated per `label_policy`). Declared as structured
 
 ---
 
-## ✅ Phase 14.54 — Unified axis/frame rendering pipeline (909 tests)
+## ✅ Phase 14.54 — Unified axis/frame rendering pipeline (908 tests)
 
 Unify top-level and child frame-drawing on a single shared `AxisFormat` model
-declared under `settings["axis"]`, so a top-level spec renders through the same
-functions and the same formatting spec as a nested child. Delivered across
+read from flat top-level settings keys, so a top-level spec renders through the
+same functions and the same formatting spec as a nested child. Delivered across
 WP-A through WP-J.
 
 - **`AxisFormat` model** (`core/axis.py`) — frozen, matplotlib-free dataclass:
@@ -173,9 +173,10 @@ WP-A through WP-J.
   plus appearance-preserving style knobs and a per-coordinate `options` dict
   (e.g. polar toggles `hide_spine`, `hide_angular_ticks`, `hide_radial_labels`,
   `hide_radial_ticks`, `polar_tick_labels`). `parse_axis_settings(settings, coord)`
-  reads `settings["axis"]` (validated) with a legacy flat-key fallback
-  (`xlim`/`ylim`/`grid_step`/… mapped to the equal field/options), so explicit
-  and flat forms parse identically.
+  reads flat top-level keys (`title`, `xlabel`/`ylabel`, `xlim`/`ylim`, `grid`,
+  `grid_step`, `tick_step`, `label_policy`, `xscale`/`yscale`, `time_format`,
+  `tick_format`, polar toggles) and maps them into the equivalent `AxisFormat`
+  fields / `options`.
 - **Unified `_draw_frame` entry** — a single frame renderer consumed by BOTH the
   top-level path and the child path. Top-level cartesian-with-limits and ternary
   render through `_render_single_framed` (one child, identity transform);
@@ -199,22 +200,24 @@ WP-A through WP-J.
   numeric tick labels only; parser strips the leading `:` via `_tick_label`.
 - **Validation** — `_validate_axis_settings` (delegating to
   `parse_axis_settings`) runs on `FigureSpec` construction, rejecting malformed
-  `limits`, non-positive `tick_step`/`grid_step`, bad `label_policy`/`tick_format`.
-- **Serialization** — `_settings_from_dict` restores `figsize` and
-  `settings["axis"]["limits"]` as tuples after JSON round-trips.
-- **Template migration** — per-template defaults moved from flat keys into
-  `settings["axis"]` (timeseries, bivariate, isotope, histogram, boxplot,
-  anp_agp, nagph_nag, npr_nnp, radar, pie); piper diamond uses
-  `axis.limits`/`grid_step`/`tick_step`. `_child_local_bbox` parses `AxisFormat`.
-  `figsize`/`y2scale`/`title`/`secondary_*` stay top-level.
+  `xlim`/`ylim`, non-positive `tick_step`/`grid_step`, bad
+  `label_policy`/`tick_format`.
+- **Serialization** — `_settings_from_dict` restores `figsize` and flat
+  `xlim`/`ylim` as tuples after JSON round-trips.
+- **Axis declarations stay flat** — axis-formatting (`title`, `xlabel`,
+  `ylabel`, `xlim`/`ylim`, `grid`, `grid_step`, `tick_step`, `time_format`,
+  polar toggles) is declared as flat top-level settings keys and parsed into
+  `AxisFormat`; there is **no nested `settings["axis"]` dict** (an earlier
+  structured form was reverted as confusing). Templates/examples/tests all use
+  flat keys; `_child_local_bbox` parses `AxisFormat`. `figsize`/`secondary_*`
+  stay top-level.
 - **`y2scale` intentionally untouched** (dormant twin-axis scale).
-- **Backward compatibility note** — `parse_axis_settings` is strict: when a spec
-  declares `settings["axis"]`, the structured form wins over flat legacy keys;
-  tests that passed flat overrides were updated to the structured shape.
+- **Backward compatibility note** — `parse_axis_settings` accepts flat top-level
+  axis keys only; the structured `settings["axis"]` form was removed entirely.
 
 ### Verification
 
-- 909 tests pass (WP-A 30, WP-B 4, WP-C 5, WP-D 5, WP-E 3, WP-F 9, WP-G 4, plus
+- 908 tests pass (WP-A 30, WP-B 4, WP-C 5, WP-D 5, WP-E 3, WP-F 9, WP-G 4, plus
   template/integration updates and the existing suite)
 - `hydro_demo.py` renders all 7 figures, appearance preserved
 - `debug_piper_axes.py` diamond unchanged (children path)

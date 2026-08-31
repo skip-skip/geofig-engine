@@ -10,12 +10,10 @@ from geofig_engine.utils.typing import SourceType
 
 ANP_AGP_DEFAULTS: dict[str, Any] = {
     "figsize": (8, 8),
-    "axis": {
-        "title": "ANP vs AGP — Classification",
-        "grid": True,
-        "xlabel": "AGP (Acid Generation Potential)",
-        "ylabel": "ANP (Acid Neutralisation Potential)",
-    },
+    "title": "ANP vs AGP — Classification",
+    "grid": True,
+    "xlabel": "AGP (Acid Generation Potential)",
+    "ylabel": "ANP (Acid Neutralisation Potential)",
 }
 
 

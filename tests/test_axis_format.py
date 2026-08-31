@@ -2,8 +2,7 @@
 Tests for the AxisFormat model and parse_axis_settings (Phase 14.54 WP-A).
 
 Covers the shared declarative axis-formatting model consumed by the unified
-frame pipeline: structured ``settings["axis"]`` parsing, the legacy flat-key
-fallback, appearance knobs, and validation.
+frame pipeline: flat top-level axis keys, appearance knobs, and validation.
 """
 
 import numpy as np
@@ -47,19 +46,18 @@ def test_appearance_knob_defaults():
     assert a.label_offset is None
 
 
-def test_explicit_axis_parses_fields():
+def test_flat_axis_parses_fields():
     a = parse_axis_settings(
         {
-            "axis": {
-                "title": "T",
-                "limits": [[0, 100], [0, 100]],
-                "grid": True,
-                "grid_step": 20,
-                "tick_step": 10,
-                "label_policy": "parallel",
-                "xscale": "log",
-                "tick_format": "{:.1f}",
-            }
+            "title": "T",
+            "xlim": [0, 100],
+            "ylim": [0, 100],
+            "grid": True,
+            "grid_step": 20,
+            "tick_step": 10,
+            "label_policy": "parallel",
+            "xscale": "log",
+            "tick_format": "{:.1f}",
         },
         CoordCartesian(),
     )
@@ -74,24 +72,8 @@ def test_explicit_axis_parses_fields():
 
 
 @pytest.mark.parametrize("coord", [CoordCartesian(), CoordPolar(), TernaryCoord()])
-def test_explicit_and_legacy_parity(coord):
-    explicit = {
-        "axis": {
-            "title": "T",
-            "xlabel": "X",
-            "ylabel": "Y",
-            "limits": [[0, 100], [20, 80]],
-            "grid": True,
-            "grid_step": 20,
-            "tick_step": 10,
-            "label_policy": "parallel",
-            "xscale": "linear",
-            "yscale": "linear",
-            "time_format": "%H:%M",
-            "tick_format": "{:.1f}",
-        }
-    }
-    legacy = {
+def test_flat_keys_parse(coord):
+    settings = {
         "title": "T",
         "xlabel": "X",
         "ylabel": "Y",
@@ -106,7 +88,19 @@ def test_explicit_and_legacy_parity(coord):
         "time_format": "%H:%M",
         "tick_format": "{:.1f}",
     }
-    assert parse_axis_settings(explicit, coord) == parse_axis_settings(legacy, coord)
+    a = parse_axis_settings(settings, coord)
+    assert a.title == "T"
+    assert a.xlabel == "X"
+    assert a.ylabel == "Y"
+    assert a.limits == ((0.0, 100.0), (20.0, 80.0))
+    assert a.grid is True
+    assert a.grid_step == 20.0
+    assert a.tick_step == 10.0
+    assert a.label_policy == "parallel"
+    assert a.xscale == "linear"
+    assert a.yscale == "linear"
+    assert a.time_format == "%H:%M"
+    assert a.tick_format == "{:.1f}"
 
 
 @pytest.mark.parametrize("coord", [CoordCartesian(), CoordPolar(), TernaryCoord()])
@@ -128,26 +122,16 @@ def test_legacy_polar_options_map(coord):
     assert a.option("polar_tick_labels") == 1
 
 
-def test_explicit_options_pass_through():
-    a = parse_axis_settings(
-        {"axis": {"options": {"hide_spine": True, "polar_tick_labels": 1}}},
-        CoordPolar(),
-    )
-    assert a.option("hide_spine") is True
-    assert a.option("polar_tick_labels") == 1
-    assert a.option("missing", "d") == "d"
-
-
 def test_limits_pair_of_pairs_coerced():
     a = parse_axis_settings(
-        {"axis": {"limits": ([0, 10], [5, 15])}}, CoordCartesian()
+        {"xlim": [0, 10], "ylim": [5, 15]}, CoordCartesian()
     )
     assert a.limits == ((0.0, 10.0), (5.0, 15.0))
 
 
 def test_xlim_ylim_properties():
     a = parse_axis_settings(
-        {"axis": {"limits": [[0, 100], [20, 80]]}}, CoordCartesian()
+        {"xlim": [0, 100], "ylim": [20, 80]}, CoordCartesian()
     )
     assert a.xlim == (0.0, 100.0)
     assert a.ylim == (20.0, 80.0)
@@ -282,12 +266,6 @@ TICK_TEXT_SETTINGS = {
     "tick_step": 20,
 }
 
-TICK_TEXT_AXIS_SETTINGS = {
-    "limits": [[0, 100], [0, 100]],
-    "grid_step": 20,
-    "tick_step": 20,
-}
-
 
 def test_child_frame_renders_via_draw_frame():
     ax = _render_child(TICK_TEXT_SETTINGS)
@@ -296,19 +274,9 @@ def test_child_frame_renders_via_draw_frame():
     assert "20" in texts and "80" in texts
 
 
-def test_flat_and_axis_frame_parity():
-    flat = _render_child(TICK_TEXT_SETTINGS)
-    axis_form = _render_child({"axis": TICK_TEXT_AXIS_SETTINGS})
-    assert sorted(t.get_text() for t in flat.texts) == sorted(
-        t.get_text() for t in axis_form.texts
-    )
-
-
 def test_tick_format_changes_tick_labels():
     plain = _render_child(TICK_TEXT_SETTINGS)
-    formatted = _render_child(
-        {"axis": {**TICK_TEXT_AXIS_SETTINGS, "tick_format": ":.1f"}}
-    )
+    formatted = _render_child({**TICK_TEXT_SETTINGS, "tick_format": ":.1f"})
     plain_texts = {t.get_text() for t in plain.texts}
     form_texts = {t.get_text() for t in formatted.texts}
     assert "20" in plain_texts
@@ -316,16 +284,13 @@ def test_tick_format_changes_tick_labels():
     assert "20" not in form_texts and "20.0" not in plain_texts
 
 
-def test_secondary_axis_titles_from_axis_options():
+def test_secondary_axis_titles_from_flat_keys():
     ax = _render_child(
         {
-            "axis": {
-                "limits": [[0, 100], [0, 100]],
-                "options": {
-                    "secondary_x": {"range": [100, 0], "label": "Anions (%)"},
-                    "secondary_y": {"range": [100, 0], "label": "Cations (%)"},
-                },
-            }
+            "xlim": [0, 100],
+            "ylim": [0, 100],
+            "secondary_x": {"range": [100, 0], "label": "Anions (%)"},
+            "secondary_y": {"range": [100, 0], "label": "Cations (%)"},
         }
     )
     texts = [t.get_text() for t in ax.texts]
@@ -374,15 +339,10 @@ def _frame_polar_axes():
     return fig, ax
 
 
-@pytest.mark.parametrize("axis_form", [False, True])
-def test_polar_frame_hides_spine(axis_form):
+def test_polar_frame_hides_spine():
     from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
 
     settings = {"hide_spine": True, "grid": False}
-    if axis_form:
-        settings = {
-            "axis": {"grid": False, "options": {"hide_spine": True}}
-        }
     fig, ax = _frame_polar_axes()
     renderer = MatplotlibRenderer()
     renderer._draw_frame(ax, _polar_spec(settings))
@@ -398,7 +358,7 @@ def test_polar_frame_polar_tick_labels_mapping():
     renderer._draw_frame(
         ax,
         _polar_spec(
-            {"axis": {"options": {"polar_tick_labels": True}}}
+            {"polar_tick_labels": True}
         ),
     )
     labels = [t.get_text() for t in ax.get_xticklabels()]
@@ -415,25 +375,25 @@ def test_polar_frame_hide_radial_ticks():
     renderer._draw_frame(
         ax,
         _polar_spec(
-            {"axis": {"options": {"hide_radial_ticks": True}}}
+            {"hide_radial_ticks": True}
         ),
     )
     assert ax.get_yticks().size == 0
     fig.clf()
 
 
-def test_polar_grid_toggled_from_axis():
+def test_polar_grid_toggled():
     from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
 
     renderer = MatplotlibRenderer()
 
     fig_g, ax_g = _frame_polar_axes()
-    renderer._draw_frame(ax_g, _polar_spec({"axis": {"grid": False}}))
+    renderer._draw_frame(ax_g, _polar_spec({"grid": False}))
     gridlines_false = list(ax_g.yaxis.get_gridlines())
     fig_g.clf()
 
     fig_t, ax_t = _frame_polar_axes()
-    renderer._draw_frame(ax_t, _polar_spec({"axis": {"grid": True}}))
+    renderer._draw_frame(ax_t, _polar_spec({"grid": True}))
     gridlines_true = list(ax_t.yaxis.get_gridlines())
     fig_t.clf()
 
@@ -486,7 +446,7 @@ def _render_single_top(settings, coord=CoordCartesian(), layers=None):
 
 def test_top_level_cartesian_framed_renders_via_draw_frame():
     ax = _render_single_top(
-        {"axis": {"limits": [[0, 100], [0, 100]], "grid_step": 20, "tick_step": 20}}
+        {"xlim": (0, 100), "ylim": (0, 100), "grid_step": 20, "tick_step": 20}
     )
     texts = [t.get_text() for t in ax.texts]
     assert "20" in texts and "80" in texts
@@ -502,16 +462,6 @@ def test_top_level_cartesian_flat_equals_child():
     )
     # Top-level adds its data line on top of the same 9 frame lines the child has.
     assert len(flat.lines) == len(child.lines) + 1
-
-
-def test_top_level_cartesian_axis_form_equals_child():
-    top = _render_single_top(
-        {"axis": {"limits": [[0, 100], [0, 100]], "grid_step": 20, "tick_step": 20}}
-    )
-    child = _render_child({"axis": TICK_TEXT_AXIS_SETTINGS})
-    assert sorted(t.get_text() for t in top.texts) == sorted(
-        t.get_text() for t in child.texts
-    )
 
 
 def test_top_level_ternary_renders_triangle():
@@ -595,9 +545,9 @@ def _render_facet(settings, scales="fixed"):
     return fig
 
 
-def test_facet_panels_formatted_from_axis_format():
+def test_facet_panels_formatted_from_flat_keys():
     fig = _render_facet(
-        {"axis": {"xlabel": "X-LAB", "ylabel": "Y-LAB", "grid": True}}
+        {"xlabel": "X-LAB", "ylabel": "Y-LAB", "grid": True}
     )
     assert len(fig.axes) == 2
     for ax in fig.axes:
@@ -606,18 +556,15 @@ def test_facet_panels_formatted_from_axis_format():
         assert any(gl.get_visible() for gl in ax.get_xgridlines())
 
 
-def test_facet_flat_and_axis_limits_parity():
-    flat = _render_facet({"xlim": (0, 10), "ylim": (0, 10)}, scales="free")
-    axis_form = _render_facet(
-        {"axis": {"limits": [[0, 10], [0, 10]]}}, scales="free"
-    )
-    for a, b in zip(flat.axes, axis_form.axes):
-        assert a.get_xlim() == b.get_xlim()
-        assert a.get_ylim() == b.get_ylim()
+def test_facet_flat_limits():
+    fig = _render_facet({"xlim": (0, 10), "ylim": (0, 10)}, scales="free")
+    for ax in fig.axes:
+        assert ax.get_xlim() == (0.0, 10.0)
+        assert ax.get_ylim() == (0.0, 10.0)
 
 
 def test_facet_layout_and_sharing_preserved():
-    fig = _render_facet({"axis": {"xlabel": "X-LAB"}})
+    fig = _render_facet({"xlabel": "X-LAB"})
     # Same two panels, x shared (fixed scales), each carries the AxisFormat label.
     assert len(fig.axes) == 2
     for ax in fig.axes:
@@ -653,44 +600,44 @@ def _construction_spec(settings):
 
 
 @pytest.mark.parametrize(
-    "bad_axis",
+    "bad_settings",
     [
-        {"limits": [0, 100]},
-        {"limits": [[0, 100]]},
-        {"limits": [[0, 100], [100]]},
-        {"limits": [[0, 100], [0, 100], [0, 100]]},
+        {"xlim": [0, 100, 200], "ylim": [0, 100]},  # xlim not a pair
+        {"xlim": [0, 100], "ylim": [0, 100, 200]},  # ylim not a pair
+        {"xlim": [0, "a"], "ylim": [0, 1]},  # non-numeric
+        {"xlim": "oops", "ylim": [0, 1]},  # not a sequence
     ],
 )
-def test_axis_limits_validation_at_construction(bad_axis):
+def test_axis_limits_validation_at_construction(bad_settings):
     with pytest.raises(ValueError):
-        _construction_spec({"axis": bad_axis})
+        _construction_spec(bad_settings)
 
 
 def test_bad_label_policy_raises_at_construction():
     with pytest.raises(ValueError):
-        _construction_spec({"axis": {"label_policy": "slanted"}})
+        _construction_spec({"label_policy": "slanted"})
 
 
 def test_nonpositive_tick_step_raises_at_construction():
     with pytest.raises(ValueError):
-        _construction_spec({"axis": {"tick_step": 0}})
+        _construction_spec({"tick_step": 0})
     with pytest.raises(ValueError):
-        _construction_spec({"axis": {"grid_step": -3}})
+        _construction_spec({"grid_step": -3})
 
 
 def test_bad_tick_format_raises_at_construction():
     with pytest.raises(ValueError):
-        _construction_spec({"axis": {"tick_format": 123}})
+        _construction_spec({"tick_format": 123})
 
 
 def test_valid_axis_constructs_cleanly():
     spec = _construction_spec(
-        {"axis": {"limits": [[0, 100], [0, 100]], "grid_step": 20, "tick_step": 20}}
+        {"xlim": (0, 100), "ylim": (0, 100), "grid_step": 20, "tick_step": 20}
     )
     assert spec is not None
 
 
-def test_legacy_flat_keys_construct_without_axis():
+def test_flat_keys_construct_cleanly():
     spec = _construction_spec(
         {"xlim": (0, 100), "ylim": (0, 100), "grid_step": 20, "tick_step": 20}
     )
@@ -698,7 +645,7 @@ def test_legacy_flat_keys_construct_without_axis():
 
 
 # ---------------------------------------------------------------------------
-# Serialization round-trips for AxisFormat settings (WP-G): figsize + axis.limits
+# Serialization round-trips for AxisFormat settings (WP-G): figsize + xlim/ylim
 # ---------------------------------------------------------------------------
 
 
@@ -710,13 +657,13 @@ def _roundtrip_settings(settings):
     return restored.settings
 
 
-def test_roundtrip_preserves_axis_limits_as_tuple_of_pairs():
+def test_roundtrip_preserves_limits_as_flat_tuples():
     s = _roundtrip_settings(
-        {"axis": {"limits": [[0, 100], [0, 100]], "grid_step": 20}}
+        {"xlim": (0, 100), "ylim": (0, 100), "grid_step": 20}
     )
-    assert s["axis"]["limits"] == ((0, 100), (0, 100))
-    assert isinstance(s["axis"]["limits"], tuple)
-    assert s["axis"]["limits"][0] == (0, 100)
+    assert s["xlim"] == (0, 100)
+    assert isinstance(s["xlim"], tuple)
+    assert s["ylim"] == (0, 100)
 
 
 def test_roundtrip_preserves_figsize_as_tuple():

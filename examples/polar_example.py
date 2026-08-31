@@ -75,7 +75,7 @@ def main() -> None:
     )
     specs = engine.build_specs_from_template(
         pie_ds, tmpl,
-        settings={"axis": {"title": "Fruit Distribution"}},
+        settings={"title": "Fruit Distribution"},
     )
     fig = renderer.render(specs[0])
     fig.savefig(str(out / "01_pie_chart.png"))
@@ -91,7 +91,7 @@ def main() -> None:
     )
     specs2 = engine.build_specs_from_template(
         pie_ds, tmpl2,
-        settings={"axis": {"title": "Fruit Distribution (with labels)"}},
+        settings={"title": "Fruit Distribution (with labels)"},
     )
     fig2 = renderer.render(specs2[0])
     fig2.savefig(str(out / "01b_pie_chart_labeled.png"))
@@ -106,7 +106,7 @@ def main() -> None:
     )
     specs3 = engine.build_specs_from_template(
         pie_ds, tmpl3,
-        settings={"axis": {"title": "Fruit Distribution (percent only)"}},
+        settings={"title": "Fruit Distribution (percent only)"},
     )
     fig3 = renderer.render(specs3[0])
     fig3.savefig(str(out / "01c_pie_chart_pct_only.png"))
@@ -122,7 +122,7 @@ def main() -> None:
     )
     specs = engine.build_specs_from_template(
         radar_ds, tmpl,
-        settings={"axis": {"title": "Hero Attributes"}},
+        settings={"title": "Hero Attributes"},
     )
     fig = renderer.render(specs[0])
     fig.savefig(str(out / "02_radar_chart.png"))
@@ -141,11 +141,9 @@ def main() -> None:
     specs = engine.build_specs_from_layers(
         scat_ds, layers,
         settings={
-            "axis": {
-                "title": "Polar Scatter",
-                "xlabel": "Angle (rad)",
-                "ylabel": "Radius",
-            },
+            "title": "Polar Scatter",
+            "xlabel": "Angle (rad)",
+            "ylabel": "Radius",
         },
         coord=CoordPolar(),
     )
