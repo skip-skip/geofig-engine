@@ -224,6 +224,50 @@ WP-A through WP-J.
 
 ---
 
+## ✅ Phase 14.55 — General axis-direction arrows (920 tests)
+
+Add a generic, opt-in "direction arrow" capability to every framed coordinate
+drawer. Each axis can annotate its **direction of increasing (ascending) value**
+with a shared arrow helper, so arrows are now configured per-spec instead of
+being hardcoded (and inconsistent) across cartesian/ternary/polar.
+
+- **`axis_arrows` field** (`core/axis.py`) — common `AxisFormat` field, a flat
+  top-level settings key read by `parse_axis_settings` and validated as bool in
+  `__post_init__` (`_bool_value`). Accessor `show_arrows()` returns `bool`.
+  Default **off** — no template opts in except the ternary ones (WP-F).
+- **Shared `_draw_axis_arrow` helper** (`renderer.py`) — draws an `annotate`
+  arrow parallel to an axis via `_apply_matrix_pts`, with the arrowhead on the
+  **high-value end**. Callers pass already-displaced low→high endpoints (offset
+  ownership is explicit, not a perpendicular-scalar knob). Optional midpoint
+  label rotates via `label_rotation(local_vec, matrix, policy)`, so it stays
+  parallel under `"parallel"`. Direction always follows ascending numeric value
+  regardless of declared/descending limit order ("axis values must be sorted");
+  there is no `reverse` handedness flag.
+- **Cartesian framed** (`_draw_cartesian_axis`) — arrows on the bottom (x),
+  left (y), and, when declared, top (`secondary_x`) and right (`secondary_y`)
+  edges, offset outside the frame to match the tick-label offset `d`.
+- **Ternary** (`_draw_ternary_frame`) — ion edge labels (`Mg`/`Ca`/`Na+K`) are
+  **decoupled** from arrows and always drawn as standalone text; the old fused
+  `_arrow` closure and `reverse`/arrowstyle logic were removed. Arrows (bottom,
+  left, right edges) are now opt-in via `axis_arrows` and point toward ascending
+  value (toward the apex), not by `coord.handedness`.
+- **Polar** (`_draw_polar_frame`) — one radial arrow on the north ray
+  (θ = π/2) pointing outward (increasing `r`), drawn in native theta/r data
+  space via the helper with an identity matrix; independent of the
+  `hide_spine`/`hide_radial_ticks`/etc. `options` toggles.
+- **Templates opt in** — piper template and `debug_piper_axes.py` set
+  `"axis_arrows": True` on both ternary children to preserve their edge arrows;
+  the diamond cartesian child stays off by default.
+- **Default-off note** — a ternary without `axis_arrows` now shows ion labels
+  but **no** arrows (formerly implicit); cartesian/polar output is unchanged by
+  default.
+- **Tests** — WP-G adds arrow-specific coverage across the model/parse, cartesian
+  (counts + descending-limits sorted direction), ternary (labels-without-arrows
+  and per-edge ascending direction via `annotate` head/tail geometry), and polar
+  (outward + independence from hide toggles). Full suite: **920 passed**.
+
+---
+
 - **Multi-level grouped legends** — `subseries_col` pattern with section headers and aligned columns (from geochemplot's grouped-legend pattern)
 - **Dimension legend builder** — `build_dimension_legend()` standalone function from color_col + shape_col + linetype_col
 - **Marker/color combinatorial generator** — `gen_markers()`, `gen_markers_series()` using `itertools.product` over marker list + color palette
