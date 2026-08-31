@@ -439,7 +439,7 @@ class TestFigureSpecSerialize:
 
         assert restored.template_name == "bivariate"
         assert restored.iterator_key == ("group",)
-        assert restored.settings == {"title": "Test", "figsize": [6, 4]}
+        assert restored.settings == {"title": "Test", "figsize": (6, 4)}
         assert restored.context == {"iter": 0}
         assert type(restored.coord) is CoordPolar
         assert type(restored.facet) is FacetWrap

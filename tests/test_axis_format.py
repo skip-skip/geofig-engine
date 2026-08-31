@@ -695,3 +695,49 @@ def test_legacy_flat_keys_construct_without_axis():
         {"xlim": (0, 100), "ylim": (0, 100), "grid_step": 20, "tick_step": 20}
     )
     assert spec is not None
+
+
+# ---------------------------------------------------------------------------
+# Serialization round-trips for AxisFormat settings (WP-G): figsize + axis.limits
+# ---------------------------------------------------------------------------
+
+
+def _roundtrip_settings(settings):
+    from geofig_engine.serialize.converters import spec_from_json, spec_to_json
+
+    spec = _construction_spec(settings)
+    restored = spec_from_json(spec_to_json(spec))
+    return restored.settings
+
+
+def test_roundtrip_preserves_axis_limits_as_tuple_of_pairs():
+    s = _roundtrip_settings(
+        {"axis": {"limits": [[0, 100], [0, 100]], "grid_step": 20}}
+    )
+    assert s["axis"]["limits"] == ((0, 100), (0, 100))
+    assert isinstance(s["axis"]["limits"], tuple)
+    assert s["axis"]["limits"][0] == (0, 100)
+
+
+def test_roundtrip_preserves_figsize_as_tuple():
+    s = _roundtrip_settings({"figsize": (8, 8)})
+    assert s["figsize"] == (8, 8)
+    assert isinstance(s["figsize"], tuple)
+
+
+def test_roundtrip_preserves_existing_tuple_keys():
+    s = _roundtrip_settings(
+        {
+            "xlim": (0, 5),
+            "ylim": (0, 9),
+            "secondary_x": {"range": [100, 0]},
+        }
+    )
+    assert s["xlim"] == (0, 5)
+    assert s["ylim"] == (0, 9)
+    assert s["secondary_x"]["range"] == (100, 0)
+
+
+def test_roundtrip_unchanged_without_axis_or_figsize():
+    s = _roundtrip_settings({"title": "T", "grid": True})
+    assert s == {"title": "T", "grid": True}
