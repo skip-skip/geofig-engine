@@ -159,6 +159,8 @@ class AxisFormat:
     x_reversed: bool = False
     y_reversed: bool = False
     label_policy: str = "upright"
+    axis_label_policy: str | None = None
+    tick_label_policy: str | None = None
     xscale: str | None = None
     yscale: str | None = None
     time_format: str | None = None
@@ -217,6 +219,18 @@ class AxisFormat:
         object.__setattr__(self, "y_reversed", _bool_value(self.y_reversed, "y_reversed"))
 
         object.__setattr__(self, "label_policy", _policy_value(self.label_policy))
+        if self.axis_label_policy is not None:
+            object.__setattr__(
+                self,
+                "axis_label_policy",
+                _policy_value(self.axis_label_policy, "axis_label_policy"),
+            )
+        if self.tick_label_policy is not None:
+            object.__setattr__(
+                self,
+                "tick_label_policy",
+                _policy_value(self.tick_label_policy, "tick_label_policy"),
+            )
         for attr in ("xscale", "yscale", "time_format"):
             value = getattr(self, attr)
             if value is not None:
@@ -323,13 +337,36 @@ class AxisFormat:
             return self.fontsize
         return _FONT_DEFAULTS[kind]
 
+    def axis_label_policy_eff(self) -> str:
+        """Effective rotation policy for axis labels.
+
+        ``axis_label_policy`` if set, else the shared ``label_policy``.
+        """
+        return (
+            self.axis_label_policy
+            if self.axis_label_policy is not None
+            else self.label_policy
+        )
+
+    def tick_label_policy_eff(self) -> str:
+        """Effective rotation policy for tick labels.
+
+        ``tick_label_policy`` if set, else the shared ``label_policy``.
+        """
+        return (
+            self.tick_label_policy
+            if self.tick_label_policy is not None
+            else self.label_policy
+        )
+
 
 def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
     """Read axis-formatting into an :class:`AxisFormat`, validated.
 
     Reads flat top-level keys from ``settings`` (``title``, ``xlabel``,
     ``ylabel``, ``xlim``/``ylim``, ``grid``, ``grid_step``, ``tick_step``,
-    ``axis_arrows``, ``x_reversed``/``y_reversed``, ``label_policy``, ``xscale``/
+    ``axis_arrows``, ``x_reversed``/``y_reversed``, ``label_policy``,
+    ``axis_label_policy``/``tick_label_policy``, ``xscale``/
     ``yscale``, ``time_format``,
     ``tick_format``, font-size keys (``fontsize`` plus the per-element
     ``*_fontsize`` knobs), polar toggles, ...) and maps them into the equivalent
@@ -380,6 +417,8 @@ def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
         x_reversed=_pick("x_reversed", default=False),
         y_reversed=_pick("y_reversed", default=False),
         label_policy=_pick("label_policy", default="upright"),
+        axis_label_policy=_pick("axis_label_policy"),
+        tick_label_policy=_pick("tick_label_policy"),
         xscale=_pick("xscale"),
         yscale=_pick("yscale"),
         time_format=_pick("time_format"),

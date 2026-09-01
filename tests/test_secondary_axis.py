@@ -145,6 +145,42 @@ class TestParseSecondarySettings:
         assert axis.label_policy == "parallel"
         assert axis.primary_range == (0.0, 200.0)
 
+    def test_inherits_axis_tick_policies_from_defaults(self):
+        axes = parse_secondary_settings(
+            {"secondary_x": {"range": [100, 0]}},
+            xlim=(0, 200),
+            ylim=(0, 200),
+            defaults={
+                "axis_label_policy": "parallel",
+                "tick_label_policy": "upright",
+            },
+        )
+        axis = axes["x"]
+        assert axis.axis_label_policy == "parallel"
+        assert axis.tick_label_policy == "upright"
+        assert axis.axis_label_policy_eff() == "parallel"
+        assert axis.tick_label_policy_eff() == "upright"
+
+    def test_secondary_axis_tick_policies_override_defaults(self):
+        axes = parse_secondary_settings(
+            {
+                "secondary_x": {
+                    "range": [100, 0],
+                    "axis_label_policy": "upright",
+                    "tick_label_policy": "parallel",
+                }
+            },
+            defaults={
+                "axis_label_policy": "parallel",
+                "tick_label_policy": "upright",
+            },
+        )
+        axis = axes["x"]
+        assert axis.axis_label_policy == "upright"
+        assert axis.tick_label_policy == "parallel"
+        assert axis.axis_label_policy_eff() == "upright"
+        assert axis.tick_label_policy_eff() == "parallel"
+
     def test_explicit_xlim_ylim_override_settings(self):
         axes = parse_secondary_settings(
             {"xlim": (0, 50), "ylim": (0, 50), "secondary_x": {"range": [50, 0]}},
@@ -226,6 +262,14 @@ class TestSecondarySettingsValidation:
         with pytest.raises(ValueError):
             validate_figure_spec(self._spec(
                 {"secondary_x": {"range": [0, 100], "label_policy": "diagonal"}}))
+
+    def test_invalid_axis_tick_policy_raises(self):
+        with pytest.raises(ValueError):
+            validate_figure_spec(self._spec(
+                {"secondary_x": {"range": [0, 100], "axis_label_policy": "diagonal"}}))
+        with pytest.raises(ValueError):
+            validate_figure_spec(self._spec(
+                {"secondary_x": {"range": [0, 100], "tick_label_policy": "diagonal"}}))
 
     def test_invalid_position_raises(self):
         with pytest.raises(ValueError):

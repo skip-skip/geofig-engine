@@ -319,6 +319,36 @@ generic **`fontsize`** fallback, so a single value can restyle everything.
 
 ---
 
+## ✅ Phase 14.57 — Independent axis-label & tick-label rotation policies (968 tests)
+
+Split the single `label_policy` (upright/parallel) text-rotation control into two
+independently-settable policies, plus fix a ternary ion-label tangent bug.
+
+- **`axis_label_policy` / `tick_label_policy`** (`core/axis.py`) — new `AxisFormat`
+  fields (`str | None`, default `None` = "inherit"), validated via `_policy_value`.
+  Each resolves independently: `axis_label_policy_eff()` governs axis labels
+  (frame/edge titles, ternary ion names) and `tick_label_policy_eff()` governs tick
+  labels. Both inherit from the shared `label_policy` unless set, so existing
+  `label_policy: "parallel"` configs keep rotating both — fully backward compatible.
+  Read as flat settings keys by `parse_axis_settings`.
+- **`SecondaryAxis`** — same two new fields, each defaulting to inherit the
+  secondary's `label_policy`; `parse_secondary_settings` inherits them from the
+  primary's effective policies unless a `secondary_x/y` declaration overrides.
+- **Wiring** (`renderer.py`) — `_draw_cartesian_axis` uses the effective tick
+  policy for primary + secondary ticks and the effective axis policy for secondary
+  titles; `_draw_ternary_frame` uses the effective tick policy for ticks and axis
+  policy for ion labels.
+- **Ternary ion-label bug fix** — previously all three ion names rotated with the
+  base-edge tangent `(1,0)`, so under `"parallel"` they all read 0°. Each ion now
+  follows its own edge tangent: base `(1,0)` → 0°, left `(0.5, √3/2)` → 60°, right
+  `(-0.5, √3/2)` → 120° (identity map). Default `"upright"` output is unchanged.
+- **Tests** — model defaults/inheritance/override for both fields, parse round-trip,
+  invalid-policy rejection, secondary inheritance + override, render tests proving
+  axis-vs-tick rotation independence and the ternary per-edge ion rotation.
+  Full suite: **968 passed**.
+
+---
+
 - **Multi-level grouped legends** — `subseries_col` pattern with section headers and aligned columns (from geochemplot's grouped-legend pattern)
 - **Dimension legend builder** — `build_dimension_legend()` standalone function from color_col + shape_col + linetype_col
 - **Marker/color combinatorial generator** — `gen_markers()`, `gen_markers_series()` using `itertools.product` over marker list + color palette

@@ -225,7 +225,8 @@ def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
     ions = list(coord.channels)
     handedness = coord.handedness
     title = axis.title
-    label_policy = axis.label_policy
+    tick_policy = axis.tick_label_policy_eff()
+    axis_policy = axis.axis_label_policy_eff()
     tick_fs = axis.resolve_fontsize("tick")
     ion_fs = axis.resolve_fontsize("axis_label")
     title_fs = axis.resolve_fontsize("title")
@@ -271,7 +272,7 @@ def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
 
         wb = _apply_matrix_pts(matrix, [(tick_val, -0.03)])[0]
         ax.text(wb[0], wb[1], bottom_lbl, ha="center", va="top", fontsize=tick_fs,
-                rotation=label_rotation((1, 0), matrix, policy=label_policy),
+                rotation=label_rotation((1, 0), matrix, policy=tick_policy),
                 clip_on=False)
 
         wl = _apply_matrix_pts(matrix, [(
@@ -279,7 +280,7 @@ def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
         )])[0]
         ax.text(wl[0], wl[1], left_lbl, ha="center", va="center", fontsize=tick_fs,
                 rotation=label_rotation(
-                    (0.5, SQRT3_2), matrix, policy=label_policy),
+                    (0.5, SQRT3_2), matrix, policy=tick_policy),
                 clip_on=False)
 
         wr = _apply_matrix_pts(matrix, [(
@@ -287,7 +288,7 @@ def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
         )])[0]
         ax.text(wr[0], wr[1], right_lbl, ha="center", va="center", fontsize=tick_fs,
                 rotation=label_rotation(
-                    (-0.5, SQRT3_2), matrix, policy=label_policy),
+                    (-0.5, SQRT3_2), matrix, policy=tick_policy),
                 clip_on=False)
 
     # -- edge title (world-side text) --
@@ -305,10 +306,14 @@ def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
         mid_base = (0.5, -offset)
         mid_right = (0.75 + offset * cos30, SQRT3_2 / 2.0 + offset * 0.5)
 
-        for anchor, text in ((mid_base, ions[0]), (mid_left, ions[1]), (mid_right, ions[2])):
+        for anchor, text, tangent in (
+            (mid_base, ions[0], (1, 0)),
+            (mid_left, ions[1], (0.5, SQRT3_2)),
+            (mid_right, ions[2], (-0.5, SQRT3_2)),
+        ):
             wp = _apply_matrix_pts(matrix, [anchor])[0]
             ax.text(wp[0], wp[1], text, ha='center', va='center',
-                    rotation=label_rotation((1, 0), matrix, policy=label_policy),
+                    rotation=label_rotation(tangent, matrix, policy=axis_policy),
                     fontsize=ion_fs,
                     bbox=dict(facecolor='white', edgecolor='none', pad=1),
                     clip_on=False)
@@ -390,7 +395,7 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     ylim = axis.ylim if axis.ylim is not None else (0.0, 1.0)
     grid_step = axis.grid_step if axis.grid_step is not None else 0.2
     tick_step = axis.tick_step if axis.tick_step is not None else grid_step
-    label_policy = axis.label_policy
+    tick_policy = axis.tick_label_policy_eff()
     title = axis.title
     tick_fs = axis.resolve_fontsize("tick")
     title_fs = axis.resolve_fontsize("title")
@@ -400,7 +405,12 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
 
     secondary = parse_secondary_settings(
         _frame_settings_dict(axis),
-        defaults={"tick_step": tick_step, "label_policy": label_policy},
+        defaults={
+            "tick_step": tick_step,
+            "label_policy": axis.label_policy,
+            "axis_label_policy": axis.axis_label_policy_eff(),
+            "tick_label_policy": axis.tick_label_policy_eff(),
+        },
     )
 
     x0, x1 = xlim
@@ -444,7 +454,7 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
         tval = xlo + xhi - tx if axis.x_reversed else tx
         w = _apply_matrix_pts(matrix, [(tx, ylo - d)])[0]
         ax.text(w[0], w[1], _tick_label(tval, tick_fmt), ha="center", va="top", fontsize=tick_fs,
-                rotation=label_rotation((1, 0), matrix, policy=label_policy),
+                rotation=label_rotation((1, 0), matrix, policy=tick_policy),
                 clip_on=False)
 
     # -- tick labels on left edge (world-side text) --
@@ -454,7 +464,7 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
         tval = ylo + yhi - ty if axis.y_reversed else ty
         w = _apply_matrix_pts(matrix, [(xlo - d, ty)])[0]
         ax.text(w[0], w[1], _tick_label(tval, tick_fmt), ha="right", va="center", fontsize=tick_fs,
-                rotation=label_rotation((0, 1), matrix, policy=label_policy),
+                rotation=label_rotation((0, 1), matrix, policy=tick_policy),
                 clip_on=False)
 
     # -- tick labels on top edge from secondary x (world-side text) --
@@ -465,7 +475,7 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
                 continue
             w = _apply_matrix_pts(matrix, [(lx, yhi + d)])[0]
             ax.text(w[0], w[1], _tick_label(sv, tick_fmt), ha="center", va="bottom", fontsize=tick_fs,
-                    rotation=label_rotation((1, 0), matrix, policy=sec.label_policy),
+                    rotation=label_rotation((1, 0), matrix, policy=sec.tick_label_policy_eff()),
                     clip_on=False)
 
     # -- tick labels on right edge from secondary y (world-side text) --
@@ -476,7 +486,7 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
                 continue
             w = _apply_matrix_pts(matrix, [(xhi + d, ly)])[0]
             ax.text(w[0], w[1], _tick_label(sv, tick_fmt), ha="left", va="center", fontsize=tick_fs,
-                    rotation=label_rotation((0, 1), matrix, policy=sec.label_policy),
+                    rotation=label_rotation((0, 1), matrix, policy=sec.tick_label_policy_eff()),
                     clip_on=False)
 
     # -- secondary axis titles (world-side text, beyond the tick labels) --
@@ -484,13 +494,13 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
         sec = secondary["x"]
         wt = _apply_matrix_pts(matrix, [((xlo + xhi) / 2.0, yhi + 0.20 * (yhi - ylo))])[0]
         ax.text(wt[0], wt[1], sec.label, ha="center", va="bottom", fontsize=axis.resolve_fontsize("axis_label"),
-                rotation=label_rotation((1, 0), matrix, policy=sec.label_policy),
+                rotation=label_rotation((1, 0), matrix, policy=sec.axis_label_policy_eff()),
                 clip_on=False)
     if "y" in secondary and secondary["y"].label:
         sec = secondary["y"]
         wt = _apply_matrix_pts(matrix, [(xhi + 0.20 * (xhi - xlo), (ylo + yhi) / 2.0)])[0]
         ax.text(wt[0], wt[1], sec.label, ha="left", va="center", fontsize=axis.resolve_fontsize("axis_label"),
-                rotation=label_rotation((0, 1), matrix, policy=sec.label_policy),
+                rotation=label_rotation((0, 1), matrix, policy=sec.axis_label_policy_eff()),
                 clip_on=False)
 
     # -- edge title (world-side text) --

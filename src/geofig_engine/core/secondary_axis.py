@@ -108,7 +108,14 @@ class SecondaryAxis:
             (drawn on the right/left edge).
         range: Secondary data scale ``(min, max)`` as declared in settings.
         tick_step: Spacing between tick labels on the secondary scale.
-        label_policy: ``"upright"`` or ``"parallel"`` text rotation policy.
+        label_policy: ``"upright"`` or ``"parallel"`` base text rotation policy,
+            inherited from the primary axis unless overridden.
+        axis_label_policy: ``"upright"`` or ``"parallel"``, or ``None`` to
+            inherit the secondary's ``label_policy`` (independent axis-label
+            rotation).
+        tick_label_policy: ``"upright"`` or ``"parallel"``, or ``None`` to
+            inherit the secondary's ``label_policy`` (independent tick-label
+            rotation).
         position: Frame edge to draw on (see :data:`_POSITION_BY_ORIENTATION`).
         label: Optional axis title (usually empty).
         primary_range: The local-frame range this axis maps onto (from the
@@ -122,6 +129,8 @@ class SecondaryAxis:
     position: str
     label: str
     primary_range: tuple[float, float]
+    axis_label_policy: str | None = None
+    tick_label_policy: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "range", _pair(self.range, "secondary range"))
@@ -137,6 +146,16 @@ class SecondaryAxis:
             raise ValueError(
                 f"secondary {self.orientation!r} label_policy must be one of "
                 f"{VALID_LABEL_POLICIES}, got {self.label_policy!r}"
+            )
+        if self.axis_label_policy is not None and self.axis_label_policy not in VALID_LABEL_POLICIES:
+            raise ValueError(
+                f"secondary {self.orientation!r} axis_label_policy must be one of "
+                f"{VALID_LABEL_POLICIES}, got {self.axis_label_policy!r}"
+            )
+        if self.tick_label_policy is not None and self.tick_label_policy not in VALID_LABEL_POLICIES:
+            raise ValueError(
+                f"secondary {self.orientation!r} tick_label_policy must be one of "
+                f"{VALID_LABEL_POLICIES}, got {self.tick_label_policy!r}"
             )
         allowed = _POSITION_BY_ORIENTATION[self.orientation]
         if self.position not in allowed:
@@ -179,6 +198,14 @@ class SecondaryAxis:
             out.append((sv, self.inv(sv)))
         return out
 
+    def axis_label_policy_eff(self) -> str:
+        """Effective rotation policy for this secondary's axis title."""
+        return self.axis_label_policy if self.axis_label_policy is not None else self.label_policy
+
+    def tick_label_policy_eff(self) -> str:
+        """Effective rotation policy for this secondary's tick labels."""
+        return self.tick_label_policy if self.tick_label_policy is not None else self.label_policy
+
 
 def parse_secondary_settings(
     settings: Mapping | None,
@@ -195,9 +222,11 @@ def parse_secondary_settings(
         ylim: Local-frame range the secondary y maps onto (the child's y axis).
             Either may be None in which case it is read from ``settings``
             (``"xlim"``/``"ylim"``) or defaults to ``(0, 1)``.
-        defaults: Optional fallback dict from which ``tick_step`` and
-            ``label_policy`` are inherited when a secondary declaration omits
-            them (the child's frame ``grid_step``/``tick_step``/``label_policy``).
+        defaults: Optional fallback dict from which ``tick_step``, ``label_policy``,
+            ``axis_label_policy`` and ``tick_label_policy`` are inherited when a
+            secondary declaration omits them (the child's frame
+            ``grid_step``/``tick_step``/``label_policy`` and those axes' effective
+            policies).
 
     Returns a dict keyed by orientation (``"x"``/``"y"``) of validated
     :class:`SecondaryAxis`. Absent declarations are skipped; malformed ones
@@ -234,6 +263,12 @@ def parse_secondary_settings(
             range=_pair(spec_range, f"secondary_{orientation} range"),
             tick_step=raw.get("tick_step", default_step),
             label_policy=raw.get("label_policy", default_policy),
+            axis_label_policy=raw.get(
+                "axis_label_policy", defaults.get("axis_label_policy")
+            ),
+            tick_label_policy=raw.get(
+                "tick_label_policy", defaults.get("tick_label_policy")
+            ),
             position=raw.get("position", _DEFAULT_POSITION[orientation]),
             label=raw.get("label", ""),
             primary_range=primary_by_orientation[orientation],

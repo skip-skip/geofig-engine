@@ -223,6 +223,8 @@ def test_xlim_ylim_properties():
         {"grid_step": -2},  # non-positive
         {"tick_step": 0},  # non-positive
         {"label_policy": "bad"},  # invalid policy
+        {"axis_label_policy": "bad"},  # invalid policy
+        {"tick_label_policy": "bad"},  # invalid policy
         {"tick_format": None},  # not a string
         {"grid_style": "nope"},  # not a dict
         {"options": "nope"},  # not a dict
@@ -328,6 +330,52 @@ def test_fontsize_resolution_cascade():
 
 def test_label_policy_constant():
     assert VALID_LABEL_POLICIES == ("upright", "parallel")
+
+
+def test_axis_tick_label_policy_defaults_to_none():
+    a = AxisFormat()
+    assert a.axis_label_policy is None
+    assert a.tick_label_policy is None
+    # Effective policies inherit the shared label_policy.
+    assert a.axis_label_policy_eff() == "upright"
+    assert a.tick_label_policy_eff() == "upright"
+
+
+def test_axis_tick_label_policy_inherit_from_label_policy():
+    a = AxisFormat(label_policy="parallel")
+    assert a.axis_label_policy is None
+    assert a.tick_label_policy is None
+    assert a.axis_label_policy_eff() == "parallel"
+    assert a.tick_label_policy_eff() == "parallel"
+
+
+def test_axis_tick_label_policy_override_independently():
+    a = AxisFormat(label_policy="upright", axis_label_policy="parallel")
+    assert a.axis_label_policy_eff() == "parallel"
+    assert a.tick_label_policy_eff() == "upright"
+
+    b = AxisFormat(label_policy="parallel", tick_label_policy="upright")
+    assert b.axis_label_policy_eff() == "parallel"
+    assert b.tick_label_policy_eff() == "upright"
+
+    c = AxisFormat(
+        label_policy="upright",
+        axis_label_policy="parallel",
+        tick_label_policy="parallel",
+    )
+    assert c.axis_label_policy_eff() == "parallel"
+    assert c.tick_label_policy_eff() == "parallel"
+
+
+@pytest.mark.parametrize("coord", [CoordCartesian(), CoordPolar(), TernaryCoord()])
+def test_axis_tick_label_policy_parse_roundtrip(coord):
+    a = parse_axis_settings({"axis_label_policy": "parallel"}, coord)
+    assert a.axis_label_policy == "parallel"
+    assert a.tick_label_policy is None
+    b = parse_axis_settings({"tick_label_policy": "parallel"}, coord)
+    assert a.axis_label_policy_eff() == "parallel"
+    assert b.tick_label_policy == "parallel"
+    assert a.tick_label_policy_eff() == "upright"
 
 
 def test_no_matplotlib_import():
@@ -1151,6 +1199,86 @@ def test_ternary_frame_title_uses_resolved_title():
         if t.get_text() == "TRI TITLE"
     ]
     assert sized == [14.0]  # generic fallback
+
+def test_ternary_ion_labels_follow_own_edge_tangent():
+    # Regression: all three ion labels used the base edge tangent (1,0), so under
+    # "parallel" they all rotated to 0 instead of following their own edge. Each
+    # ion should rotate parallel to its own edge: 0/60/120 degrees (identity map).
+    from geofig_engine.core.geom import GeomLine
+    from geofig_engine.core.layer import LayerSpec
+    from geofig_engine.core.stat import StatIdentity
+
+    layers = [
+        LayerSpec(
+            geom=GeomLine(),
+            stat=StatIdentity(),
+            visual_mapping={
+                "a": pd.Series([0.0, 0.5, 1.0]),
+                "b": pd.Series([0.0, 0.433, 0.0]),
+                "c": pd.Series([1.0, 0.067, 0.0]),
+            },
+        )
+    ]
+    ax = _render_single_top(
+        {"axis_label_policy": "parallel"}, coord=TernaryCoord(), layers=layers
+    )
+    rotations = {
+        t.get_text(): round(t.get_rotation(), 6)
+        for t in ax.texts
+        if t.get_text() in ("a", "b", "c")
+    }
+    # base('a'): (1,0) -> 0; left('b'): (0.5, sqrt3/2) -> 60; right('c') -> 120.
+    assert rotations["a"] == 0.0
+    assert rotations["b"] == pytest.approx(60.0)
+    assert rotations["c"] == pytest.approx(120.0)
+
+
+def test_cartesian_axis_tick_policies_independent():
+    # axis_label_policy and tick_label_policy rotate independently. The y-left
+    # tick labels (tangent (0,1)) and the y-right secondary title (tangent
+    # (0,1)) both read 90 under "parallel" and 0 under "upright".
+    def rotations(settings):
+        layers = [
+            LayerSpec(
+                geom=GeomLine(),
+                stat=StatIdentity(),
+                visual_mapping={
+                    "x": pd.Series([0.0, 50.0, 100.0]),
+                    "y": pd.Series([0.0, 50.0, 100.0]),
+                },
+            )
+        ]
+        ax = _render_single_top(settings, layers=layers)
+        tick_rots = {
+            t.get_text(): round(t.get_rotation(), 6)
+            for t in ax.texts
+            if t.get_text().isnumeric()
+        }
+        title_rots = {
+            t.get_text(): round(t.get_rotation(), 6)
+            for t in ax.texts
+            if t.get_text() == "RIGHT TITLE"
+        }
+        return tick_rots, title_rots
+
+    base = {
+        "xlim": (0, 100), "ylim": (0, 100),
+        "secondary_y": {"range": [0, 100], "label": "RIGHT TITLE"},
+    }
+
+    # Ticks parallel, axis labels upright: y-ticks rotate 90, title stays 0.
+    tick_rots, title_rots = rotations(
+        {**base, "tick_label_policy": "parallel", "axis_label_policy": "upright"}
+    )
+    assert any(abs(r - 90.0) < 1e-6 for r in tick_rots.values())
+    assert title_rots == {"RIGHT TITLE": 0.0}
+
+    # Ticks upright, axis labels parallel: y-ticks stay 0, title rotates 90.
+    tick_rots, title_rots = rotations(
+        {**base, "tick_label_policy": "upright", "axis_label_policy": "parallel"}
+    )
+    assert all(abs(r) < 1e-6 for r in tick_rots.values())
+    assert title_rots == {"RIGHT TITLE": 90.0}
 
 def test_suptitle_uses_resolved_fontsize():
     import matplotlib
