@@ -113,8 +113,11 @@ def build_piper_specs(
     aug["_dia_cation_pct"] = dia_cation_pct
 
     # -- build mappings (column references for ternary, passthrough for diamond) --
-    left_channels = (left_tri[1], left_tri[0], left_tri[2])
-    right_channels = (right_tri[1], right_tri[2], right_tri[0])
+    # Channel order = (apex, bottom-left, bottom-right) in the equilateral
+    # ternary projection. Left triangle: apex=Ca, bottom-left=Mg. Right
+    # triangle (right-handed mirror): apex=Cl, bottom-right=SO4.
+    left_channels = (left_tri[0], left_tri[1], left_tri[2])
+    right_channels = (right_tri[2], right_tri[1], right_tri[0])
 
     left_mmap: dict[str, SourceType] = {ch: [ch] for ch in left_channels}
     left_mmap.update(visuals)

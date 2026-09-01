@@ -89,7 +89,7 @@ class TestBuildPiperSpecs:
         left = specs[0].children[0]
         assert isinstance(left.coord, TernaryCoord)
         assert left.coord.handedness == "left"
-        assert left.coord.channels == ("Mg", "Ca", "Na+K")
+        assert left.coord.channels == ("Ca", "Mg", "Na+K")
         assert left.transform.ops == (("scale", (0.5, 0.5)),)
 
     def test_right_child_has_ternary_coord_and_transform(self):
@@ -97,7 +97,7 @@ class TestBuildPiperSpecs:
         right = specs[0].children[1]
         assert isinstance(right.coord, TernaryCoord)
         assert right.coord.handedness == "right"
-        assert right.coord.channels == ("SO4", "Cl", "HCO3")
+        assert right.coord.channels == ("Cl", "SO4", "HCO3")
         assert right.transform.ops == (
             ("scale", (-0.5, 0.5)),
             ("translate", (1.2, 0.0)),
@@ -300,8 +300,8 @@ class TestPiperChargeLabels:
         specs = build_piper_specs(_DATA)
         left = specs[0].children[0]
         right = specs[0].children[1]
-        assert left.coord.channels == ("Mg", "Ca", "Na+K")
-        assert right.coord.channels == ("SO4", "Cl", "HCO3")
+        assert left.coord.channels == ("Ca", "Mg", "Na+K")
+        assert right.coord.channels == ("Cl", "SO4", "HCO3")
 
     def test_custom_label_override(self):
         specs = build_piper_specs(
@@ -309,8 +309,8 @@ class TestPiperChargeLabels:
         )
         left = specs[0].children[0]
         right = specs[0].children[1]
-        assert left.coord.labels == (r"$Mg^{++}$", r"$Ca^{2+}$", r"$(Na+K)^{+}$")
-        assert right.coord.labels == (r"$SO_4^{--}$", r"$Cl^{-}$", "Alkalinity")
+        assert left.coord.labels == (r"$Ca^{2+}$", r"$Mg^{++}$", r"$(Na+K)^{+}$")
+        assert right.coord.labels == (r"$Cl^{-}$", r"$SO_4^{--}$", "Alkalinity")
 
     def test_ternary_labels_serialize_roundtrip(self):
         coord = TernaryCoord(
@@ -356,14 +356,16 @@ class TestPiperAxisLabelPolicy:
         }
         # Ion edge labels follow their own edge tangent, flipped to rightside-up
         # when the tangent angle is outside ±90° (rightside-up normalization).
-        # Left triangle: Mg base 0°, Ca left edge 60°, Na+K right edge 120°→-60°→300°.
-        assert rotations[r"$Mg^{++}$"] == pytest.approx(0.0)
-        assert rotations[r"$Ca^{++}$"] == pytest.approx(60.0)
+        # Left triangle: Ca (apex) base 0°, Mg (bottom-left) left edge 60°,
+        # Na+K (bottom-right) right edge 120°→-60°→300°.
+        assert rotations[r"$Ca^{++}$"] == pytest.approx(0.0)
+        assert rotations[r"$Mg^{++}$"] == pytest.approx(60.0)
         assert rotations[r"$(Na+K)^{+}$"] == pytest.approx(300.0)
-        # Right triangle is x-flipped: SO4 base 180°→0°, Cl left edge 120°→-60°→300°,
-        # HCO3 right edge 60° (no flip).
-        assert rotations[r"$SO_4^{--}$"] == pytest.approx(0.0)
-        assert rotations[r"$Cl^{-}$"] == pytest.approx(300.0)
+        # Right triangle is x-flipped (mirror): Cl (apex) base 0° (via mirror
+        # 180°→0°), SO4 (bottom-left) appears on the world-right at 300°,
+        # HCO3 (bottom-right) appears on the world-left at 60°.
+        assert rotations[r"$Cl^{-}$"] == pytest.approx(0.0)
+        assert rotations[r"$SO_4^{--}$"] == pytest.approx(300.0)
         assert rotations[r"$HCO_3^{-} + CO_3^{--}$"] == pytest.approx(60.0)
         # Tick labels stay upright: all numeric % ticks rotate 0°.
         tick_rots = {
@@ -411,14 +413,14 @@ class TestPiperParity:
         x_new = vm["x"].to_numpy()
         y_new = vm["y"].to_numpy()
 
-        # Legacy math
+        # Legacy math. Left triangle: apex=Ca, bottom-left=Mg, bottom-right=Na+K.
         def _fracs(cols):
             total = _DATA[list(cols)].sum(axis=1)
             return [_DATA[c] / total for c in cols]
 
         cat_f = _fracs(("Ca", "Mg", "Na+K"))
-        legacy_x = cat_f[2].to_numpy() + 0.5 * cat_f[1].to_numpy()
-        legacy_y = h * cat_f[1].to_numpy()
+        legacy_x = cat_f[2].to_numpy() + 0.5 * cat_f[0].to_numpy()
+        legacy_y = h * cat_f[0].to_numpy()
 
         np.testing.assert_allclose(x_new, legacy_x, atol=1e-12)
         np.testing.assert_allclose(y_new, legacy_y, atol=1e-12)
@@ -471,13 +473,15 @@ class TestPiperParity:
         x_new = vm["x"].to_numpy()
         y_new = vm["y"].to_numpy()
 
+        # Legacy math. Right triangle (right-handed): apex=Cl, bottom-right=SO4,
+        # bottom-left=HCO3; x = 0.5*Cl + SO4 after the handedness mirror.
         def _fracs(cols):
             total = _DATA[list(cols)].sum(axis=1)
             return [_DATA[c] / total for c in cols]
 
         an_f = _fracs(("HCO3", "SO4", "Cl"))
-        legacy_x = an_f[2].to_numpy() + 0.5 * an_f[1].to_numpy()
-        legacy_y = h * an_f[1].to_numpy()
+        legacy_x = 0.5 * an_f[2].to_numpy() + an_f[1].to_numpy()
+        legacy_y = h * an_f[2].to_numpy()
 
         np.testing.assert_allclose(x_new, legacy_x, atol=1e-12)
         np.testing.assert_allclose(y_new, legacy_y, atol=1e-12)
