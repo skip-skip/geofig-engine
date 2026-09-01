@@ -131,6 +131,14 @@ SQRT3_2 = math.sqrt(3) / 2.0
 # explicit ``axis_arrow_offset`` is configured.
 _ARROW_OFFSET_MULT = 2.0
 
+# Secondary-axis title offset, expressed as a multiple of the secondary
+# tick-label offset ``d``. Tied to ``d`` (rather than a fraction of the axis
+# range) so the empty strip between the tick labels and the axis title scales
+# with the configured label offset. With the Piper diamond's default
+# ``d = range/20`` this reproduces the ternary frame's label-to-tick buffer
+# (~0.045 world units) instead of the previous ``0.20 * range`` gap.
+_SECONDARY_TITLE_OFFSET_MULT = 2.8
+
 
 def _tick_label(value: float, fmt: str) -> str:
     """Format a numeric tick label with a format-spec string.
@@ -492,13 +500,13 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     # -- secondary axis titles (world-side text, beyond the tick labels) --
     if "x" in secondary and secondary["x"].label:
         sec = secondary["x"]
-        wt = _apply_matrix_pts(matrix, [((xlo + xhi) / 2.0, yhi + 0.20 * (yhi - ylo))])[0]
+        wt = _apply_matrix_pts(matrix, [((xlo + xhi) / 2.0, yhi + _SECONDARY_TITLE_OFFSET_MULT * d)])[0]
         ax.text(wt[0], wt[1], sec.label, ha="center", va="bottom", fontsize=axis.resolve_fontsize("axis_label"),
                 rotation=label_rotation((1, 0), matrix, policy=sec.axis_label_policy_eff()),
                 clip_on=False)
     if "y" in secondary and secondary["y"].label:
         sec = secondary["y"]
-        wt = _apply_matrix_pts(matrix, [(xhi + 0.20 * (xhi - xlo), (ylo + yhi) / 2.0)])[0]
+        wt = _apply_matrix_pts(matrix, [(xhi + _SECONDARY_TITLE_OFFSET_MULT * d, (ylo + yhi) / 2.0)])[0]
         ax.text(wt[0], wt[1], sec.label, ha="left", va="center", fontsize=axis.resolve_fontsize("axis_label"),
                 rotation=label_rotation((0, 1), matrix, policy=sec.axis_label_policy_eff()),
                 clip_on=False)
