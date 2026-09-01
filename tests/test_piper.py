@@ -138,8 +138,8 @@ class TestBuildPiperSpecs:
         # Per-panel titles were dropped; left/right opt into ternary axis arrows.
         left = specs[0].children[0]
         right = specs[0].children[1]
-        assert left.settings == {"axis_arrows": True}
-        assert right.settings == {"axis_arrows": True}
+        assert left.settings == {"axis_arrows": True, "axis_label_policy": "parallel"}
+        assert right.settings == {"axis_arrows": True, "axis_label_policy": "parallel"}
         dia = specs[0].children[2]
         # Diamond primary axes are declared normalized (0 .. 100) and reversed via
         # explicit flags, so their arrows point inward toward the triangle's
@@ -322,6 +322,71 @@ class TestPiperChargeLabels:
         assert isinstance(restored, TernaryCoord)
         assert restored.channels == ("SO4", "Cl", "HCO3")
         assert restored.labels == coord.labels
+
+
+# ---------------------------------------------------------------------------
+# Axis label policy (parallel labels, upright tick labels)
+# ---------------------------------------------------------------------------
+
+
+class TestPiperAxisLabelPolicy:
+    def test_default_is_parallel(self):
+        specs = build_piper_specs(_DATA)
+        for child in specs[0].children:
+            assert child.settings["axis_label_policy"] == "parallel"
+            assert "tick_label_policy" not in child.settings
+
+    def test_parallel_only_axis_labels(self):
+        specs = build_piper_specs(_DATA, axis_label_policy="parallel")
+        for child in specs[0].children:
+            assert child.settings["axis_label_policy"] == "parallel"
+            assert "tick_label_policy" not in child.settings
+
+    def test_invalid_policy_rejected(self):
+        with pytest.raises(ValueError, match="axis_label_policy"):
+            build_piper_specs(_DATA, axis_label_policy="diagonal")
+
+    def test_parallel_rotates_ion_labels_ticks_upright(self):
+        from geofig_engine.renderers import MatplotlibRenderer
+        specs = build_piper_specs(_DATA, axis_label_policy="parallel")
+        ax = MatplotlibRenderer().render(specs[0]).axes[0]
+        rotations = {
+            t.get_text(): round(t.get_rotation(), 6)
+            for t in ax.texts
+        }
+        # Ion edge labels follow their own edge tangent, flipped to rightside-up
+        # when the tangent angle is outside ±90° (rightside-up normalization).
+        # Left triangle: Mg base 0°, Ca left edge 60°, Na+K right edge 120°→-60°→300°.
+        assert rotations[r"$Mg^{++}$"] == pytest.approx(0.0)
+        assert rotations[r"$Ca^{++}$"] == pytest.approx(60.0)
+        assert rotations[r"$(Na+K)^{+}$"] == pytest.approx(300.0)
+        # Right triangle is x-flipped: SO4 base 180°→0°, Cl left edge 120°→-60°→300°,
+        # HCO3 right edge 60° (no flip).
+        assert rotations[r"$SO_4^{--}$"] == pytest.approx(0.0)
+        assert rotations[r"$Cl^{-}$"] == pytest.approx(300.0)
+        assert rotations[r"$HCO_3^{-} + CO_3^{--}$"] == pytest.approx(60.0)
+        # Tick labels stay upright: all numeric % ticks rotate 0°.
+        tick_rots = {
+            r for text, r in rotations.items() if text in ("20", "40", "60", "80")
+        }
+        assert all(abs(r) < 1e-6 for r in tick_rots)
+        assert len(tick_rots) == 1
+
+    def test_parallel_rotates_diamond_titles(self):
+        from geofig_engine.renderers import MatplotlibRenderer
+        specs = build_piper_specs(_DATA, axis_label_policy="parallel")
+        ax = MatplotlibRenderer().render(specs[0]).axes[0]
+        rotations = {
+            t.get_text(): round(t.get_rotation(), 6)
+            for t in ax.texts
+        }
+        anion_title = "$SO_4^{--}$ + $Cl^{-}$"
+        cation_title = "$Ca^{++}$ + $Mg^{++}$"
+        # Diamond rotated 45°; the two titles rotate parallel to the x/y axes.
+        assert anion_title in rotations
+        assert cation_title in rotations
+        assert abs(rotations[anion_title]) > 1e-6
+        assert abs(rotations[cation_title]) > 1e-6
 
 
 # ---------------------------------------------------------------------------

@@ -54,6 +54,7 @@ def build_piper_specs(
     mapping: dict[str, SourceType] | None = None,
     title: str = "Piper Diagram",
     labels: dict[str, str] | None = None,
+    axis_label_policy: str = "parallel",
 ) -> list[FigureSpec]:
     """Build a Piper FigureSpec using linked axes.
 
@@ -65,7 +66,21 @@ def build_piper_specs(
     ``labels`` optionally maps a channel (data column) name to a display label
     (e.g. ``{"Ca": "$Ca^{2+}$"}``); defaults provide charge-bearing mathtext
     labels for the standard ion columns.
+
+    ``axis_label_policy`` ("upright" or "parallel") controls the rotation of the
+    axis labels only (ternary ion names and diamond axis titles). The default
+    ``"parallel"`` rotates them alongside their edge/axis while tick labels remain
+    upright; pass ``"upright"`` to keep the ion names horizontal and the diamond
+    titles horizontal.
     """
+    if axis_label_policy not in ("upright", "parallel"):
+        raise ValueError(
+            f"axis_label_policy must be 'upright' or 'parallel', got "
+            f"{axis_label_policy!r}"
+        )
+    # axis_label_policy applies to the labels; tick labels stay on label_policy.
+    child_settings = {"axis_arrows": True, "axis_label_policy": axis_label_policy}
+
     # -- validate ion columns exist --
     all_ions = set(left_tri + right_tri)
     missing = [c for c in all_ions if c not in data.columns]
@@ -117,7 +132,7 @@ def build_piper_specs(
     left = FigureSpec(
         data=aug,
         mappings=left_mmap,
-        settings={"axis_arrows": True},
+        settings=dict(child_settings),
         context={},
         template_name="piper",
         coord=TernaryCoord(
@@ -136,7 +151,7 @@ def build_piper_specs(
     right = FigureSpec(
         data=aug,
         mappings=right_mmap,
-        settings={"axis_arrows": True},
+        settings=dict(child_settings),
         context={},
         template_name="piper",
         coord=TernaryCoord(
@@ -159,6 +174,7 @@ def build_piper_specs(
         mappings=dia_mmap,
         settings={
             "axis_arrows": True,
+            "axis_label_policy": axis_label_policy,
             "xlim": (0, 100),
             "ylim": (0, 100),
             "x_reversed": True,

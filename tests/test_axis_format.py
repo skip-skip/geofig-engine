@@ -1203,7 +1203,8 @@ def test_ternary_frame_title_uses_resolved_title():
 def test_ternary_ion_labels_follow_own_edge_tangent():
     # Regression: all three ion labels used the base edge tangent (1,0), so under
     # "parallel" they all rotated to 0 instead of following their own edge. Each
-    # ion should rotate parallel to its own edge: 0/60/120 degrees (identity map).
+    # ion should rotate parallel to its own edge: 0/60/-60 degrees (identity map).
+    # 120° for the right-edge tangent is flipped to -60° (rightside-up flip).
     from geofig_engine.core.geom import GeomLine
     from geofig_engine.core.layer import LayerSpec
     from geofig_engine.core.stat import StatIdentity
@@ -1227,10 +1228,11 @@ def test_ternary_ion_labels_follow_own_edge_tangent():
         for t in ax.texts
         if t.get_text() in ("a", "b", "c")
     }
-    # base('a'): (1,0) -> 0; left('b'): (0.5, sqrt3/2) -> 60; right('c') -> 120.
+    # base('a'): (1,0) -> 0; left('b'): (0.5, sqrt3/2) -> 60;
+    # right('c'): (-0.5, sqrt3/2) -> 120 -> flipped to -60 (stored as 300 by matplotlib).
     assert rotations["a"] == 0.0
     assert rotations["b"] == pytest.approx(60.0)
-    assert rotations["c"] == pytest.approx(120.0)
+    assert rotations["c"] == pytest.approx(300.0)
 
 
 def test_cartesian_axis_tick_policies_independent():

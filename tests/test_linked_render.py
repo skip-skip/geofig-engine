@@ -418,6 +418,33 @@ class TestLabelRotation:
         with pytest.raises(ValueError, match="label policy"):
             label_rotation((1, 0), matrix, policy="diagonal")
 
+    def test_parallel_flips_upside_down_labels(self):
+        # Angles outside ±90° are flipped 180° so text stays parallel but
+        # always reads rightside up.
+        import math as _m
+        # rotate(120°): (1,0) -> 120° -> flipped to -60°.
+        rot120 = np.array([
+            [np.cos(np.radians(120)), -np.sin(np.radians(120)), 0],
+            [np.sin(np.radians(120)),  np.cos(np.radians(120)), 0],
+            [0, 0, 1],
+        ])
+        assert label_rotation((1, 0), rot120, policy="parallel") == pytest.approx(-60.0)
+        # x-mirror: (1,0) -> 180° -> flipped to 0°.
+        mirror_x = np.diag([-1.0, 1.0, 1.0])
+        assert label_rotation((1, 0), mirror_x, policy="parallel") == pytest.approx(0.0)
+        # right-edge tangent (-0.5, sqrt3/2) through x-mirror: 60° (no flip).
+        left_tangent = np.array([-0.5, np.sqrt(3) / 2])
+        assert label_rotation(left_tangent, mirror_x, policy="parallel") == pytest.approx(60.0)
+        # base tangent (1,0) at exactly 90° (vertical, not flipped).
+        rot90 = np.array([
+            [0, -1, 0],
+            [1,  0, 0],
+            [0,  0, 1],
+        ])
+        assert label_rotation((1, 0), rot90, policy="parallel") == pytest.approx(90.0)
+        # -90° (vertical, not flipped).
+        assert label_rotation((1, 0), rot90.T, policy="parallel") == pytest.approx(-90.0)
+
 
 class TestLinkedSerializationRoundTrip:
     def test_children_survive_json_round_trip(self):

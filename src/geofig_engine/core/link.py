@@ -199,7 +199,10 @@ def label_rotation(local_vec, matrix: np.ndarray, policy: str = "upright") -> fl
       label runs along its edge *after* deformation. Uses only the linear
       part of *matrix*, making it correct under non-uniform scale (the
       squash-aware case: rotate 45° + scale_y<1 tilts a horizontal edge to
-      atan2(sin45·k, cos45), not 45°).
+      atan2(sin45·k, cos45), not 45°). Angles outside ±90° (text that would
+      read upside down) are flipped 180° so the label stays parallel to its
+      edge but always reads rightside up; vertical labels (exactly ±90°) are
+      not flipped.
     """
     if policy == "upright":
         return 0.0
@@ -211,4 +214,9 @@ def label_rotation(local_vec, matrix: np.ndarray, policy: str = "upright") -> fl
     w = matrix[:2, :2] @ v
     if w[0] == 0.0 and w[1] == 0.0:
         return 0.0
-    return float(math.degrees(math.atan2(w[1], w[0])))
+    deg = float(math.degrees(math.atan2(w[1], w[0])))
+    if deg > 90.0:
+        deg -= 180.0
+    elif deg < -90.0:
+        deg += 180.0
+    return deg
