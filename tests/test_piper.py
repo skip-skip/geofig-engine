@@ -217,9 +217,9 @@ class TestPiperRenderer:
         assert "60" in texts
         assert "40" in texts
         assert "20" in texts
-        # Secondary axis titles.
-        assert "Anions (%)" in texts
-        assert "Cations (%)" in texts
+        # Secondary axis titles (charge-bearing mathtext labels).
+        assert "$SO_4^{--}$ + $Cl^{-}$" in texts
+        assert "$Ca^{++}$ + $Mg^{++}$" in texts
 
     def test_secondary_titles_use_axis_label_fontsize(self):
         from geofig_engine.renderers import MatplotlibRenderer
@@ -229,10 +229,10 @@ class TestPiperRenderer:
         sizes = {
             t.get_text(): t.get_fontsize()
             for t in ax.texts
-            if t.get_text() in ("Anions (%)", "Cations (%)")
+            if t.get_text() in ("$SO_4^{--}$ + $Cl^{-}$", "$Ca^{++}$ + $Mg^{++}$")
         }
         # Unified under axis_label (default 7): matches the ternary ion labels.
-        assert sizes == {"Anions (%)": 7.0, "Cations (%)": 7.0}
+        assert sizes == {"$SO_4^{--}$ + $Cl^{-}$": 7.0, "$Ca^{++}$ + $Mg^{++}$": 7.0}
 
     def test_font_resolution_generic_and_per_element(self):
         from geofig_engine.renderers import MatplotlibRenderer
@@ -256,10 +256,10 @@ class TestPiperRenderer:
         secondary = {
             t.get_text(): t.get_fontsize()
             for t in ax.texts
-            if t.get_text() in ("Anions (%)", "Cations (%)")
+            if t.get_text() in ("$SO_4^{--}$ + $Cl^{-}$", "$Ca^{++}$ + $Mg^{++}$")
         }
         # axis_label unset -> generic fontsize (9) fallback.
-        assert secondary == {"Anions (%)": 9.0, "Cations (%)": 9.0}
+        assert secondary == {"$SO_4^{--}$ + $Cl^{-}$": 9.0, "$Ca^{++}$ + $Mg^{++}$": 9.0}
 
         # Cartesian child ticks use per-element tick_fontsize (6), beating generic.
         tick_sizes = Counter(
@@ -270,6 +270,58 @@ class TestPiperRenderer:
         assert tick_sizes[6.0] > 0
         # Ternary children (untouched) keep the built-in tick default (5).
         assert tick_sizes[5.0] > 0
+
+
+# ---------------------------------------------------------------------------
+# Charge-bearing ion labels
+# ---------------------------------------------------------------------------
+
+
+class TestPiperChargeLabels:
+    def test_ternary_ion_labels_show_charges_and_hco3_composite(self):
+        from geofig_engine.renderers import MatplotlibRenderer
+        specs = build_piper_specs(_DATA)
+        ax = MatplotlibRenderer().render(specs[0]).axes[0]
+        texts = set(t.get_text() for t in ax.texts)
+        # Cation triangle vertices.
+        assert r"$Mg^{++}$" in texts
+        assert r"$Ca^{++}$" in texts
+        assert r"$(Na+K)^{+}$" in texts
+        # Anion triangle vertices (HCO3 shows the HCO3+CO3 compound label).
+        assert r"$SO_4^{--}$" in texts
+        assert r"$Cl^{-}$" in texts
+        assert r"$HCO_3^{-} + CO_3^{--}$" in texts
+        # Diamond axis titles summarize the two summed ions per axis.
+        assert r"$SO_4^{--}$ + $Cl^{-}$" in texts
+        assert r"$Ca^{++}$ + $Mg^{++}$" in texts
+
+    def test_data_columns_unchanged_by_label_overrides(self):
+        """Labels are display-only; data still keyed by channel names."""
+        specs = build_piper_specs(_DATA)
+        left = specs[0].children[0]
+        right = specs[0].children[1]
+        assert left.coord.channels == ("Mg", "Ca", "Na+K")
+        assert right.coord.channels == ("SO4", "Cl", "HCO3")
+
+    def test_custom_label_override(self):
+        specs = build_piper_specs(
+            _DATA, labels={"Ca": r"$Ca^{2+}$", "HCO3": "Alkalinity"}
+        )
+        left = specs[0].children[0]
+        right = specs[0].children[1]
+        assert left.coord.labels == (r"$Mg^{++}$", r"$Ca^{2+}$", r"$(Na+K)^{+}$")
+        assert right.coord.labels == (r"$SO_4^{--}$", r"$Cl^{-}$", "Alkalinity")
+
+    def test_ternary_labels_serialize_roundtrip(self):
+        coord = TernaryCoord(
+            channels=("SO4", "Cl", "HCO3"),
+            handedness="right",
+            labels=(r"$SO_4^{--}$", r"$Cl^{-}$", r"$HCO_3^{-} + CO_3^{--}$"),
+        )
+        restored = coord_from_dict(coord_to_dict(coord))
+        assert isinstance(restored, TernaryCoord)
+        assert restored.channels == ("SO4", "Cl", "HCO3")
+        assert restored.labels == coord.labels
 
 
 # ---------------------------------------------------------------------------

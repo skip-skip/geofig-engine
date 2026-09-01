@@ -222,7 +222,7 @@ def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
     Reads ions from coord.channels, reversals from coord.handedness, and all
     styling/formatting from the parsed :class:`AxisFormat` (``axis``).
     """
-    ions = list(coord.channels)
+    ions = list(coord.labels if coord.labels is not None else coord.channels)
     handedness = coord.handedness
     title = axis.title
     tick_policy = axis.tick_label_policy_eff()

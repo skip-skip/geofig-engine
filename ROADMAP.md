@@ -347,6 +347,28 @@ independently-settable policies, plus fix a ternary ion-label tangent bug.
   axis-vs-tick rotation independence and the ternary per-edge ion rotation.
   Full suite: **968 passed**.
 
+## ✅ Phase 14.58 — Charge-bearing ion labels for the Piper diagram (972 tests)
+
+Render chemical sub/superscripts on the Piper ion labels using matplotlib mathtext,
+decoupled from the underlying data column names.
+
+- **`TernaryCoord.labels`** (`core/coord.py`) — optional display labels for the three
+  vertices (default `None` = fall back to `channels`, so data columns stay keyed by
+  their plain names while the rendered text can carry charges). Validated,
+  serialized in `params`, and round-tripped by the ternary converter.
+- **Wiring** (`renderer.py`) — `_draw_ternary_frame` draws ion edge labels from
+  `coord.labels` instead of `coord.channels` when present.
+- **Piper template** (`templates/piper.py`) — default charge-bearing mathtext labels
+  for the six standard ions: `Ca^{++}`, `Mg^{++}`, `(Na+K)^{+}` (cations) and
+  `SO_4^{--}`, `Cl^{-}`, and a compound `HCO_3^{-} + CO_3^{--}` for the HCO3 vertex.
+  Diamond axis titles now summarize the summed ions: `SO_4^{--} + Cl^{-}` (anions,
+  was "Anions (%)") and `Ca^{++} + Mg^{++}` (cations, was "Cations (%)"). A new
+  `labels: dict[str, str] | None` arg lets callers override any label; unknown ion
+  columns fall back to their channel name.
+- **Tests** — render asserts all six superscripted ion labels + the HCO3/CO3 compound
+  + the two diamond titles; display labels don't alter data channels; custom override;
+  TernaryCoord `labels` serialization round-trip. Full suite: **972 passed**.
+
 ---
 
 - **Multi-level grouped legends** — `subseries_col` pattern with section headers and aligned columns (from geochemplot's grouped-legend pattern)

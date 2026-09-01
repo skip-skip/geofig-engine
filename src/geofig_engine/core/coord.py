@@ -230,26 +230,43 @@ class TernaryCoord(Coord):
         channels: Names of the three fraction channels in the visual
             mapping, ordered (apex, bottom-left, bottom-right).
         handedness: "left" or "right"; mirrors the triangle horizontally.
+        labels: Optional display labels for the three vertices (defaults to
+            ``channels``, so data column names can differ from the rendered
+            label — e.g. charge-bearing superscripts like ``$Ca^{++}$``).
 
     Rows are normalized by their fraction sum; zero-total rows become NaN.
     """
 
     channels: tuple[str, str, str] = ("a", "b", "c")
     handedness: str = "left"
+    labels: tuple[str, str, str] | None = None
 
     def __init__(
         self,
         channels: tuple[str, str, str] = ("a", "b", "c"),
         handedness: str = "left",
+        labels: tuple[str, str, str] | None = None,
     ) -> None:
         chans = _validate_ternary_channels(channels)
         _validate_handedness(handedness)
         object.__setattr__(self, "channels", chans)
         object.__setattr__(self, "handedness", handedness)
-        super().__init__(
-            name="ternary",
-            params={"channels": list(chans), "handedness": handedness},
-        )
+        labs = chans if labels is None else self._validate_labels(labels)
+        object.__setattr__(self, "labels", labs)
+        params: dict[str, Any] = {"channels": list(chans), "handedness": handedness}
+        if labels is not None:
+            params["labels"] = list(labs)
+        super().__init__(name="ternary", params=params)
+
+    @staticmethod
+    def _validate_labels(labels) -> tuple[str, str, str]:
+        if not isinstance(labels, (tuple, list)) or len(labels) != 3:
+            raise ValueError(
+                f"Ternary labels must be a 3-tuple of strings, got {labels!r}"
+            )
+        if not all(isinstance(l, str) for l in labels):
+            raise ValueError(f"Ternary labels must be 3 strings, got {labels!r}")
+        return tuple(labels)
 
     def transform_visual_mapping(self, visual_mapping: dict, geom: Any) -> dict:
         """Rewrite the three fraction channels into local x/y positions."""

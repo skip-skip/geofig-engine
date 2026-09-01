@@ -247,9 +247,11 @@ def coord_from_dict(data: dict) -> Coord:
     elif name == "fixed":
         return CoordFixed(**params)
     elif name == "ternary":
+        labels = params.get("labels")
         return TernaryCoord(
             channels=tuple(params.get("channels", ("a", "b", "c"))),
             handedness=params.get("handedness", "left"),
+            labels=None if labels is None else tuple(labels),
         )
     elif name == "piper":
         return PiperCoord(

@@ -27,6 +27,25 @@ from geofig_engine.utils.typing import SourceType
 _SQRT3_2 = math.sqrt(3) / 2.0
 _SQRT2 = math.sqrt(2)
 
+# Charge-bearing display labels (matplotlib mathtext sub/superscripts).
+# Keyed by channel (data column) name; the ternary vertex label order follows
+# the channel order, and the diamond axis titles are derived from these below.
+_PIPER_ION_LABELS: dict[str, str] = {
+    "Ca": r"$Ca^{++}$",
+    "Mg": r"$Mg^{++}$",
+    "Na+K": r"$(Na+K)^{+}$",
+    "HCO3": r"$HCO_3^{-} + CO_3^{--}$",
+    "SO4": r"$SO_4^{--}$",
+    "Cl": r"$Cl^{-}$",
+}
+
+
+def _resolve_ion_label(channel: str, overrides: dict[str, str] | None) -> str:
+    """Display label for a channel: explicit override, then known-ion, then name."""
+    if overrides and channel in overrides:
+        return overrides[channel]
+    return _PIPER_ION_LABELS.get(channel, channel)
+
 
 def build_piper_specs(
     data: pd.DataFrame,
@@ -34,6 +53,7 @@ def build_piper_specs(
     right_tri: tuple[str, str, str] = ("HCO3", "SO4", "Cl"),
     mapping: dict[str, SourceType] | None = None,
     title: str = "Piper Diagram",
+    labels: dict[str, str] | None = None,
 ) -> list[FigureSpec]:
     """Build a Piper FigureSpec using linked axes.
 
@@ -41,6 +61,10 @@ def build_piper_specs(
     - Left cation triangle (TernaryCoord left-handed, LinkTransform scale 0.5)
     - Right anion triangle (TernaryCoord right-handed, LinkTransform scale -0.5)
     - Diamond (CoordCartesian, LinkTransform rotate 45° + scale + translate)
+
+    ``labels`` optionally maps a channel (data column) name to a display label
+    (e.g. ``{"Ca": "$Ca^{2+}$"}``); defaults provide charge-bearing mathtext
+    labels for the standard ion columns.
     """
     # -- validate ion columns exist --
     all_ions = set(left_tri + right_tri)
@@ -96,7 +120,11 @@ def build_piper_specs(
         settings={"axis_arrows": True},
         context={},
         template_name="piper",
-        coord=TernaryCoord(channels=left_channels, handedness="left"),
+        coord=TernaryCoord(
+            channels=left_channels,
+            handedness="left",
+            labels=tuple(_resolve_ion_label(ch, labels) for ch in left_channels),
+        ),
         transform=LinkTransform().scale(0.5, 0.5),
         layers=[LayerSpec(
             geom=GeomPoint(),
@@ -111,7 +139,11 @@ def build_piper_specs(
         settings={"axis_arrows": True},
         context={},
         template_name="piper",
-        coord=TernaryCoord(channels=right_channels, handedness="right"),
+        coord=TernaryCoord(
+            channels=right_channels,
+            handedness="right",
+            labels=tuple(_resolve_ion_label(ch, labels) for ch in right_channels),
+        ),
         transform=LinkTransform().scale(-0.5, 0.5).translate(1.2, 0.0),
         layers=[LayerSpec(
             geom=GeomPoint(),
@@ -133,8 +165,14 @@ def build_piper_specs(
             "y_reversed": True,
             "grid_step": 20,
             "tick_step": 20,
-            "secondary_x": {"range": [0, 100], "label": "Anions (%)"},
-            "secondary_y": {"range": [0, 100], "label": "Cations (%)"},
+            "secondary_x": {
+                "range": [0, 100],
+                "label": f"{_resolve_ion_label(right_tri[1], labels)} + {_resolve_ion_label(right_tri[2], labels)}",
+            },
+            "secondary_y": {
+                "range": [0, 100],
+                "label": f"{_resolve_ion_label(left_tri[0], labels)} + {_resolve_ion_label(left_tri[1], labels)}",
+            },
         },
         context={},
         template_name="piper",
