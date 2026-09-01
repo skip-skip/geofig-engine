@@ -1,6 +1,6 @@
 # WP-D: Wire native-path text through font knobs (single + facet)
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.56
 **Dependencies**: `14_56_wpa_axis_font_model.md`, `14_56_wpb_font_flat_keys.md`
 

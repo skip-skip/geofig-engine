@@ -1045,6 +1045,53 @@ def test_plain_single_stays_native_axes():
     assert ax.axison is True
 
 
+def test_native_title_xlabel_ylabel_use_resolved_fontsize():
+    # Defaults: title 7, xlabel 10, ylabel 10.
+    ax = _render_single_top({"title": "T", "xlabel": "X", "ylabel": "Y"})
+    assert ax.title.get_fontsize() == 7.0
+    assert ax.xaxis.label.get_fontsize() == 10.0
+    assert ax.yaxis.label.get_fontsize() == 10.0
+
+
+def test_native_fontsize_knobs_override_defaults():
+    ax = _render_single_top(
+        {
+            "title": "T",
+            "xlabel": "X",
+            "ylabel": "Y",
+            "title_fontsize": 8,
+            "xlabel_fontsize": 12,
+            "ylabel_fontsize": 11,
+        }
+    )
+    assert ax.title.get_fontsize() == 8.0
+    assert ax.xaxis.label.get_fontsize() == 12.0
+    assert ax.yaxis.label.get_fontsize() == 11.0
+
+
+def test_native_title_xlabel_ylabel_use_generic_fontsize():
+    ax = _render_single_top(
+        {"title": "T", "xlabel": "X", "ylabel": "Y", "fontsize": 9}
+    )
+    assert ax.title.get_fontsize() == 9.0
+    assert ax.xaxis.label.get_fontsize() == 9.0
+    assert ax.yaxis.label.get_fontsize() == 9.0
+
+
+def test_facet_panel_titles_use_facet_title_fontsize():
+    fig = _render_facet({"xlabel": "X"})
+    # FacetWrap panels each get a "g=<v>" title using facet_title (default 10).
+    for ax in fig.axes:
+        assert ax.title.get_fontsize() == 10.0
+        assert ax.get_title() in ("g=A", "g=B")
+
+
+def test_facet_panel_titles_override_facet_title_fontsize():
+    fig = _render_facet({"xlabel": "X", "facet_title_fontsize": 13})
+    for ax in fig.axes:
+        assert ax.title.get_fontsize() == 13.0
+
+
 # ---------------------------------------------------------------------------
 # Facet panels consume AxisFormat (WP-E): per-panel native formatting
 # ---------------------------------------------------------------------------

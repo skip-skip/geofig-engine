@@ -991,19 +991,19 @@ class MatplotlibRenderer(BaseRenderer):
         """
         coord = spec.coord
         if axis.title:
-            ax.set_title(axis.title)
+            ax.set_title(axis.title, fontsize=axis.resolve_fontsize("title"))
         xlabel = axis.xlabel if axis.xlabel is not None else self._channel_label(spec, "x")
         ylabel = axis.ylabel if axis.ylabel is not None else self._channel_label(spec, "y")
         if isinstance(coord, CoordFlipped):
             if ylabel:
-                ax.set_xlabel(ylabel)
+                ax.set_xlabel(ylabel, fontsize=axis.resolve_fontsize("xlabel"))
             if xlabel:
-                ax.set_ylabel(xlabel)
+                ax.set_ylabel(xlabel, fontsize=axis.resolve_fontsize("ylabel"))
         else:
             if xlabel:
-                ax.set_xlabel(xlabel)
+                ax.set_xlabel(xlabel, fontsize=axis.resolve_fontsize("xlabel"))
             if ylabel:
-                ax.set_ylabel(ylabel)
+                ax.set_ylabel(ylabel, fontsize=axis.resolve_fontsize("ylabel"))
         xlim = axis.xlim
         ylim = axis.ylim
         if isinstance(coord, CoordFlipped):
@@ -1249,7 +1249,7 @@ class MatplotlibRenderer(BaseRenderer):
                 self._render_axes(ax, spec, subset)
                 self._apply_axis_format_native(ax, fig, spec, axis)
                 self._apply_facet_panel(ax, ctx, glims, facet.scales)
-                ax.set_title(", ".join(f"{k}={v}" for k, v in ctx.items()), fontsize=10)
+                ax.set_title(", ".join(f"{k}={v}" for k, v in ctx.items()), fontsize=axis.resolve_fontsize("facet_title"))
             for idx in range(len(panels), len(axes_flat)):
                 axes_flat[idx].set_visible(False)
         else:
@@ -1265,9 +1265,9 @@ class MatplotlibRenderer(BaseRenderer):
                     self._apply_axis_format_native(ax, fig, spec, axis)
                     self._apply_facet_panel(ax, ctx, glims, facet.scales)
                     if ri == 0:
-                        ax.set_title(ctx.get(facet.params["col"], ""), fontsize=10)
+                        ax.set_title(ctx.get(facet.params["col"], ""), fontsize=axis.resolve_fontsize("facet_title"))
                     if ci == 0:
-                        ax.set_ylabel(ctx.get(facet.params["row"], ""), fontsize=10)
+                        ax.set_ylabel(ctx.get(facet.params["row"], ""), fontsize=axis.resolve_fontsize("facet_title"))
 
         plt.close(fig)
         return fig
