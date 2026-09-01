@@ -224,7 +224,7 @@ WP-A through WP-J.
 
 ---
 
-## ✅ Phase 14.55 — General axis-direction arrows (920 tests)
+## ✅ Phase 14.55 — General axis-direction arrows (932 tests)
 
 Add a generic, opt-in "direction arrow" capability to every framed coordinate
 drawer. Each axis can annotate its **direction of increasing (ascending) value**
@@ -242,7 +242,16 @@ being hardcoded (and inconsistent) across cartesian/ternary/polar.
   label rotates via `label_rotation(local_vec, matrix, policy)`, so it stays
   parallel under `"parallel"`. Direction always follows ascending numeric value
   regardless of declared/descending limit order ("axis values must be sorted");
-  there is no `reverse` handedness flag.
+  `_draw_cartesian_axis` normalizes `min/max` of `xlim`/`ylim` so descending
+  declarations can no longer empty out the grid/ticks (`np.arange` with
+  `start > stop`) or drive tick/title offsets negative.
+- **`x_reversed`/`y_reversed` common fields** (`core/axis.py`) — flat keys
+  `x_reversed`/`y_reversed`, validated as plain bools (default `False`; `None`
+  rejected, unlike `axis_arrows`). Arrow direction always follows **increasing
+  data**: reversing an axis flips its tick labels high→low **and** swaps the
+  arrowhead to the low-value end, so arrows reverse together with the data and
+  labels. Secondary axes (mapped via `SecondaryAxis.range`) keep pointing toward
+  increasing *secondary* value.
 - **Cartesian framed** (`_draw_cartesian_axis`) — arrows on the bottom (x),
   left (y), and, when declared, top (`secondary_x`) and right (`secondary_y`)
   edges, offset outside the frame to match the tick-label offset `d`.
@@ -257,14 +266,20 @@ being hardcoded (and inconsistent) across cartesian/ternary/polar.
   `hide_spine`/`hide_radial_ticks`/etc. `options` toggles.
 - **Templates opt in** — piper template and `debug_piper_axes.py` set
   `"axis_arrows": True` on both ternary children to preserve their edge arrows;
-  the diamond cartesian child stays off by default.
+  the diamond cartesian child also opts in (`axis_arrows`) and, in `piper.py`,
+  expresses its inward-pointing arrows via normalized `xlim`/`ylim` `(0, 100)`
+  plus `x_reversed`/`y_reversed` `True` (replacing the former descending-limits
+  hack).
 - **Default-off note** — a ternary without `axis_arrows` now shows ion labels
   but **no** arrows (formerly implicit); cartesian/polar output is unchanged by
   default.
 - **Tests** — WP-G adds arrow-specific coverage across the model/parse, cartesian
   (counts + descending-limits sorted direction), ternary (labels-without-arrows
   and per-edge ascending direction via `annotate` head/tail geometry), and polar
-  (outward + independence from hide toggles). Full suite: **920 passed**.
+  (outward + independence from hide toggles). WP-I/M add `x_reversed`/`y_reversed`
+  model/parse/validation, descending-limit normalization (grid + ticks non-empty,
+  titles above/right), and arrow+label reversal (head flips with the reversed
+  reading). Full suite: **932 passed**.
 
 ---
 

@@ -139,8 +139,13 @@ class TestBuildPiperSpecs:
         assert left.settings == {"axis_arrows": True}
         assert right.settings == {"axis_arrows": True}
         dia = specs[0].children[2]
+        # Diamond primary axes are declared normalized (0 .. 100) and reversed via
+        # explicit flags, so their arrows point inward toward the triangle's
+        # shared base region (arrows always point toward increasing data).
         assert dia.settings["xlim"] == (0, 100)
         assert dia.settings["ylim"] == (0, 100)
+        assert dia.settings["x_reversed"] is True
+        assert dia.settings["y_reversed"] is True
         assert dia.settings["grid_step"] == 20
         # The diamond opts into cartesian axis arrows (all four edges).
         assert dia.settings.get("axis_arrows", False) is True

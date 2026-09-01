@@ -405,6 +405,8 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
 
     x0, x1 = xlim
     y0, y1 = ylim
+    xlo, xhi = min(x0, x1), max(x0, x1)
+    ylo, yhi = min(y0, y1), max(y0, y1)
 
     # -- outline (local space) --
     box = [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]
@@ -412,8 +414,8 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     ax.plot(box_arr[:, 0], box_arr[:, 1], color="black", linewidth=frame_lw, zorder=2)
 
     # -- internal grid (local space) --
-    xs = list(np.arange(x0 + grid_step, x1, grid_step))
-    ys = list(np.arange(y0 + grid_step, y1, grid_step))
+    xs = list(np.arange(xlo + grid_step, xhi, grid_step))
+    ys = list(np.arange(ylo + grid_step, yhi, grid_step))
     for gx in xs:
         g = [(gx, y0), (gx, y1)]
         ax.plot([g[0][0], g[1][0]], [g[0][1], g[1][1]], color=grid_style.get("color", "gray"),
@@ -427,7 +429,7 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     # -- tick-label offset from the edge (default derived from limits size) --
     d = axis.label_offset
     if d is None:
-        d = 1.0 if x1 - x0 == 1.0 else (x1 - x0) / 20.0
+        d = 1.0 if xhi - xlo == 1.0 else (xhi - xlo) / 20.0
 
     # -- axis-arrow offset from the edge (default past the tick-label strip) --
     d_arrow = axis.axis_arrow_offset
@@ -435,21 +437,23 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
         d_arrow = _ARROW_OFFSET_MULT * d
 
     # -- tick labels on bottom edge (world-side text) --
-    # X-axis ticks at tick_step along the bottom (y0) edge, interior only.
-    for tx in np.arange(x0, x1 + 0.5 * tick_step, tick_step):
-        if x0 - 1e-9 <= tx <= x0 + 1e-9 or x1 - 1e-9 <= tx <= x1 + 1e-9:
+    # X-axis ticks at tick_step along the bottom (ylo) edge, interior only.
+    for tx in np.arange(xlo, xhi + 0.5 * tick_step, tick_step):
+        if xlo - 1e-9 <= tx <= xlo + 1e-9 or xhi - 1e-9 <= tx <= xhi + 1e-9:
             continue
-        w = _apply_matrix_pts(matrix, [(tx, y0 - d)])[0]
-        ax.text(w[0], w[1], _tick_label(tx, tick_fmt), ha="center", va="top", fontsize=tick_fs,
+        tval = xlo + xhi - tx if axis.x_reversed else tx
+        w = _apply_matrix_pts(matrix, [(tx, ylo - d)])[0]
+        ax.text(w[0], w[1], _tick_label(tval, tick_fmt), ha="center", va="top", fontsize=tick_fs,
                 rotation=label_rotation((1, 0), matrix, policy=label_policy),
                 clip_on=False)
 
     # -- tick labels on left edge (world-side text) --
-    for ty in np.arange(y0, y1 + 0.5 * tick_step, tick_step):
-        if y0 - 1e-9 <= ty <= y0 + 1e-9 or y1 - 1e-9 <= ty <= y1 + 1e-9:
+    for ty in np.arange(ylo, yhi + 0.5 * tick_step, tick_step):
+        if ylo - 1e-9 <= ty <= ylo + 1e-9 or yhi - 1e-9 <= ty <= yhi + 1e-9:
             continue
-        w = _apply_matrix_pts(matrix, [(x0 - d, ty)])[0]
-        ax.text(w[0], w[1], _tick_label(ty, tick_fmt), ha="right", va="center", fontsize=tick_fs,
+        tval = ylo + yhi - ty if axis.y_reversed else ty
+        w = _apply_matrix_pts(matrix, [(xlo - d, ty)])[0]
+        ax.text(w[0], w[1], _tick_label(tval, tick_fmt), ha="right", va="center", fontsize=tick_fs,
                 rotation=label_rotation((0, 1), matrix, policy=label_policy),
                 clip_on=False)
 
@@ -457,9 +461,9 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     if "x" in secondary:
         sec = secondary["x"]
         for sv, lx in sec.tick_coordinates():
-            if x0 - 1e-9 <= lx <= x0 + 1e-9 or x1 - 1e-9 <= lx <= x1 + 1e-9:
+            if xlo - 1e-9 <= lx <= xlo + 1e-9 or xhi - 1e-9 <= lx <= xhi + 1e-9:
                 continue
-            w = _apply_matrix_pts(matrix, [(lx, y1 + d)])[0]
+            w = _apply_matrix_pts(matrix, [(lx, yhi + d)])[0]
             ax.text(w[0], w[1], _tick_label(sv, tick_fmt), ha="center", va="bottom", fontsize=tick_fs,
                     rotation=label_rotation((1, 0), matrix, policy=sec.label_policy),
                     clip_on=False)
@@ -468,9 +472,9 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     if "y" in secondary:
         sec = secondary["y"]
         for sv, ly in sec.tick_coordinates():
-            if y0 - 1e-9 <= ly <= y0 + 1e-9 or y1 - 1e-9 <= ly <= y1 + 1e-9:
+            if ylo - 1e-9 <= ly <= ylo + 1e-9 or yhi - 1e-9 <= ly <= yhi + 1e-9:
                 continue
-            w = _apply_matrix_pts(matrix, [(x1 + d, ly)])[0]
+            w = _apply_matrix_pts(matrix, [(xhi + d, ly)])[0]
             ax.text(w[0], w[1], _tick_label(sv, tick_fmt), ha="left", va="center", fontsize=tick_fs,
                     rotation=label_rotation((0, 1), matrix, policy=sec.label_policy),
                     clip_on=False)
@@ -478,39 +482,42 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     # -- secondary axis titles (world-side text, beyond the tick labels) --
     if "x" in secondary and secondary["x"].label:
         sec = secondary["x"]
-        wt = _apply_matrix_pts(matrix, [((x0 + x1) / 2.0, y1 + 0.20 * (y1 - y0))])[0]
+        wt = _apply_matrix_pts(matrix, [((xlo + xhi) / 2.0, yhi + 0.20 * (yhi - ylo))])[0]
         ax.text(wt[0], wt[1], sec.label, ha="center", va="bottom", fontsize=6,
                 rotation=label_rotation((1, 0), matrix, policy=sec.label_policy),
                 clip_on=False)
     if "y" in secondary and secondary["y"].label:
         sec = secondary["y"]
-        wt = _apply_matrix_pts(matrix, [(x1 + 0.20 * (x1 - x0), (y0 + y1) / 2.0)])[0]
+        wt = _apply_matrix_pts(matrix, [(xhi + 0.20 * (xhi - xlo), (ylo + yhi) / 2.0)])[0]
         ax.text(wt[0], wt[1], sec.label, ha="left", va="center", fontsize=6,
                 rotation=label_rotation((0, 1), matrix, policy=sec.label_policy),
                 clip_on=False)
 
     # -- edge title (world-side text) --
     if title:
-        wt = _apply_matrix_pts(matrix, [((x0 + x1) / 2.0, y1 + 0.12 * (y1 - y0))])[0]
+        wt = _apply_matrix_pts(matrix, [((xlo + xhi) / 2.0, yhi + 0.12 * (yhi - ylo))])[0]
         ax.text(wt[0], wt[1], title, ha="center", va="bottom", fontsize=title_fs,
                 fontweight="bold", clip_on=False)
 
     # -- axis direction arrows (opt-in) --
     if axis.show_arrows():
-        # Primary axes: point toward ascending numeric values regardless of
-        # declaration order ("axis values must be sorted"). Offsets place the
-        # arrows outside the box (below the bottom edge / left of the left
-        # edge), beyond the tick-label strip (``d_arrow``).
+        # Primary axes: always point toward increasing data. For a non-reversed
+        # axis that is the ascending (high) end; for a reversed axis the data
+        # itself is flipped, so the arrow points toward the (now) low end.
+        # Offsets place the arrows outside the box (below the bottom edge /
+        # left of the left edge), beyond the tick-label strip (``d_arrow``).
         if x0 != x1:
+            x_end = xhi if not axis.x_reversed else xlo
             _draw_axis_arrow(
                 ax, matrix,
-                (min(x0, x1), y0 - d_arrow), (max(x0, x1), y0 - d_arrow),
+                (xlo + xhi - x_end, ylo - d_arrow), (x_end, ylo - d_arrow),
                 (1.0, 0.0), lw=frame_lw,
             )
         if y0 != y1:
+            y_end = yhi if not axis.y_reversed else ylo
             _draw_axis_arrow(
                 ax, matrix,
-                (x0 - d_arrow, min(y0, y1)), (x0 - d_arrow, max(y0, y1)),
+                (xlo - d_arrow, ylo + yhi - y_end), (xlo - d_arrow, y_end),
                 (0.0, 1.0), lw=frame_lw,
             )
         # Secondary axes: point toward ascending secondary values, offset
@@ -520,7 +527,7 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
             slo, shi = min(sec.range), max(sec.range)
             _draw_axis_arrow(
                 ax, matrix,
-                (sec.inv(slo), y1 + d_arrow), (sec.inv(shi), y1 + d_arrow),
+                (sec.inv(slo), yhi + d_arrow), (sec.inv(shi), yhi + d_arrow),
                 (1.0, 0.0), lw=frame_lw,
             )
         if "y" in secondary:
@@ -528,7 +535,7 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
             slo, shi = min(sec.range), max(sec.range)
             _draw_axis_arrow(
                 ax, matrix,
-                (x1 + d_arrow, sec.inv(slo)), (x1 + d_arrow, sec.inv(shi)),
+                (xhi + d_arrow, sec.inv(slo)), (xhi + d_arrow, sec.inv(shi)),
                 (0.0, 1.0), lw=frame_lw,
             )
 

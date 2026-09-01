@@ -129,6 +129,8 @@ def build_piper_specs(
             "axis_arrows": True,
             "xlim": (0, 100),
             "ylim": (0, 100),
+            "x_reversed": True,
+            "y_reversed": True,
             "grid_step": 20,
             "tick_step": 20,
             "secondary_x": {"range": [0, 100], "label": "Anions (%)"},

@@ -14,6 +14,8 @@ flat top-level settings keys::
         "grid_step": 20,
         "tick_step": 10,
         "axis_arrows": True,
+        "x_reversed": False,
+        "y_reversed": False,
         "label_policy": "upright",
         "tick_format": ":g",
         # per-coordinate extension (polar toggles, etc.):
@@ -118,6 +120,8 @@ class AxisFormat:
     grid_step: float | None = None
     tick_step: float | None = None
     axis_arrows: bool | None = None
+    x_reversed: bool = False
+    y_reversed: bool = False
     label_policy: str = "upright"
     xscale: str | None = None
     yscale: str | None = None
@@ -164,6 +168,8 @@ class AxisFormat:
             object.__setattr__(self, "tick_step", _positive(self.tick_step, "tick_step"))
         if self.axis_arrows is not None:
             object.__setattr__(self, "axis_arrows", _bool_value(self.axis_arrows, "axis_arrows"))
+        object.__setattr__(self, "x_reversed", _bool_value(self.x_reversed, "x_reversed"))
+        object.__setattr__(self, "y_reversed", _bool_value(self.y_reversed, "y_reversed"))
 
         object.__setattr__(self, "label_policy", _policy_value(self.label_policy))
         for attr in ("xscale", "yscale", "time_format"):
@@ -246,7 +252,8 @@ def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
 
     Reads flat top-level keys from ``settings`` (``title``, ``xlabel``,
     ``ylabel``, ``xlim``/``ylim``, ``grid``, ``grid_step``, ``tick_step``,
-    ``axis_arrows``, ``label_policy``, ``xscale``/``yscale``, ``time_format``,
+    ``axis_arrows``, ``x_reversed``/``y_reversed``, ``label_policy``, ``xscale``/
+    ``yscale``, ``time_format``,
     ``tick_format``, polar toggles, ...) and maps them into the equivalent
     :class:`AxisFormat` fields / ``options``.
 
@@ -292,6 +299,8 @@ def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
         grid_step=_pick("grid_step"),
         tick_step=_pick("tick_step"),
         axis_arrows=_pick("axis_arrows"),
+        x_reversed=_pick("x_reversed", default=False),
+        y_reversed=_pick("y_reversed", default=False),
         label_policy=_pick("label_policy", default="upright"),
         xscale=_pick("xscale"),
         yscale=_pick("yscale"),

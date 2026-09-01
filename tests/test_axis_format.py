@@ -160,6 +160,8 @@ def test_xlim_ylim_properties():
         {"grid_style": "nope"},  # not a dict
         {"options": "nope"},  # not a dict
         {"axis_arrows": "nope"},  # not a bool
+        {"x_reversed": "nope"},  # not a bool
+        {"y_reversed": 1},  # not a bool
     ],
 )
 def test_invalid_axis_raises(axis):
@@ -188,6 +190,27 @@ def test_axis_arrow_offset_model_and_parse(coord):
         AxisFormat(axis_arrow_offset="nope")
     with pytest.raises(ValueError):
         parse_axis_settings({"axis_arrow_offset": "nope"}, coord)
+
+
+@pytest.mark.parametrize("coord", [CoordCartesian(), CoordPolar(), TernaryCoord()])
+def test_axis_reversed_model_and_parse(coord):
+    # Defaults: both flags off.
+    assert parse_axis_settings({}, coord).x_reversed is False
+    assert parse_axis_settings({}, coord).y_reversed is False
+    assert AxisFormat().x_reversed is False
+    assert AxisFormat().y_reversed is False
+    # Round-trip both True and independent per-axis flags.
+    a = parse_axis_settings({"x_reversed": True, "y_reversed": True}, coord)
+    assert a.x_reversed is True and a.y_reversed is True
+    assert AxisFormat(x_reversed=True).x_reversed is True
+    assert AxisFormat(y_reversed=True).y_reversed is True
+    # None is NOT accepted (plain bools, unlike axis_arrows).
+    with pytest.raises(ValueError):
+        AxisFormat(x_reversed=None)
+    with pytest.raises(ValueError):
+        parse_axis_settings({"y_reversed": None}, coord)
+    with pytest.raises(ValueError):
+        parse_axis_settings({"x_reversed": 1}, coord)
 
 
 @pytest.mark.parametrize("coord", [CoordCartesian(), CoordPolar(), TernaryCoord()])
@@ -472,6 +495,77 @@ def test_cartesian_arrow_points_to_ascending_when_limits_descending():
             x_coords.append((xs.min(), xs.max()))
     assert x_coords, "no x-axis arrow found"
     assert all(lo < hi for lo, hi in x_coords)
+
+
+def test_cartesian_normalizes_descending_limits():
+    # Declaring descending limits (100 -> 0) must not blow away the grid/ticks
+    # (an empty np.arange) nor drive the secondary titles to the lower edges.
+    ax = _render_single_top(
+        {
+            "xlim": (100, 0),
+            "ylim": (100, 0),
+            "grid_step": 20,
+            "tick_step": 20,
+            "secondary_x": {"range": [0, 100], "label": "Anions (%)"},
+            "secondary_y": {"range": [0, 100], "label": "Cations (%)"},
+        }
+    )
+    ax.figure.canvas.draw()
+    grid_lines = sum(1 for l in ax.lines if l.get_linestyle() != "-")
+    assert grid_lines > 0
+    ticks = [t for t in ax.texts if t.get_text().isdigit()]
+    assert len(ticks) > 0
+    positions = {
+        t.get_text(): np.asarray(t.get_position())
+        for t in ax.texts if t.get_text() in ("Anions (%)", "Cations (%)")
+    }
+    assert "Anions (%)" in positions and "Cations (%)" in positions
+    # Anions title above the frame center; Cations title right of it.
+    assert positions["Anions (%)"][1] > 50.0
+    assert positions["Cations (%)"][0] > 50.0
+
+
+def test_cartesian_x_arrow_and_labels_reverse_together():
+    # Arrows always point toward increasing data: reversing the axis flips the
+    # arrowhead AND the bottom-edge tick labels together.
+    def bottom_arrow_head_tail(revx):
+        settings = {
+            "xlim": (0, 100), "ylim": (0, 100),
+            "grid_step": 20, "tick_step": 20, "axis_arrows": True,
+        }
+        if revx:
+            settings["x_reversed"] = True
+        ax = _render_single_top(settings)
+        ax.figure.canvas.draw()
+        for t in ax.texts:
+            if isinstance(t, matplotlib.text.Annotation):
+                end = np.asarray(t.xy)
+                start = np.asarray(t.xyann)
+                if abs(end[1] - start[1]) < 1e-9 and end[1] < 0:
+                    return start[0], end[0]
+        return None
+
+    def bottom_ticks(revx):
+        settings = {"xlim": (0, 100), "ylim": (0, 100), "grid_step": 20, "tick_step": 20}
+        if revx:
+            settings["x_reversed"] = True
+        ax = _render_single_top(settings)
+        ax.figure.canvas.draw()
+        out = []
+        for t in ax.texts:
+            if t.get_text().isdigit() and t.get_position()[1] < 0:
+                out.append((round(t.get_position()[0]), t.get_text()))
+        out.sort()
+        return [lbl for _, lbl in out]
+
+    # Non-reversed: arrowhead at high x; labels ascend 20..80.
+    s0, e0 = bottom_arrow_head_tail(False)
+    assert e0 > s0
+    assert bottom_ticks(False) == ["20", "40", "60", "80"]
+    # Reversed: arrowhead flips to low x; labels descend 80..20.
+    s1, e1 = bottom_arrow_head_tail(True)
+    assert s1 > e1
+    assert bottom_ticks(True) == ["80", "60", "40", "20"]
 
 
 # ---------------------------------------------------------------------------
