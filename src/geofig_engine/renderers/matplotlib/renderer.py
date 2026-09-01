@@ -227,7 +227,7 @@ def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
     title = axis.title
     label_policy = axis.label_policy
     tick_fs = axis.tick_fontsize
-    ion_fs = axis.label_fontsize
+    ion_fs = axis.axis_label_fontsize
     title_fs = axis.title_fontsize
     frame_lw = axis.frame_linewidth
     grid_style = axis.grid_style

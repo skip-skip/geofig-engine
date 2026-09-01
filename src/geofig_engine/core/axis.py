@@ -89,6 +89,34 @@ def _bool_value(value, label: str) -> bool:
     return value
 
 
+# Built-in default font size (points) per text-element kind, matching the
+# current native/custom matplotlib look. These are used only when neither the
+# per-element knob nor the generic ``fontsize`` fallback is set.
+_FONT_DEFAULTS: dict[str, float] = {
+    "title": 7,       # frame edge title / native set_title
+    "axis_label": 7,  # ternary ion labels + cartesian secondary titles
+    "xlabel": 10,     # native axis-label slot (x)
+    "ylabel": 10,     # native axis-label slot (y)
+    "tick": 5,        # tick labels (drawn + native + polar)
+    "suptitle": 14,   # top-level bundled figure title
+    "legend": 9,      # legend text
+    "facet_title": 10,  # facet panel titles / row ylabels
+}
+
+# Maps a text-element ``kind`` (used by ``AxisFormat.resolve_fontsize``) to the
+# per-element ``AxisFormat`` font-size field that governs it.
+_KIND_FIELD: dict[str, str] = {
+    "title": "title_fontsize",
+    "axis_label": "axis_label_fontsize",
+    "xlabel": "xlabel_fontsize",
+    "ylabel": "ylabel_fontsize",
+    "tick": "tick_fontsize",
+    "suptitle": "suptitle_fontsize",
+    "legend": "legend_fontsize",
+    "facet_title": "facet_title_fontsize",
+}
+
+
 def _policy_value(value, label: str = "label_policy") -> str:
     if value not in VALID_LABEL_POLICIES:
         raise ValueError(
@@ -106,9 +134,17 @@ class AxisFormat:
     policy, and a ``tick_format`` format-spec applied to numeric tick labels.
     ``options`` is a per-coordinate extension dict (e.g. polar toggles).
 
-    Appearance-preserving style knobs (``tick_fontsize``, ``label_fontsize``,
-    ``title_fontsize``, ``grid_style``, ``frame_linewidth``, ``label_offset``)
-    default to the current native/custom matplotlib look.
+    Appearance-preserving style knobs (``tick_fontsize``, ``axis_label_fontsize``,
+    ``title_fontsize``, ``xlabel_fontsize``, ``ylabel_fontsize``,
+    ``suptitle_fontsize``, ``legend_fontsize``, ``facet_title_fontsize``,
+    ``grid_style``, ``frame_linewidth``, ``label_offset``) default to the current
+    native/custom matplotlib look.
+
+    Font sizes resolve per text-element ``kind`` via :meth:`resolve_fontsize`:
+    the per-element knob wins, else the generic ``fontsize`` fallback, else a
+    built-in default (matched to today's rendered output). All font knobs are
+    ``float | None``; ``None`` means "not set", so merely omitting them preserves
+    the default look.
     """
 
     # Common fields (both paths)
@@ -128,10 +164,19 @@ class AxisFormat:
     time_format: str | None = None
     tick_format: str = ":g"
 
-    # Appearance-preserving style knobs (defaults match current output)
-    tick_fontsize: float = 5
-    label_fontsize: float = 7
-    title_fontsize: float = 7
+    # Appearance-preserving style knobs. All font-* knobs are float|None
+    # ("None" == not set); the effective size is resolved at render time by
+    # ``resolve_fontsize`` (per-element -> generic ``fontsize`` -> built-in
+    # default), so omitting them preserves the current output.
+    fontsize: float | None = None  # generic fallback for any unset element
+    tick_fontsize: float | None = None
+    axis_label_fontsize: float | None = None  # ternary ion + cartesian secondary titles
+    title_fontsize: float | None = None
+    xlabel_fontsize: float | None = None
+    ylabel_fontsize: float | None = None
+    suptitle_fontsize: float | None = None
+    legend_fontsize: float | None = None
+    facet_title_fontsize: float | None = None
     grid_style: dict[str, Any] = field(
         default_factory=lambda: {
             "color": "gray",
@@ -179,14 +224,26 @@ class AxisFormat:
 
         object.__setattr__(self, "tick_format", self._validate_tick_format(self.tick_format))
 
-        for attr in ("tick_fontsize", "label_fontsize", "title_fontsize", "frame_linewidth"):
-            object.__setattr__(self, attr, _scalar(getattr(self, attr), attr))
-        if self.tick_fontsize <= 0:
-            raise ValueError(f"tick_fontsize must be positive, got {self.tick_fontsize!r}")
-        if self.label_fontsize <= 0:
-            raise ValueError(f"label_fontsize must be positive, got {self.label_fontsize!r}")
-        if self.title_fontsize <= 0:
-            raise ValueError(f"title_fontsize must be positive, got {self.title_fontsize!r}")
+        # Font-size knobs: each is float|None; validate any set value as a
+        # strictly positive real number. `_positive` coerces to float and
+        # rejects bools/non-numbers.
+        _FONT_FIELDS = (
+            "fontsize",
+            "tick_fontsize",
+            "axis_label_fontsize",
+            "title_fontsize",
+            "xlabel_fontsize",
+            "ylabel_fontsize",
+            "suptitle_fontsize",
+            "legend_fontsize",
+            "facet_title_fontsize",
+        )
+        for attr in _FONT_FIELDS:
+            value = getattr(self, attr)
+            if value is not None:
+                object.__setattr__(self, attr, _positive(value, attr))
+
+        object.__setattr__(self, "frame_linewidth", _scalar(self.frame_linewidth, "frame_linewidth"))
         if self.frame_linewidth < 0:
             raise ValueError(
                 f"frame_linewidth must be non-negative, got {self.frame_linewidth!r}"
@@ -245,6 +302,26 @@ class AxisFormat:
     def show_arrows(self) -> bool:
         """Effective axis-direction-arrow flag (``False`` when unset or None)."""
         return bool(self.axis_arrows)
+
+    def resolve_fontsize(self, kind: str) -> float:
+        """Effective font size (points) for a text-element ``kind``.
+
+        Resolution cascade:
+          1. the per-element knob (``<kind>_fontsize``) if set,
+          2. else the generic ``fontsize`` fallback if set,
+          3. else a built-in default matched to the current rendered output.
+
+        ``kind`` is one of ``title``, ``axis_label``, ``xlabel``, ``ylabel``,
+        ``tick``, ``suptitle``, ``legend``, ``facet_title``.
+        """
+        if kind not in _KIND_FIELD:
+            raise ValueError(f"unknown font kind {kind!r}")
+        specific = getattr(self, _KIND_FIELD[kind])
+        if specific is not None:
+            return specific
+        if self.fontsize is not None:
+            return self.fontsize
+        return _FONT_DEFAULTS[kind]
 
 
 def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:

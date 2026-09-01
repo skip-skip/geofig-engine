@@ -40,12 +40,28 @@ def test_tick_format_defaults_to_g():
 
 def test_appearance_knob_defaults():
     a = parse_axis_settings({}, CoordCartesian())
-    assert a.tick_fontsize == 5
-    assert a.label_fontsize == 7
-    assert a.title_fontsize == 7
+    assert a.tick_fontsize is None
+    assert a.axis_label_fontsize is None
+    assert a.title_fontsize is None
+    assert a.fontsize is None
+    assert a.xlabel_fontsize is None
+    assert a.ylabel_fontsize is None
+    assert a.suptitle_fontsize is None
+    assert a.legend_fontsize is None
+    assert a.facet_title_fontsize is None
     assert a.grid_style == {"color": "gray", "linewidth": 0.3, "linestyle": ":"}
     assert a.frame_linewidth == 1.0
     assert a.label_offset is None
+
+    # Unset knobs resolve to the built-in defaults (current rendered output).
+    assert a.resolve_fontsize("tick") == 5
+    assert a.resolve_fontsize("axis_label") == 7
+    assert a.resolve_fontsize("title") == 7
+    assert a.resolve_fontsize("xlabel") == 10
+    assert a.resolve_fontsize("ylabel") == 10
+    assert a.resolve_fontsize("suptitle") == 14
+    assert a.resolve_fontsize("legend") == 9
+    assert a.resolve_fontsize("facet_title") == 10
 
 
 def test_flat_axis_parses_fields():
@@ -232,7 +248,31 @@ def test_fontsize_positive():
     with pytest.raises(ValueError):
         AxisFormat(tick_fontsize=0)
     with pytest.raises(ValueError):
-        AxisFormat(label_fontsize=-1)
+        AxisFormat(axis_label_fontsize=-1)
+    with pytest.raises(ValueError):
+        AxisFormat(fontsize=0)
+    with pytest.raises(ValueError):
+        AxisFormat(xlabel_fontsize=-5)
+    with pytest.raises(ValueError):
+        AxisFormat(legend_fontsize="big")
+    with pytest.raises(ValueError):
+        AxisFormat(suptitle_fontsize=True)
+
+
+def test_fontsize_resolution_cascade():
+    a = AxisFormat()
+    assert a.resolve_fontsize("tick") == 5  # built-in default
+
+    gen = AxisFormat(fontsize=9)
+    assert gen.resolve_fontsize("tick") == 9  # generic fallback
+    assert gen.resolve_fontsize("title") == 9
+
+    specific = AxisFormat(fontsize=9, tick_fontsize=6)
+    assert specific.resolve_fontsize("tick") == 6  # per-element wins
+    assert specific.resolve_fontsize("title") == 9  # other kinds use generic
+
+    with pytest.raises(ValueError):
+        a.resolve_fontsize("bogus")
 
 
 def test_label_policy_constant():
