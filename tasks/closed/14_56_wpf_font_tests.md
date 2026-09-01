@@ -1,6 +1,6 @@
 # WP-F: Tests for font-size knobs + generic fallback
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.56
 **Dependencies**: `14_56_wpa_axis_font_model.md`, `14_56_wpb_font_flat_keys.md`, `14_56_wpc_drawn_frame_fonts.md`, `14_56_wpd_native_path_fonts.md`, `14_56_wpe_figure_level_fonts.md`
 
@@ -38,10 +38,23 @@ frames, the native path, and figure-level text.
 
 ## Acceptance criteria
 
-- [ ] New model/parse/validation tests pass
-- [ ] Render tests confirm per-element, generic, and built-in-default resolution for drawn frames and native path
-- [ ] Anion/Cation == `axis_label_fontsize` (7) confirmed for the piper
-- [ ] Full test suite passes (no regressions)
+- [x] New model/parse/validation tests pass
+- [x] Render tests confirm per-element, generic, and built-in-default resolution for drawn frames and native path
+- [x] Anion/Cation == `axis_label_fontsize` (7) confirmed for the piper
+- [x] Full test suite passes (no regressions)
+
+## Implementation notes
+
+Most coverage was added incrementally across WP-A..WP-E. WP-F closes two gaps in
+drawn-frame render coverage:
+
+- `test_polar_tick_fontsize_applies_resolved_tick` (new): polar `labelsize` uses
+  `resolve_fontsize("tick")` — default 5, per-element `tick_fontsize`, and generic
+  `fontsize` fallback.
+- `test_ternary_frame_title_uses_resolved_title` (new): ternary drawn title uses
+  `resolve_fontsize("title")` — default 7, `title_fontsize`, and generic fallback.
+
+Full suite: 955 passed.
 
 ## Files
 

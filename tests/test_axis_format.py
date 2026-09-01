@@ -728,6 +728,33 @@ def test_polar_frame_polar_tick_labels_mapping():
     fig.clf()
 
 
+def test_polar_tick_fontsize_applies_resolved_tick():
+    from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
+
+    renderer = MatplotlibRenderer()
+
+    fig, ax = _frame_polar_axes()
+    renderer._draw_frame(ax, _polar_spec({"polar_tick_labels": True}))
+    assert ax.xaxis.get_ticklabels()[0].get_fontsize() == 5.0  # built-in default
+    fig.clf()
+
+    fig, ax = _frame_polar_axes()
+    renderer._draw_frame(
+        ax,
+        _polar_spec({"polar_tick_labels": True, "tick_fontsize": 12}),
+    )
+    assert ax.xaxis.get_ticklabels()[0].get_fontsize() == 12.0  # per-element wins
+    fig.clf()
+
+    fig, ax = _frame_polar_axes()
+    renderer._draw_frame(
+        ax,
+        _polar_spec({"polar_tick_labels": True, "fontsize": 11}),
+    )
+    assert ax.xaxis.get_ticklabels()[0].get_fontsize() == 11.0  # generic fallback
+    fig.clf()
+
+
 def test_polar_frame_hide_radial_ticks():
     from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
 
@@ -1079,6 +1106,51 @@ def test_native_title_xlabel_ylabel_use_generic_fontsize():
     assert ax.title.get_fontsize() == 9.0
     assert ax.xaxis.label.get_fontsize() == 9.0
     assert ax.yaxis.label.get_fontsize() == 9.0
+
+def test_ternary_frame_title_uses_resolved_title():
+    # Ternary drawn frame's title text (drawn on the axes) uses resolve_fontsize("title").
+    ternary_layers = [
+        LayerSpec(
+            geom=GeomLine(),
+            stat=StatIdentity(),
+            visual_mapping={
+                "a": pd.Series([0.0, 0.5, 1.0]),
+                "b": pd.Series([0.0, 0.433, 0.0]),
+                "c": pd.Series([1.0, 0.067, 0.0]),
+            },
+        )
+    ]
+    ax = _render_single_top(
+        {"title": "TRI TITLE"}, coord=TernaryCoord(), layers=ternary_layers
+    )
+    sized = [
+        t.get_fontsize()
+        for t in ax.texts
+        if t.get_text() == "TRI TITLE"
+    ]
+    assert sized == [7.0]  # built-in default
+
+    ax = _render_single_top(
+        {"title": "TRI TITLE", "title_fontsize": 13},
+        coord=TernaryCoord(), layers=ternary_layers,
+    )
+    sized = [
+        t.get_fontsize()
+        for t in ax.texts
+        if t.get_text() == "TRI TITLE"
+    ]
+    assert sized == [13.0]
+
+    ax = _render_single_top(
+        {"title": "TRI TITLE", "fontsize": 14},
+        coord=TernaryCoord(), layers=ternary_layers,
+    )
+    sized = [
+        t.get_fontsize()
+        for t in ax.texts
+        if t.get_text() == "TRI TITLE"
+    ]
+    assert sized == [14.0]  # generic fallback
 
 def test_suptitle_uses_resolved_fontsize():
     import matplotlib
