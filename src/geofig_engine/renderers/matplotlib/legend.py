@@ -203,6 +203,7 @@ def _make_handle(entry: LegendEntry) -> Line2D:
 def render_legend_figure(
     legend_data: LegendAccumulator,
     figsize: tuple[float, float] = (6, 4),
+    fontsize: float = 9,
 ) -> plt.Figure:
     groups = list(legend_data.groups)
     if not groups:
@@ -246,7 +247,7 @@ def render_legend_figure(
             frameon=False,
             handletextpad=1.5,
             labelspacing=1.2,
-            fontsize=9,
+            fontsize=fontsize,
         )
         if legend.get_texts():
             legend.get_texts()[0].set_weight("bold")
@@ -254,7 +255,7 @@ def render_legend_figure(
                 txt = t.get_text()
                 if txt.startswith("  "):
                     t.set_weight("semibold")
-                    t.set_fontsize(8)
+                    t.set_fontsize(fontsize - 1)
 
     plt.subplots_adjust(wspace=0.4)
     plt.close(fig)

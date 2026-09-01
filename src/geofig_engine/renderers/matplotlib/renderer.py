@@ -654,7 +654,8 @@ class MatplotlibRenderer(BaseRenderer):
 
         title = spec.settings.get("title")
         if title:
-            fig.suptitle(title, fontsize=14, y=0.98)
+            _axis = parse_axis_settings(spec.settings, spec.coord)
+            fig.suptitle(title, fontsize=_axis.resolve_fontsize("suptitle"), y=0.98)
         ax.axis("off")
 
         plt.close(fig)
@@ -820,7 +821,8 @@ class MatplotlibRenderer(BaseRenderer):
 
         title = spec.settings.get("title")
         if title:
-            fig.suptitle(title, fontsize=14, y=0.98)
+            _axis = parse_axis_settings(spec.settings, spec.coord)
+            fig.suptitle(title, fontsize=_axis.resolve_fontsize("suptitle"), y=0.98)
         ax.axis("off")
 
         plt.close(fig)
@@ -1336,8 +1338,8 @@ class MatplotlibRenderer(BaseRenderer):
     # Legend
     # ------------------------------------------------------------------
 
-    def render_legend(self, legend_data: LegendAccumulator) -> plt.Figure:
-        return render_legend_figure(legend_data)
+    def render_legend(self, legend_data: LegendAccumulator, fontsize: float = 9) -> plt.Figure:
+        return render_legend_figure(legend_data, fontsize=fontsize)
 
     def _apply_coord_transform(self, spec: FigureSpec) -> FigureSpec:
         """Apply coordinate transform to all layers' visual mappings."""

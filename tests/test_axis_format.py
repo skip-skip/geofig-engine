@@ -13,7 +13,10 @@ import matplotlib
 
 from geofig_engine.core.axis import AxisFormat, parse_axis_settings, VALID_LABEL_POLICIES
 from geofig_engine.core.coord import CoordCartesian, CoordPolar, TernaryCoord
+from geofig_engine.core.geom import GeomLine
+from geofig_engine.core.layer import LayerSpec
 from geofig_engine.core.spec import FigureSpec
+from geofig_engine.core.stat import StatIdentity
 
 
 @pytest.fixture(params=[CoordCartesian(), CoordPolar(), TernaryCoord()])
@@ -1077,6 +1080,40 @@ def test_native_title_xlabel_ylabel_use_generic_fontsize():
     assert ax.xaxis.label.get_fontsize() == 9.0
     assert ax.yaxis.label.get_fontsize() == 9.0
 
+def test_suptitle_uses_resolved_fontsize():
+    import matplotlib
+    matplotlib.use("Agg")
+    from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
+
+    def render(settings):
+        spec = FigureSpec(
+            data=pd.DataFrame({"v": [0.0, 1.0, 2.0]}),
+            mappings={},
+            settings={"figsize": (8, 8), "xlim": (0, 100), "ylim": (0, 100), **settings},
+            context={},
+            template_name="test",
+            layers=[
+                LayerSpec(
+                    geom=GeomLine(),
+                    stat=StatIdentity(),
+                    visual_mapping={
+                        "x": pd.Series([0.0, 1.0]),
+                        "y": pd.Series([0.0, 1.0]),
+                    },
+                ),
+            ],
+        )
+        return MatplotlibRenderer().render(spec)
+
+    fig = render({"title": "T"})
+    assert fig._suptitle.get_text() == "T"
+    assert fig._suptitle.get_fontsize() == 14.0
+
+    fig = render({"title": "T", "suptitle_fontsize": 18})
+    assert fig._suptitle.get_fontsize() == 18.0
+
+    fig = render({"title": "T", "fontsize": 20})
+    assert fig._suptitle.get_fontsize() == 20.0
 
 def test_facet_panel_titles_use_facet_title_fontsize():
     fig = _render_facet({"xlabel": "X"})

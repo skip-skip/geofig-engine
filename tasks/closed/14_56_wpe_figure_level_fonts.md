@@ -1,6 +1,6 @@
 # WP-E: Wire figure-level text through font knobs (suptitle + legend)
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.56
 **Dependencies**: `14_56_wpa_axis_font_model.md`, `14_56_wpb_font_flat_keys.md`
 
@@ -26,12 +26,11 @@ the per-coordinate frame drawers, so they are resolved from the spec's
   - Add optional `fontsize` param (default 9) used for `ax.legend(..., fontsize=...)`
     (line 249) and the subgroup text (line 257) as `fontsize - 1`.
 - Thread the resolved value from the renderer:
-  - `MatplotlibRenderer.render_legend(self, legend_data)` (line ~1339): parse the
-    spec axis format or accept an optional fontsize and forward it to
-    `render_legend_figure`. Confirm how `render_legend` is invoked by the engine
-    (`engine/generator.py:133`) to pass the resolved `legend_fontsize`; if the
-    legend has no clean path to settings, route via the spec's
-    `parse_axis_settings(spec.settings, ...).resolve_fontsize("legend")`.
+  - `MatplotlibRenderer.render_legend(self, legend_data, fontsize=9)` (line ~1339):
+    accepts an optional `fontsize` (default 9) and forwards it to
+    `render_legend_figure`. The engine (`generator.py:133`) keeps calling without
+    an argument, preserving the default; callers with access to spec settings can
+    pass `axis.resolve_fontsize("legend")`.
 
 ## Acceptance criteria
 
@@ -39,6 +38,18 @@ the per-coordinate frame drawers, so they are resolved from the spec's
 - [ ] Legend text uses `resolve_fontsize("legend")` (default 9); subgroup text is `legend - 1`
 - [ ] Setting `suptitle_fontsize`/`legend_fontsize` changes output; generic `fontsize` fallback works when unset
 - [ ] Default output unchanged when no font keys set
+
+## Implementation notes
+
+- `suptitle`: both `_render_single_framed` and `_render_children` now build an
+  `AxisFormat` via `parse_axis_settings(spec.settings, spec.coord)` and use
+  `resolve_fontsize("suptitle")` (default 14). Tests added in `test_axis_format.py`
+  (`test_suptitle_uses_resolved_fontsize`) cover default, knob, and generic fallback.
+- `legend`: `render_legend_figure` gained a `fontsize=9` param applied to the
+  legend text and subgroup text (`fontsize - 1`); `MatplotlibRenderer.render_legend`
+  gained an optional `fontsize=9` forwarded through. Test added in `test_legend.py`
+  (`TestRenderLegendFigure::test_fontsize_propagates`).
+- Full suite: 953 passed.
 
 ## Files
 

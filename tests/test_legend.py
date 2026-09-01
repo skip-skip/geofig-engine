@@ -409,6 +409,27 @@ class TestRenderLegendFigure:
         assert "A" in entry_labels
         assert "B" in entry_labels
 
+    def test_fontsize_propagates(self):
+        data = pd.DataFrame({"x": [1, 2], "y": [3, 4], "loc": ["A", "B"]})
+        accumulator = LegendAccumulator()
+        spec = FigureSpec(
+            data=data, mappings={}, settings={}, context={}, template_name="custom",
+            layers=[
+                LayerSpec(
+                    geom=GeomPoint(), stat=StatIdentity(),
+                    visual_mapping={
+                        "x": data["x"], "y": data["y"],
+                        "color": pd.Series(["red", "blue"], name="loc"),
+                    },
+                ),
+            ],
+        )
+        accumulator.add_from_spec(spec)
+        fig = render_legend_figure(accumulator, fontsize=14)
+        legend = fig.axes[0].get_legend()
+        assert legend is not None
+        assert all(abs(t.get_fontsize() - 14) < 1e-6 for t in legend.get_texts())
+
 
 class TestLegendIntegration:
     """End-to-end: engine → specs → legend rendering."""
