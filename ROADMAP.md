@@ -283,6 +283,42 @@ being hardcoded (and inconsistent) across cartesian/ternary/polar.
 
 ---
 
+## ✅ Phase 14.56 — Configurable font sizes for all text elements (955 tests)
+
+Make every text element's font size configurable as a flat settings key, with a
+uniform resolution cascade. One **per-element knob** per text element plus a
+generic **`fontsize`** fallback, so a single value can restyle everything.
+
+- **`AxisFormat` font knobs** (`core/axis.py`) — all font sizes are now
+  `float | None` (default `None`, meaning "unset"): `tick_fontsize`,
+  `axis_label_fontsize`, `title_fontsize`, `xlabel_fontsize`, `ylabel_fontsize`,
+  `suptitle_fontsize`, `legend_fontsize`, `facet_title_fontsize`, plus the
+  generic `fontsize`. Each validated via `_positive` (rejects non-positive and
+  non-numeric values, e.g. `"11"`).
+- **Resolution cascade** — `resolve_fontsize(kind)` returns the per-element knob
+  if set, else the generic `fontsize`, else the built-in default. Built-in
+  defaults: title 7, axis_label 7, xlabel 10, ylabel 10, tick 5, suptitle 14,
+  legend 9, facet_title 10. Unknown `kind` raises `ValueError`.
+- **`axis_label` unification** — the previous inconsistency (ternary ion labels
+  at 7 vs cartesian secondary titles hardcoded at 6) is resolved: both the
+  ternary ion labels and cartesian Anion/Cation secondary titles now use
+  `axis_label_fontsize` (default 7).
+- **Wiring** — drawn frames (ternary/cartesian/polar) use `resolve_fontsize`
+  for tick/title/axis_label; the native `set_xlabel`/`set_ylabel`/`set_title`
+  path uses xlabel/ylabel/title; facet panel titles + row ylabels use
+  `facet_title`; top-level `fig.suptitle` uses `suptitle`; legend text uses
+  `legend` (subgroup text `legend - 1`).
+- **Flat keys** — `parse_axis_settings` reads every `*_fontsize` key plus
+  `fontsize`; each parses to the matching field only.
+- **Out of scope: stiffness labels** — stiff row labels/axis titles remain
+  hardcoded (10/7) and are not covered by these knobs.
+- **Tests** — model/parse/validation, the cascade (per-element > generic >
+  built-in), drawn-frame coverage across ternary/cartesian/polar, native-path +
+  facet, piper Anion/Cation == `axis_label_fontsize` (7), suptitle, and legend.
+  Full suite: **955 passed**.
+
+---
+
 - **Multi-level grouped legends** — `subseries_col` pattern with section headers and aligned columns (from geochemplot's grouped-legend pattern)
 - **Dimension legend builder** — `build_dimension_legend()` standalone function from color_col + shape_col + linetype_col
 - **Marker/color combinatorial generator** — `gen_markers()`, `gen_markers_series()` using `itertools.product` over marker list + color palette

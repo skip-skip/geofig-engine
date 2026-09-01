@@ -1,6 +1,6 @@
 # WP-G: Piper template + outputs + ROADMAP + commit
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.56
 **Dependencies**: `14_56_wpa_axis_font_model.md` .. `14_56_wpf_font_tests.md`
 
@@ -46,12 +46,20 @@ Phase 14.56 entry, and commit the working-tree changes on `mapping-refactor`.
 
 ## Acceptance criteria
 
-- [ ] Piper renders with unified `axis_label` (Anion/Cation 7) and default sizes elsewhere
-- [ ] All affected example outputs regenerated (git-ignored)
-- [ ] ROADMAP Phase 14.56 entry added with accurate test count; stiffness correctly excluded
-- [ ] All font WPs in `tasks/closed/` with `**Status**: complete`
-- [ ] `git status` staged set matches intended files
-- [ ] Commit created on `mapping-refactor` with a `Phase 14.56` message
+- [x] Piper renders with unified `axis_label` (Anion/Cation 7) and default sizes elsewhere
+- [x] All affected example outputs regenerated (git-ignored)
+- [x] ROADMAP Phase 14.56 entry added with accurate test count; stiffness correctly excluded
+- [x] All font WPs in `tasks/closed/` with `**Status**: complete`
+- [x] `git status` staged set matches intended files
+- [x] Commit created on `mapping-refactor` with a `Phase 14.56` message
+
+## Implementation notes
+
+- `piper.py` requires **no** knob override: it relies on built-in defaults, and the
+  Anion/Cation secondary titles now pick up `axis_label` (default 7) automatically.
+- Regenerated `hydro_demo` Piper outputs and `piper_axes_debug.png` (git-ignored).
+- ROADMAP Phase 14.56 entry added (955 tests); stiffness labels explicitly excluded.
+- Final commit: `Phase 14.56 WP-A..G: configurable font sizes for all text elements`.
 
 ## Files
 
