@@ -89,6 +89,54 @@ def test_flat_axis_parses_fields():
     assert a.tick_format == "{:.1f}"
 
 
+@pytest.mark.parametrize(
+    "key,attr",
+    [
+        ("fontsize", "fontsize"),
+        ("tick_fontsize", "tick_fontsize"),
+        ("axis_label_fontsize", "axis_label_fontsize"),
+        ("title_fontsize", "title_fontsize"),
+        ("xlabel_fontsize", "xlabel_fontsize"),
+        ("ylabel_fontsize", "ylabel_fontsize"),
+        ("suptitle_fontsize", "suptitle_fontsize"),
+        ("legend_fontsize", "legend_fontsize"),
+        ("facet_title_fontsize", "facet_title_fontsize"),
+    ],
+)
+def test_font_keys_parse_roundtrip(key, attr):
+    a = parse_axis_settings({key: 12}, CoordCartesian())
+    assert getattr(a, attr) == 12.0
+    # Only the specified knob is set; all others remain unset (None).
+    for check_attr in (
+        "fontsize", "tick_fontsize", "axis_label_fontsize", "title_fontsize",
+        "xlabel_fontsize", "ylabel_fontsize", "suptitle_fontsize",
+        "legend_fontsize", "facet_title_fontsize",
+    ):
+        if check_attr == attr:
+            continue
+        assert getattr(a, check_attr) is None
+
+
+def test_generic_fontsize_only_sets_generic():
+    a = parse_axis_settings({"fontsize": 9}, CoordCartesian())
+    assert a.fontsize == 9.0
+    assert a.tick_fontsize is None
+    assert a.axis_label_fontsize is None
+
+
+def test_parse_font_keys_coerce_to_float_and_validate():
+    a = parse_axis_settings({"title_fontsize": 11}, CoordCartesian())
+    assert a.title_fontsize == 11.0
+    with pytest.raises(ValueError):
+        parse_axis_settings({"tick_fontsize": 0}, CoordCartesian())
+    with pytest.raises(ValueError):
+        parse_axis_settings({"fontsize": -3}, CoordCartesian())
+    with pytest.raises(ValueError):
+        parse_axis_settings({"legend_fontsize": True}, CoordCartesian())
+    with pytest.raises(ValueError):
+        parse_axis_settings({"suptitle_fontsize": "11"}, CoordCartesian())
+
+
 @pytest.mark.parametrize("coord", [CoordCartesian(), CoordPolar(), TernaryCoord()])
 def test_flat_keys_parse(coord):
     settings = {

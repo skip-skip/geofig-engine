@@ -331,7 +331,8 @@ def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
     ``ylabel``, ``xlim``/``ylim``, ``grid``, ``grid_step``, ``tick_step``,
     ``axis_arrows``, ``x_reversed``/``y_reversed``, ``label_policy``, ``xscale``/
     ``yscale``, ``time_format``,
-    ``tick_format``, polar toggles, ...) and maps them into the equivalent
+    ``tick_format``, font-size keys (``fontsize`` plus the per-element
+    ``*_fontsize`` knobs), polar toggles, ...) and maps them into the equivalent
     :class:`AxisFormat` fields / ``options``.
 
     ``coord`` is currently informational context for any future coord-specific
@@ -384,5 +385,14 @@ def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
         time_format=_pick("time_format"),
         tick_format=_pick("tick_format", default=":g"),
         axis_arrow_offset=_pick("axis_arrow_offset"),
+        fontsize=_pick("fontsize"),
+        tick_fontsize=_pick("tick_fontsize"),
+        axis_label_fontsize=_pick("axis_label_fontsize"),
+        title_fontsize=_pick("title_fontsize"),
+        xlabel_fontsize=_pick("xlabel_fontsize"),
+        ylabel_fontsize=_pick("ylabel_fontsize"),
+        suptitle_fontsize=_pick("suptitle_fontsize"),
+        legend_fontsize=_pick("legend_fontsize"),
+        facet_title_fontsize=_pick("facet_title_fontsize"),
         options=options,
     )

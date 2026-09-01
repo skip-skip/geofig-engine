@@ -1,6 +1,6 @@
 # WP-B: Parse font-size flat keys in parse_axis_settings
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.56
 **Dependencies**: `14_56_wpa_axis_font_model.md`
 
