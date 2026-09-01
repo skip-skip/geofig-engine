@@ -226,9 +226,9 @@ def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
     handedness = coord.handedness
     title = axis.title
     label_policy = axis.label_policy
-    tick_fs = axis.tick_fontsize
-    ion_fs = axis.axis_label_fontsize
-    title_fs = axis.title_fontsize
+    tick_fs = axis.resolve_fontsize("tick")
+    ion_fs = axis.resolve_fontsize("axis_label")
+    title_fs = axis.resolve_fontsize("title")
     frame_lw = axis.frame_linewidth
     grid_style = axis.grid_style
     tick_fmt = axis.tick_format
@@ -392,8 +392,8 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     tick_step = axis.tick_step if axis.tick_step is not None else grid_step
     label_policy = axis.label_policy
     title = axis.title
-    tick_fs = axis.tick_fontsize
-    title_fs = axis.title_fontsize
+    tick_fs = axis.resolve_fontsize("tick")
+    title_fs = axis.resolve_fontsize("title")
     frame_lw = axis.frame_linewidth
     grid_style = axis.grid_style
     tick_fmt = axis.tick_format
@@ -483,13 +483,13 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     if "x" in secondary and secondary["x"].label:
         sec = secondary["x"]
         wt = _apply_matrix_pts(matrix, [((xlo + xhi) / 2.0, yhi + 0.20 * (yhi - ylo))])[0]
-        ax.text(wt[0], wt[1], sec.label, ha="center", va="bottom", fontsize=6,
+        ax.text(wt[0], wt[1], sec.label, ha="center", va="bottom", fontsize=axis.resolve_fontsize("axis_label"),
                 rotation=label_rotation((1, 0), matrix, policy=sec.label_policy),
                 clip_on=False)
     if "y" in secondary and secondary["y"].label:
         sec = secondary["y"]
         wt = _apply_matrix_pts(matrix, [(xhi + 0.20 * (xhi - xlo), (ylo + yhi) / 2.0)])[0]
-        ax.text(wt[0], wt[1], sec.label, ha="left", va="center", fontsize=6,
+        ax.text(wt[0], wt[1], sec.label, ha="left", va="center", fontsize=axis.resolve_fontsize("axis_label"),
                 rotation=label_rotation((0, 1), matrix, policy=sec.label_policy),
                 clip_on=False)
 
@@ -1090,7 +1090,7 @@ class MatplotlibRenderer(BaseRenderer):
         if options.get("polar_tick_labels", False):
             self._apply_polar_ticks(ax, spec)
             try:
-                ax.tick_params(labelsize=axis.tick_fontsize)
+                ax.tick_params(labelsize=axis.resolve_fontsize("tick"))
             except TypeError:
                 pass
 

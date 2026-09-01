@@ -5,6 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
+import dataclasses
+from collections import Counter
 
 import matplotlib
 matplotlib.use("Agg")
@@ -218,6 +220,56 @@ class TestPiperRenderer:
         # Secondary axis titles.
         assert "Anions (%)" in texts
         assert "Cations (%)" in texts
+
+    def test_secondary_titles_use_axis_label_fontsize(self):
+        from geofig_engine.renderers import MatplotlibRenderer
+        renderer = MatplotlibRenderer()
+        specs = build_piper_specs(_DATA)
+        ax = renderer.render(specs[0]).axes[0]
+        sizes = {
+            t.get_text(): t.get_fontsize()
+            for t in ax.texts
+            if t.get_text() in ("Anions (%)", "Cations (%)")
+        }
+        # Unified under axis_label (default 7): matches the ternary ion labels.
+        assert sizes == {"Anions (%)": 7.0, "Cations (%)": 7.0}
+
+    def test_font_resolution_generic_and_per_element(self):
+        from geofig_engine.renderers import MatplotlibRenderer
+        renderer = MatplotlibRenderer()
+        specs = build_piper_specs(_DATA)
+        cartesian_children = []
+        new_children = []
+        for child in specs[0].children:
+            if isinstance(child.coord, CoordCartesian):
+                cartesian_children.append(child)
+                child = dataclasses.replace(
+                    child,
+                    settings={**child.settings, "fontsize": 9, "tick_fontsize": 6},
+                )
+            new_children.append(child)
+        assert len(cartesian_children) == 1
+
+        spec = dataclasses.replace(specs[0], children=tuple(new_children))
+        ax = renderer.render(spec).axes[0]
+
+        secondary = {
+            t.get_text(): t.get_fontsize()
+            for t in ax.texts
+            if t.get_text() in ("Anions (%)", "Cations (%)")
+        }
+        # axis_label unset -> generic fontsize (9) fallback.
+        assert secondary == {"Anions (%)": 9.0, "Cations (%)": 9.0}
+
+        # Cartesian child ticks use per-element tick_fontsize (6), beating generic.
+        tick_sizes = Counter(
+            t.get_fontsize()
+            for t in ax.texts
+            if t.get_text() in ("20", "40", "60", "80")
+        )
+        assert tick_sizes[6.0] > 0
+        # Ternary children (untouched) keep the built-in tick default (5).
+        assert tick_sizes[5.0] > 0
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 # WP-C: Wire drawn-frame text through font knobs (ternary/cartesian/polar)
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.56
 **Dependencies**: `14_56_wpa_axis_font_model.md`, `14_56_wpb_font_flat_keys.md`
 
