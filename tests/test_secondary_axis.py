@@ -109,6 +109,81 @@ class TestSecondaryAxis:
         assert coords[80] == pytest.approx(20)
         assert coords[20] == pytest.approx(80)
 
+    def test_named_tick_values_include_edges(self):
+        axis = SecondaryAxis(
+            "y",
+            (0, 2),
+            1,
+            "upright",
+            "right",
+            "",
+            (0, 2),
+            tick_labels={0: "SO4", 1: "HCO3", 2: "Cl"},
+        )
+        assert axis.tick_values() == [0.0, 1.0, 2.0]
+        assert axis.tick_coordinates() == [
+            (0.0, 0.0),
+            (1.0, 1.0),
+            (2.0, 2.0),
+        ]
+
+    def test_named_ticks_map_through_linear_range(self):
+        axis = SecondaryAxis(
+            "y",
+            (100, 0),
+            20,
+            "upright",
+            "right",
+            "",
+            (0, 100),
+            tick_labels={100: "top", 20: "mid"},
+        )
+        assert axis.tick_values() == [20.0, 100.0]
+        coords = dict(axis.tick_coordinates())
+        assert coords[100] == pytest.approx(0)
+        assert coords[20] == pytest.approx(80)
+
+    def test_abs_ticks_and_tick_labels_construct(self):
+        axis = SecondaryAxis(
+            "x",
+            (0, 2),
+            1,
+            "upright",
+            "top",
+            "",
+            (0, 2),
+            abs_ticks=True,
+            tick_labels={0: "a", 2: "b"},
+        )
+        assert axis.abs_ticks is True
+        assert axis.tick_labels == {0.0: "a", 2.0: "b"}
+
+    def test_named_tick_labels_normalize_string_keys(self):
+        axis = SecondaryAxis(
+            "x",
+            (0, 2),
+            1,
+            "upright",
+            "top",
+            "",
+            (0, 2),
+            tick_labels={"0": "a", "2": "b"},
+        )
+        assert axis.tick_labels == {0.0: "a", 2.0: "b"}
+
+    def test_invalid_abs_ticks_raises(self):
+        with pytest.raises(ValueError):
+            SecondaryAxis(
+                "x", (0, 2), 1, "upright", "top", "", (0, 2), abs_ticks="yes"
+            )
+
+    def test_invalid_tick_labels_raises(self):
+        for bad in ("nope", {0: ""}, {"x": "a"}, {0: 5}, {True: "a"}):
+            with pytest.raises(ValueError):
+                SecondaryAxis(
+                    "x", (0, 2), 1, "upright", "top", "", (0, 2), tick_labels=bad
+                )
+
 
 class TestParseSecondarySettings:
     def test_none_returns_empty(self):
@@ -197,6 +272,50 @@ class TestParseSecondarySettings:
         with pytest.raises(ValueError):
             parse_secondary_settings({"secondary_x": {"tick_step": 20}})
 
+    def test_named_tick_labels_declared(self):
+        axes = parse_secondary_settings(
+            {
+                "secondary_y": {
+                    "range": [0, 2],
+                    "abs_ticks": True,
+                    "tick_labels": {0: "SO4", 1: "HCO3", 2: "Cl"},
+                }
+            },
+            xlim=(0, 2),
+            ylim=(0, 2),
+        )
+        axis = axes["y"]
+        assert axis.abs_ticks is True
+        assert axis.tick_labels == {0.0: "SO4", 1.0: "HCO3", 2.0: "Cl"}
+
+    def test_named_tick_labels_inherited_from_defaults(self):
+        axes = parse_secondary_settings(
+            {"secondary_y": {"range": [0, 2]}},
+            xlim=(0, 2),
+            ylim=(0, 2),
+            defaults={
+                "abs_ticks": True,
+                "tick_labels": {1: "mid"},
+            },
+        )
+        axis = axes["y"]
+        assert axis.abs_ticks is True
+        assert axis.tick_labels == {1.0: "mid"}
+
+    def test_invalid_named_tick_labels_raises(self):
+        with pytest.raises(ValueError):
+            parse_secondary_settings(
+                {"secondary_x": {"range": [0, 2], "tick_labels": {0: ""}}}
+            )
+        with pytest.raises(ValueError):
+            parse_secondary_settings(
+                {"secondary_x": {"range": [0, 2], "tick_labels": {"x": "a"}}}
+            )
+        with pytest.raises(ValueError):
+            parse_secondary_settings(
+                {"secondary_x": {"range": [0, 2], "abs_ticks": 1}}
+            )
+
 
 class TestSecondarySettingsSerialization:
     def _spec(self, settings):
@@ -226,6 +345,26 @@ class TestSecondarySettingsSerialization:
         restored = spec_from_json(spec_to_json(spec))
         assert restored.settings["xlim"] == (0, 100)
         assert restored.settings["ylim"] == (0, 100)
+
+    def test_tick_labels_survive_json_round_trip(self):
+        spec = self._spec({
+            "xlim": (0, 2),
+            "ylim": (0, 2),
+            "secondary_y": {
+                "range": [0, 2],
+                "abs_ticks": True,
+                "tick_labels": {0: "SO4", 1: "HCO3", 2: "Cl"},
+            },
+        })
+        restored = spec_from_json(spec_to_json(spec))
+        decl = restored.settings["secondary_y"]
+        assert decl["abs_ticks"] is True
+        assert decl["tick_labels"] == {"0": "SO4", "1": "HCO3", "2": "Cl"}
+        axes = parse_secondary_settings(
+            {"secondary_y": decl}, xlim=(0, 2), ylim=(0, 2)
+        )
+        assert axes["y"].abs_ticks is True
+        assert axes["y"].tick_labels == {0.0: "SO4", 1.0: "HCO3", 2.0: "Cl"}
 
 
 class TestSecondarySettingsValidation:
@@ -280,3 +419,22 @@ class TestSecondarySettingsValidation:
         with pytest.raises(ValueError):
             validate_figure_spec(self._spec(
                 {"secondary_y": {"range": [0, 100], "tick_step": 0}}))
+
+    def test_valid_named_tick_labels_pass(self):
+        validate_figure_spec(self._spec({
+            "xlim": (0, 2),
+            "ylim": (0, 2),
+            "secondary_y": {
+                "range": [0, 2],
+                "abs_ticks": True,
+                "tick_labels": {0: "SO4", 1: "HCO3", 2: "Cl"},
+            },
+        }))
+
+    def test_invalid_named_tick_labels_raise(self):
+        with pytest.raises(ValueError):
+            validate_figure_spec(self._spec(
+                {"secondary_y": {"range": [0, 2], "tick_labels": {0: ""}}}))
+        with pytest.raises(ValueError):
+            validate_figure_spec(self._spec(
+                {"secondary_y": {"range": [0, 2], "abs_ticks": 1}}))

@@ -89,6 +89,32 @@ def _bool_value(value, label: str) -> bool:
     return value
 
 
+def _tick_labels(value, label: str = "tick_labels") -> dict[float, str]:
+    """Validate and normalize a ``{position: label}`` tick-label declaration.
+
+    Keys may be real numbers or numeric strings (JSON round-trips coerce dict
+    keys to strings); they are normalized to ``float`` positions. Values must
+    be non-empty strings. Returns a ``{float: str}`` dict.
+    """
+    out: dict[float, str] = {}
+    if not isinstance(value, (dict, Mapping)):
+        raise ValueError(f"{label} must be a dict of {{position: label}}, got {value!r}")
+    for k, v in value.items():
+        if isinstance(k, bool) or not isinstance(k, (int, float, str)):
+            raise ValueError(f"{label} key {k!r} must be a numeric position")
+        if isinstance(k, str):
+            try:
+                pos = float(k)
+            except ValueError as exc:
+                raise ValueError(f"{label} key {k!r} must be a numeric position") from exc
+        else:
+            pos = float(k)
+        if not isinstance(v, str) or not v.strip():
+            raise ValueError(f"{label} values must be non-empty strings, got {v!r}")
+        out[pos] = v
+    return out
+
+
 # Built-in default font size (points) per text-element kind, matching the
 # current native/custom matplotlib look. These are used only when neither the
 # per-element knob nor the generic ``fontsize`` fallback is set.
@@ -165,6 +191,8 @@ class AxisFormat:
     yscale: str | None = None
     time_format: str | None = None
     tick_format: str = ":g"
+    abs_ticks: bool = False
+    tick_labels: dict[float, str] = field(default_factory=dict)
 
     # Appearance-preserving style knobs. All font-* knobs are float|None
     # ("None" == not set); the effective size is resolved at render time by
@@ -237,6 +265,8 @@ class AxisFormat:
                 object.__setattr__(self, attr, str(value))
 
         object.__setattr__(self, "tick_format", self._validate_tick_format(self.tick_format))
+        object.__setattr__(self, "abs_ticks", _bool_value(self.abs_ticks, "abs_ticks"))
+        object.__setattr__(self, "tick_labels", _tick_labels(self.tick_labels))
 
         # Font-size knobs: each is float|None; validate any set value as a
         # strictly positive real number. `_positive` coerces to float and
@@ -368,7 +398,8 @@ def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
     ``axis_arrows``, ``x_reversed``/``y_reversed``, ``label_policy``,
     ``axis_label_policy``/``tick_label_policy``, ``xscale``/
     ``yscale``, ``time_format``,
-    ``tick_format``, font-size keys (``fontsize`` plus the per-element
+    ``tick_format``, ``abs_ticks``, ``tick_labels``, font-size keys
+    (``fontsize`` plus the per-element
     ``*_fontsize`` knobs), polar toggles, ...) and maps them into the equivalent
     :class:`AxisFormat` fields / ``options``.
 
@@ -423,6 +454,8 @@ def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
         yscale=_pick("yscale"),
         time_format=_pick("time_format"),
         tick_format=_pick("tick_format", default=":g"),
+        abs_ticks=_pick("abs_ticks", default=False),
+        tick_labels=_pick("tick_labels", default={}),
         axis_arrow_offset=_pick("axis_arrow_offset"),
         fontsize=_pick("fontsize"),
         tick_fontsize=_pick("tick_fontsize"),

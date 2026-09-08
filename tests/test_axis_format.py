@@ -156,6 +156,8 @@ def test_flat_keys_parse(coord):
         "yscale": "linear",
         "time_format": "%H:%M",
         "tick_format": "{:.1f}",
+        "abs_ticks": True,
+        "tick_labels": {0: "Mg2+", 1: "Ca2+", 2: "Na+"},
     }
     a = parse_axis_settings(settings, coord)
     assert a.title == "T"
@@ -170,6 +172,57 @@ def test_flat_keys_parse(coord):
     assert a.yscale == "linear"
     assert a.time_format == "%H:%M"
     assert a.tick_format == "{:.1f}"
+    assert a.abs_ticks is True
+    assert a.tick_labels == {0.0: "Mg2+", 1.0: "Ca2+", 2.0: "Na+"}
+
+
+def test_abs_ticks_defaults_false():
+    a = parse_axis_settings({}, CoordCartesian())
+    assert a.abs_ticks is False
+    assert a.tick_labels == {}
+    assert AxisFormat().abs_ticks is False
+    assert AxisFormat().tick_labels == {}
+
+
+def test_tick_labels_parse_normalizes_numeric_string_keys():
+    a = parse_axis_settings(
+        {"tick_labels": {"0": "Mg2+", "1.5": "Ca2+", 2: "Na+"}},
+        CoordCartesian(),
+    )
+    assert a.tick_labels == {0.0: "Mg2+", 1.5: "Ca2+", 2.0: "Na+"}
+
+
+def test_tick_labels_model_construct():
+    a = AxisFormat(tick_labels={0: "Mg2+", 2: "Na+"})
+    assert a.tick_labels == {0.0: "Mg2+", 2.0: "Na+"}
+
+
+def test_tick_labels_invalid_cases_raise():
+    with pytest.raises(ValueError):
+        AxisFormat(tick_labels="nope")
+    with pytest.raises(ValueError):
+        AxisFormat(tick_labels={"x": "label"})
+    with pytest.raises(ValueError):
+        AxisFormat(tick_labels={0: ""})
+    with pytest.raises(ValueError):
+        AxisFormat(tick_labels={0: 5})
+    with pytest.raises(ValueError):
+        AxisFormat(tick_labels={True: "label"})
+    with pytest.raises(ValueError):
+        parse_axis_settings({"tick_labels": {0: None}}, CoordCartesian())
+
+
+def test_abs_ticks_parse_and_model():
+    assert parse_axis_settings({"abs_ticks": True}, CoordCartesian()).abs_ticks is True
+    assert parse_axis_settings({"abs_ticks": False}, CoordCartesian()).abs_ticks is False
+    with pytest.raises(ValueError):
+        parse_axis_settings({"abs_ticks": None}, CoordCartesian())
+    with pytest.raises(ValueError):
+        AxisFormat(abs_ticks=1)
+    with pytest.raises(ValueError):
+        AxisFormat(abs_ticks=None)
+    with pytest.raises(ValueError):
+        parse_axis_settings({"abs_ticks": "yes"}, CoordCartesian())
 
 
 @pytest.mark.parametrize("coord", [CoordCartesian(), CoordPolar(), TernaryCoord()])
@@ -231,6 +284,8 @@ def test_xlim_ylim_properties():
         {"axis_arrows": "nope"},  # not a bool
         {"x_reversed": "nope"},  # not a bool
         {"y_reversed": 1},  # not a bool
+        {"abs_ticks": 1},  # not a bool
+        {"tick_labels": "nope"},  # not a dict
     ],
 )
 def test_invalid_axis_raises(axis):
@@ -1452,6 +1507,25 @@ def test_bad_tick_format_raises_at_construction():
         _construction_spec({"tick_format": 123})
 
 
+def test_bad_abs_ticks_raises_at_construction():
+    with pytest.raises(ValueError):
+        _construction_spec({"abs_ticks": "yes"})
+
+
+def test_bad_tick_labels_raises_at_construction():
+    with pytest.raises(ValueError):
+        _construction_spec({"tick_labels": "nope"})
+    with pytest.raises(ValueError):
+        _construction_spec({"tick_labels": {"x": "label"}})
+
+
+def test_valid_abs_ticks_tick_labels_construct_cleanly():
+    spec = _construction_spec(
+        {"abs_ticks": True, "tick_labels": {0: "a", 1: "b", 2: "c"}}
+    )
+    assert spec is not None
+
+
 def test_valid_axis_constructs_cleanly():
     spec = _construction_spec(
         {"xlim": (0, 100), "ylim": (0, 100), "grid_step": 20, "tick_step": 20}
@@ -1510,3 +1584,12 @@ def test_roundtrip_preserves_existing_tuple_keys():
 def test_roundtrip_unchanged_without_axis_or_figsize():
     s = _roundtrip_settings({"title": "T", "grid": True})
     assert s == {"title": "T", "grid": True}
+
+
+def test_roundtrip_tick_labels_string_keys_reparse_as_floats():
+    s = _roundtrip_settings({"tick_labels": {0: "a", 2: "c"}})
+    assert s["tick_labels"] == {"0": "a", "2": "c"}
+    a = parse_axis_settings(
+        {"xlim": (0, 100), "tick_labels": s["tick_labels"]}, CoordCartesian()
+    )
+    assert a.tick_labels == {0.0: "a", 2.0: "c"}

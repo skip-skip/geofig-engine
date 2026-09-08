@@ -31,7 +31,7 @@ coord/data path (WP-D).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Mapping
 
 VALID_LABEL_POLICIES = ("upright", "parallel")
@@ -63,6 +63,32 @@ def _scalar(value, label: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{label} must be a real number, got {value!r}")
     return float(value)
+
+
+def _tick_labels(value, label: str = "tick_labels") -> dict[float, str]:
+    """Validate and normalize a ``{position: label}`` tick-label declaration.
+
+    Keys may be real numbers or numeric strings (JSON round-trips coerce dict
+    keys to strings); they are normalized to ``float`` positions. Values must
+    be non-empty strings. Returns a ``{float: str}`` dict.
+    """
+    out: dict[float, str] = {}
+    if not isinstance(value, (dict, Mapping)):
+        raise ValueError(f"{label} must be a dict of {{position: label}}, got {value!r}")
+    for k, v in value.items():
+        if isinstance(k, bool) or not isinstance(k, (int, float, str)):
+            raise ValueError(f"{label} key {k!r} must be a numeric position")
+        if isinstance(k, str):
+            try:
+                pos = float(k)
+            except ValueError as exc:
+                raise ValueError(f"{label} key {k!r} must be a numeric position") from exc
+        else:
+            pos = float(k)
+        if not isinstance(v, str) or not v.strip():
+            raise ValueError(f"{label} values must be non-empty strings, got {v!r}")
+        out[pos] = v
+    return out
 
 
 def linear_mapping(
@@ -131,6 +157,8 @@ class SecondaryAxis:
     primary_range: tuple[float, float]
     axis_label_policy: str | None = None
     tick_label_policy: str | None = None
+    abs_ticks: bool = False
+    tick_labels: dict[float, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "range", _pair(self.range, "secondary range"))
@@ -157,6 +185,14 @@ class SecondaryAxis:
                 f"secondary {self.orientation!r} tick_label_policy must be one of "
                 f"{VALID_LABEL_POLICIES}, got {self.tick_label_policy!r}"
             )
+        if not isinstance(self.abs_ticks, bool):
+            raise ValueError(
+                f"secondary {self.orientation!r} abs_ticks must be a bool, "
+                f"got {self.abs_ticks!r}"
+            )
+        object.__setattr__(
+            self, "tick_labels", _tick_labels(self.tick_labels)
+        )
         allowed = _POSITION_BY_ORIENTATION[self.orientation]
         if self.position not in allowed:
             raise ValueError(
@@ -175,7 +211,14 @@ class SecondaryAxis:
         return linear_mapping(self.primary_range, self.range)[1]
 
     def tick_values(self) -> list[float]:
-        """Interior secondary tick values (endpoints excluded, like primary ticks)."""
+        """Secondary tick positions (secondary units).
+
+        When ``tick_labels`` is set, returns all label positions (frame edges
+        included); otherwise returns interior numeric ticks at ``tick_step``
+        (endpoints excluded, like primary ticks).
+        """
+        if self.tick_labels:
+            return sorted(self.tick_labels)
         s0, s1 = self.range
         lo, hi = min(s0, s1), max(s0, s1)
         step = self.tick_step
@@ -192,7 +235,10 @@ class SecondaryAxis:
         return values
 
     def tick_coordinates(self) -> list[tuple[float, float]]:
-        """Return ``[(secondary_value, local_coord), ...]`` for interior ticks."""
+        """Return ``[(tick_value, local_coord), ...]``.
+
+        Named ticks include frame-edge positions; numeric ticks are interior.
+        """
         out = []
         for sv in self.tick_values():
             out.append((sv, self.inv(sv)))
@@ -223,10 +269,10 @@ def parse_secondary_settings(
             Either may be None in which case it is read from ``settings``
             (``"xlim"``/``"ylim"``) or defaults to ``(0, 1)``.
         defaults: Optional fallback dict from which ``tick_step``, ``label_policy``,
-            ``axis_label_policy`` and ``tick_label_policy`` are inherited when a
-            secondary declaration omits them (the child's frame
-            ``grid_step``/``tick_step``/``label_policy`` and those axes' effective
-            policies).
+            ``axis_label_policy``, ``tick_label_policy``, ``abs_ticks`` and
+            ``tick_labels`` are inherited when a secondary declaration omits them
+            (the child's frame ``grid_step``/``tick_step``/``label_policy``,
+            those axes' effective policies, and primary tick-label formatting).
 
     Returns a dict keyed by orientation (``"x"``/``"y"``) of validated
     :class:`SecondaryAxis`. Absent declarations are skipped; malformed ones
@@ -272,5 +318,11 @@ def parse_secondary_settings(
             position=raw.get("position", _DEFAULT_POSITION[orientation]),
             label=raw.get("label", ""),
             primary_range=primary_by_orientation[orientation],
+            abs_ticks=raw.get(
+                "abs_ticks", defaults.get("abs_ticks", False)
+            ),
+            tick_labels=raw.get(
+                "tick_labels", defaults.get("tick_labels", {})
+            ),
         )
     return result
