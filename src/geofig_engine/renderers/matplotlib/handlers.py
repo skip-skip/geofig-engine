@@ -9,7 +9,7 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.colors import to_rgba
 
-from geofig_engine.core.coord import CoordPolar, StiffCoord
+from geofig_engine.core.coord import CoordPolar
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.renderers.matplotlib.util import resolve_color_series, resolve_marker_series
 
@@ -225,7 +225,7 @@ def render_bar(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
     ax.bar(x, y, **kwargs)
 
 
-def _draw_areas_grouped(ax, x, y, color_series, kwargs, polar=False, stiff=False):
+def _draw_areas_grouped(ax, x, y, color_series, kwargs, polar=False):
     for c_val in color_series.unique():
         if pd.isna(c_val):
             continue
@@ -238,11 +238,7 @@ def _draw_areas_grouped(ax, x, y, color_series, kwargs, polar=False, stiff=False
             continue
         order = np.argsort(xs.values, kind="stable")
         kw = dict(kwargs)
-        if stiff:
-            kw["facecolor"] = c_val
-            kw.pop("color", None)
-            ax.fill(xs.values, ys.values, **kw)
-        elif polar:
+        if polar:
             kw["facecolor"] = c_val
             kw.pop("color", None)
             sorted_xs = xs.values[order]
@@ -276,18 +272,11 @@ def render_area(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None
         resolved = resolve_color_series(color)
         if isinstance(resolved, pd.Series) and resolved.nunique() > 1:
             _draw_areas_grouped(ax, x, y, resolved, kwargs,
-                                polar=isinstance(coord, CoordPolar),
-                                stiff=isinstance(coord, StiffCoord))
+                                polar=isinstance(coord, CoordPolar))
             return
         kwargs["color"] = _resolve_constant(resolved) if isinstance(resolved, pd.Series) else resolved
 
-    if isinstance(coord, StiffCoord):
-        fill_kw = {"facecolor": kwargs.pop("color", None)} if "color" in kwargs else {}
-        fill_kw.update(kwargs)
-        fill_kw.setdefault("edgecolor", "black")
-        fill_kw.setdefault("linewidth", 1.5)
-        ax.fill(x, y, **fill_kw)
-    elif isinstance(coord, CoordPolar):
+    if isinstance(coord, CoordPolar):
         x_vals = np.append(x.values, x.values[0])
         y_vals = np.append(y.values, y.values[0])
         fill_kw = {"facecolor": kwargs.pop("color", None)} if "color" in kwargs else {}

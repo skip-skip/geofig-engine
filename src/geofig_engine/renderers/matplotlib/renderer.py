@@ -18,7 +18,7 @@ import matplotlib.text
 from matplotlib.transforms import Affine2D, IdentityTransform
 
 from geofig_engine.core.axis import AxisFormat, parse_axis_settings
-from geofig_engine.core.coord import CoordCartesian, CoordFlipped, CoordFixed, CoordPolar, StiffCoord, TernaryCoord
+from geofig_engine.core.coord import CoordCartesian, CoordFlipped, CoordFixed, CoordPolar, TernaryCoord
 from geofig_engine.core.facet import FacetGrid, FacetNull, FacetWrap
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.core.link import LinkTransform, label_rotation
@@ -677,8 +677,6 @@ class MatplotlibRenderer(BaseRenderer):
 
         if spec.children:
             return self._render_children(spec)
-        if isinstance(spec.coord, StiffCoord):
-            return self._render_stiff(spec)
         if not isinstance(spec.facet, FacetNull):
             return self._render_faceted(spec)
         if self._is_framed_single(spec):
@@ -1205,81 +1203,6 @@ class MatplotlibRenderer(BaseRenderer):
                 )
 
     # ------------------------------------------------------------------
-    # Stiff diagram (single-sample 6-axis polygon)
-    # ------------------------------------------------------------------
-
-    def _render_stiff(self, spec: FigureSpec):
-        coord = spec.coord
-        figsize = spec.settings.get("figsize", (6, 6))
-        fig, ax = plt.subplots(figsize=figsize)
-
-        max_val = coord.params.get("max_val", 1.0)
-        scale = max_val * 1.3 if max_val > 0 else 1.0
-        tick_max = _nice_tick_max(max_val)
-        scale_extent = tick_max / scale
-
-        self._draw_stiff_frame(ax, coord, scale, scale_extent)
-        self._draw_stiff_scale(ax, scale, tick_max, scale_extent)
-
-        spec = self._apply_coord_transform(spec)
-        self._render_axes(ax, spec, spec.data)
-
-        sample_title = coord.params.get("sample_title", "")
-        if sample_title:
-            ax.set_title(sample_title, fontsize=12, fontweight="bold", pad=10)
-
-        ax.set_xlim(-1.5, 1.5)
-        ax.set_ylim(-0.55, 2.5)
-        ax.set_aspect("equal")
-        ax.axis("off")
-
-        plt.close(fig)
-        return fig
-
-    @staticmethod
-    def _draw_stiff_frame(ax, coord, scale, scale_extent):
-        params = coord.params
-        ca = params.get("ca", 0)
-        mg = params.get("mg", 0)
-        na_k = params.get("na_k", 0)
-        cl = params.get("cl", 0)
-        hco3 = params.get("hco3", 0)
-        so4 = params.get("so4", 0)
-
-        left_vals = [na_k, ca, mg]
-        right_vals = [cl, hco3, so4]
-        labels_left = ["Na\u207a+K\u207a", "Ca\u00b2\u207a", "Mg\u00b2\u207a"]
-        labels_right = ["Cl\u207b", "HCO\u2083\u207b", "SO\u2084\u00b2\u207b"]
-        y_positions = [2, 1, 0]
-
-        for v, y, lbl in zip(left_vals, y_positions, labels_left):
-            ax.plot([-v / scale, -scale_extent], [y, y], color="black", linewidth=0.5, zorder=1)
-            ax.text(-scale_extent - 0.03, y, lbl, ha="right", va="center", fontsize=10, fontweight="bold")
-
-        for v, y, lbl in zip(right_vals, y_positions, labels_right):
-            ax.plot([v / scale, scale_extent], [y, y], color="black", linewidth=0.5, zorder=1)
-            ax.text(scale_extent + 0.03, y, lbl, ha="left", va="center", fontsize=10, fontweight="bold")
-
-        ax.plot([0, 0], [0, 2.1], color="black", linewidth=1.0, linestyle="dashed", zorder=11)
-        ax.plot([-0.5, 0.5], [1, 1], color="black", linewidth=1.0, zorder=11)
-
-    @staticmethod
-    def _draw_stiff_scale(ax, scale, tick_max, scale_extent):
-        y_line = -0.18
-        steps = [-tick_max, -tick_max / 2, 0, tick_max / 2, tick_max]
-
-        ax.plot([-scale_extent, scale_extent], [y_line, y_line],
-                color="black", linewidth=0.8, zorder=1)
-
-        for t in steps:
-            x = t / scale
-            ax.plot([x, x], [y_line, y_line - 0.06], color="black", linewidth=0.5, zorder=1)
-            label = f"{t:g}" if t != 0 else "0"
-            ax.text(x, y_line - 0.1, label, ha="center", va="top", fontsize=7)
-
-        ax.text(0, y_line - 0.22, "meq/L", ha="center", va="top", fontsize=7, color="gray")
-
-    # ------------------------------------------------------------------
     # Faceted (multi-panel)
     # ------------------------------------------------------------------
 
@@ -1406,8 +1329,6 @@ class MatplotlibRenderer(BaseRenderer):
     # ------------------------------------------------------------------
 
     def supports(self, spec: FigureSpec) -> bool:
-        if isinstance(spec.coord, StiffCoord):
-            return True
         if spec.template_name in IMPLEMENTED:
             return True
         if spec.layers:

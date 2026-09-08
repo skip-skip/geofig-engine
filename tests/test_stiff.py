@@ -1,8 +1,7 @@
-from geofig_engine.core.coord import CoordCartesian, StiffCoord
+from geofig_engine.core.coord import CoordCartesian
 from geofig_engine.core.geom import GeomPolygon
 from geofig_engine.renderers.matplotlib.renderer import _nice_tick_max
 from geofig_engine.templates import plot_stiff
-from geofig_engine.serialize import coord_to_dict, coord_from_dict
 
 
 class TestNiceTickMax:
@@ -17,27 +16,6 @@ class TestNiceTickMax:
 
     def test_minimum_value(self):
         assert _nice_tick_max(1) == 1
-
-
-class TestStiffCoord:
-    def test_defaults(self):
-        c = StiffCoord(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3)
-        assert c.name == "stiff"
-        assert c.params["ca"] == 10
-        assert c.params["mg"] == 5
-        assert c.params["max_val"] == 15
-
-    def test_sample_title(self):
-        c = StiffCoord(ca=1, mg=1, na_k=1, cl=1, hco3=1, so4=1, sample_title="Sample A")
-        assert c.params["sample_title"] == "Sample A"
-
-    def test_serialization_roundtrip(self):
-        c = StiffCoord(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3, sample_title="Well 1")
-        d = coord_to_dict(c)
-        restored = coord_from_dict(d)
-        assert isinstance(restored, StiffCoord)
-        assert restored.params["ca"] == 10
-        assert restored.params["sample_title"] == "Well 1"
 
 
 class TestPlotStiff:

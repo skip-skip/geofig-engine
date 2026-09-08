@@ -38,8 +38,6 @@ from geofig_engine.core.coord import (
     CoordFlipped,
     CoordFixed,
     CoordPolar,
-    PiperCoord,
-    StiffCoord,
     TernaryCoord,
 )
 from geofig_engine.core.facet import (
@@ -269,21 +267,6 @@ def coord_from_dict(data: dict) -> Coord:
             channels=tuple(params.get("channels", ("a", "b", "c"))),
             handedness=params.get("handedness", "left"),
             labels=None if labels is None else tuple(labels),
-        )
-    elif name == "piper":
-        return PiperCoord(
-            left_tri=tuple(params.get("left_tri", params.get("cation_cols", ["Ca", "Mg", "Na+K"]))),
-            right_tri=tuple(params.get("right_tri", params.get("anion_cols", ["HCO3", "SO4", "Cl"]))),
-        )
-    elif name == "stiff":
-        return StiffCoord(
-            ca=params.get("ca", 0.0),
-            mg=params.get("mg", 0.0),
-            na_k=params.get("na_k", 0.0),
-            cl=params.get("cl", 0.0),
-            hco3=params.get("hco3", 0.0),
-            so4=params.get("so4", 0.0),
-            sample_title=params.get("sample_title", ""),
         )
     else:
         raise ValueError(f"Unknown coord type: {name}")

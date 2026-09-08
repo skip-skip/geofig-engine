@@ -11,9 +11,8 @@ from collections import Counter
 import matplotlib
 matplotlib.use("Agg")
 
-from geofig_engine.core.coord import CoordCartesian, PiperCoord, TernaryCoord
+from geofig_engine.core.coord import CoordCartesian, TernaryCoord
 from geofig_engine.core.geom import GeomPoint
-from geofig_engine.core.spec import FigureSpec
 from geofig_engine.templates import build_piper_specs
 from geofig_engine.serialize import coord_to_dict, coord_from_dict
 
@@ -29,38 +28,6 @@ _DATA = pd.DataFrame({
 
 
 # ---------------------------------------------------------------------------
-# PiperCoord (still importable, deprecated)
-# ---------------------------------------------------------------------------
-
-
-class TestPiperCoord:
-    def test_defaults(self):
-        c = PiperCoord()
-        assert c.name == "piper"
-        assert c.params["left_tri"] == ["Ca", "Mg", "Na+K"]
-        assert c.params["right_tri"] == ["HCO3", "SO4", "Cl"]
-
-    def test_custom_columns(self):
-        c = PiperCoord(
-            left_tri=("Na", "K", "Ca"),
-            right_tri=("Cl", "SO4", "HCO3"),
-        )
-        assert c.params["left_tri"] == ["Na", "K", "Ca"]
-        assert c.params["right_tri"] == ["Cl", "SO4", "HCO3"]
-
-    def test_serialization_roundtrip(self):
-        c = PiperCoord(
-            left_tri=("Ca", "Mg", "Na+K"),
-            right_tri=("HCO3", "SO4", "Cl"),
-        )
-        d = coord_to_dict(c)
-        restored = coord_from_dict(d)
-        assert isinstance(restored, PiperCoord)
-        assert restored.params["left_tri"] == ["Ca", "Mg", "Na+K"]
-        assert restored.params["right_tri"] == ["HCO3", "SO4", "Cl"]
-
-
-# ---------------------------------------------------------------------------
 # build_piper_specs — declarative linked-axes structure
 # ---------------------------------------------------------------------------
 
@@ -73,7 +40,6 @@ class TestBuildPiperSpecs:
     def test_spec_has_children_not_piper_coord(self):
         specs = build_piper_specs(_DATA)
         spec = specs[0]
-        assert not isinstance(spec.coord, PiperCoord)
         assert isinstance(spec.coord, CoordCartesian)
         assert len(spec.children) == 3
 

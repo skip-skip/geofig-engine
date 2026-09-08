@@ -8,8 +8,6 @@ the spec-building pipeline.
 
 from __future__ import annotations
 
-import warnings
-
 import math
 from dataclasses import dataclass, field
 from typing import Any
@@ -93,72 +91,6 @@ class CoordFixed(Coord):
 
     def aspect_ratio(self) -> float | None:
         return float(self.params["ratio"])
-
-
-@dataclass(frozen=True)
-class PiperCoord(Coord):
-    left_tri: tuple[str, str, str] = ("Ca", "Mg", "Na+K")
-    right_tri: tuple[str, str, str] = ("HCO3", "SO4", "Cl")
-
-    def __init__(
-        self,
-        left_tri: tuple[str, str, str] = ("Ca", "Mg", "Na+K"),
-        right_tri: tuple[str, str, str] = ("HCO3", "SO4", "Cl"),
-    ) -> None:
-        warnings.warn(
-            "PiperCoord is deprecated; use build_piper_specs() with "
-            "nested FigureSpec children instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        object.__setattr__(self, "left_tri", left_tri)
-        object.__setattr__(self, "right_tri", right_tri)
-        super().__init__(
-            name="piper",
-            params={
-                "left_tri": list(left_tri),
-                "right_tri": list(right_tri),
-            },
-        )
-
-
-@dataclass(frozen=True)
-class StiffCoord(Coord):
-    ca: float = 0.0
-    mg: float = 0.0
-    na_k: float = 0.0
-    cl: float = 0.0
-    hco3: float = 0.0
-    so4: float = 0.0
-    sample_title: str = ""
-
-    def __init__(
-        self,
-        ca: float = 0.0,
-        mg: float = 0.0,
-        na_k: float = 0.0,
-        cl: float = 0.0,
-        hco3: float = 0.0,
-        so4: float = 0.0,
-        sample_title: str = "",
-    ) -> None:
-        object.__setattr__(self, "ca", ca)
-        object.__setattr__(self, "mg", mg)
-        object.__setattr__(self, "na_k", na_k)
-        object.__setattr__(self, "cl", cl)
-        object.__setattr__(self, "hco3", hco3)
-        object.__setattr__(self, "so4", so4)
-        object.__setattr__(self, "sample_title", sample_title)
-        max_val = max(ca, mg, na_k, cl, hco3, so4) or 1.0
-        super().__init__(
-            name="stiff",
-            params={
-                "ca": ca, "mg": mg, "na_k": na_k,
-                "cl": cl, "hco3": hco3, "so4": so4,
-                "sample_title": sample_title,
-                "max_val": max_val,
-            },
-        )
 
 
 # ---------------------------------------------------------------------------
