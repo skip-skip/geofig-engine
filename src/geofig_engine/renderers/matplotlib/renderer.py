@@ -35,6 +35,7 @@ from geofig_engine.renderers.matplotlib.handlers import (
     render_hspan,
     render_line,
     render_point,
+    render_polygon,
     render_rect,
     render_ribbon,
     render_step_line,
@@ -61,6 +62,7 @@ _GEOM_HANDLERS = {
     "vspan": render_vspan,
     "rect": render_rect,
     "abline": render_abline,
+    "polygon": render_polygon,
 }
 
 

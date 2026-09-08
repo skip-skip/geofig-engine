@@ -118,6 +118,52 @@ class GeomArea(Geom):
         )
 
 
+_VALID_EDGE_STYLES = {"solid", "dashed", "dashdot", "dotted", "-", "--", "-.", ":"}
+
+
+@dataclass(frozen=True)
+class GeomPolygon(Geom):
+    edgecolor: str = "black"
+    edgealpha: float | None = None
+    edgewidth: float = 0.5
+    edgestyle: str = "-"
+
+    def __init__(
+        self,
+        edgecolor: str = "black",
+        edgealpha: float | None = None,
+        edgewidth: float = 0.5,
+        edgestyle: str = "-",
+    ) -> None:
+        if not isinstance(edgecolor, str) or not edgecolor:
+            raise ValueError(f"edgecolor must be a non-empty string, got {edgecolor!r}")
+        if edgealpha is not None and (
+            isinstance(edgealpha, bool) or not isinstance(edgealpha, (int, float))
+        ):
+            raise ValueError(f"edgealpha must be a real number or None, got {edgealpha!r}")
+        if (
+            isinstance(edgewidth, bool)
+            or not isinstance(edgewidth, (int, float))
+            or edgewidth <= 0
+        ):
+            raise ValueError(f"edgewidth must be a positive real number, got {edgewidth!r}")
+        if edgestyle not in _VALID_EDGE_STYLES:
+            raise ValueError(
+                f"edgestyle must be one of {sorted(_VALID_EDGE_STYLES)}, got {edgestyle!r}"
+            )
+        object.__setattr__(self, "edgecolor", edgecolor)
+        object.__setattr__(
+            self, "edgealpha", float(edgealpha) if edgealpha is not None else None
+        )
+        object.__setattr__(self, "edgewidth", float(edgewidth))
+        object.__setattr__(self, "edgestyle", edgestyle)
+        super().__init__(
+            name="polygon",
+            required_channels=("x", "y"),
+            optional_channels=("color", "alpha"),
+        )
+
+
 @dataclass(frozen=True)
 class GeomRibbon(Geom):
     def __init__(self) -> None:

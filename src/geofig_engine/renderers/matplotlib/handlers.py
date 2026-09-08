@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
+from matplotlib.colors import to_rgba
 
 from geofig_engine.core.coord import CoordPolar, StiffCoord
 from geofig_engine.core.layer import LayerSpec
@@ -294,6 +295,44 @@ def render_area(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None
         ax.fill(x_vals, y_vals, **fill_kw)
     else:
         ax.fill_between(x, y, 0, **kwargs)
+
+
+def render_polygon(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
+    x = layer_spec.visual_mapping.get("x")
+    y = layer_spec.visual_mapping.get("y")
+    if x is None or y is None:
+        raise ValueError("GeomPolygon requires both x and y channels")
+
+    geom = layer_spec.geom  # GeomPolygon
+
+    x_vals = x.values if isinstance(x, pd.Series) else np.asarray(x)
+    y_vals = y.values if isinstance(y, pd.Series) else np.asarray(y)
+    if len(x_vals) < 3 or len(y_vals) < 3:
+        return
+
+    kwargs: dict[str, Any] = {"zorder": order}
+
+    color = layer_spec.visual_mapping.get("color")
+    if color is not None:
+        resolved = resolve_color_series(color)
+        kwargs["facecolor"] = (
+            _resolve_constant(resolved) if isinstance(resolved, pd.Series) else resolved
+        )
+
+    alpha = layer_spec.visual_mapping.get("alpha")
+    if alpha is not None:
+        alpha_val = _resolve_constant(alpha) if isinstance(alpha, pd.Series) else alpha
+        if alpha_val is not None:
+            kwargs["alpha"] = float(alpha_val)
+
+    if geom.edgealpha is not None:
+        kwargs["edgecolor"] = to_rgba(geom.edgecolor, geom.edgealpha)
+    else:
+        kwargs["edgecolor"] = geom.edgecolor
+    kwargs["linewidth"] = geom.edgewidth
+    kwargs["linestyle"] = geom.edgestyle
+
+    ax.fill(x_vals, y_vals, **kwargs)
 
 
 def render_ribbon(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:

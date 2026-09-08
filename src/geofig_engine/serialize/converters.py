@@ -24,6 +24,7 @@ from geofig_engine.core.geom import (
     GeomHSpan,
     GeomLine,
     GeomPoint,
+    GeomPolygon,
     GeomRect,
     GeomRibbon,
     GeomStepLine,
@@ -158,6 +159,15 @@ def geom_to_dict(geom: Geom) -> dict:
     elif isinstance(geom, GeomBar):
         if geom.position != "identity":
             base["position"] = geom.position
+    elif isinstance(geom, GeomPolygon):
+        if geom.edgecolor != "black":
+            base["edgecolor"] = geom.edgecolor
+        if geom.edgealpha is not None:
+            base["edgealpha"] = geom.edgealpha
+        if geom.edgewidth != 0.5:
+            base["edgewidth"] = geom.edgewidth
+        if geom.edgestyle != "-":
+            base["edgestyle"] = geom.edgestyle
     return base
 
 
@@ -179,6 +189,13 @@ def geom_from_dict(data: dict) -> Geom:
         return GeomBar(position=data.get("position", "identity"))
     elif geom_type == "area":
         return GeomArea()
+    elif geom_type == "polygon":
+        return GeomPolygon(
+            edgecolor=data.get("edgecolor", "black"),
+            edgealpha=data.get("edgealpha"),
+            edgewidth=data.get("edgewidth", 0.5),
+            edgestyle=data.get("edgestyle", "-"),
+        )
     elif geom_type == "ribbon":
         return GeomRibbon()
     elif geom_type == "text":
