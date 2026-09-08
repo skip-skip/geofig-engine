@@ -1,6 +1,6 @@
 # Phase 14.59: Docs & roadmap update
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.59
 **Dependencies**: `14_59_wp6_tests`
 

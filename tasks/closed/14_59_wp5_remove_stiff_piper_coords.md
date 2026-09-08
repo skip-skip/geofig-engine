@@ -1,6 +1,6 @@
 # Phase 14.59: Remove StiffCoord and the deprecated PiperCoord
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.59
 **Dependencies**: `14_59_wp4_stiff_template_cartesian` (template no longer uses `StiffCoord`)
 

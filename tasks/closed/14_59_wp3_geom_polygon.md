@@ -1,6 +1,6 @@
 # Phase 14.59: GeomPolygon geometry type
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.59
 **Dependencies**: `14_58` (piper charge labels)
 

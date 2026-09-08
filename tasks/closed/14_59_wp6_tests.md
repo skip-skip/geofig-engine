@@ -1,6 +1,6 @@
 # Phase 14.59: Tests for the stiff-as-cartesian migration
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.59
 **Dependencies**: `14_59_wp4_stiff_template_cartesian`, `14_59_wp5_remove_stiff_piper_coords`, `14_59_wp3_geom_polygon`
 

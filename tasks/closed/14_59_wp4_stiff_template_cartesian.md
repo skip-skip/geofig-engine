@@ -1,6 +1,6 @@
 # Phase 14.59: Rewrite the Stiff template as a cartesian FigureSpec
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.59
 **Dependencies**: `14_59_wp1_axis_named_ticks`, `14_59_wp2_frame_named_ticks_render`, `14_59_wp3_geom_polygon`
 
