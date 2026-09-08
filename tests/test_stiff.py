@@ -1,7 +1,28 @@
+"""Tests for the stiff-as-cartesian template (Phase 14.59 WP6).
+
+Covers the spec-level contract of ``plot_stiff``: cartesian coord, symmetric
+ab-ticks ruler, named cation/anion rows, raw signed meq/L polygon data,
+decorative layers, serialization, and a render smoke test.
+"""
+
+import numpy as np
+import pandas as pd
+import pytest
+
+import matplotlib
+matplotlib.use("Agg")
+from matplotlib.patches import Polygon as MplPolygon
+
+from geofig_engine.core.axis import parse_axis_settings
 from geofig_engine.core.coord import CoordCartesian
-from geofig_engine.core.geom import GeomPolygon
+from geofig_engine.core.geom import GeomAbline, GeomLine, GeomPolygon
+from geofig_engine.core.spec import FigureSpec
 from geofig_engine.renderers.matplotlib.renderer import _nice_tick_max
+from geofig_engine.serialize import spec_from_json, spec_to_json
 from geofig_engine.templates import plot_stiff
+
+CATIONS = {0: "Mg\u00b2\u207a", 1: "Ca\u00b2\u207a", 2: "Na\u207a+K\u207a"}
+ANIONS = {0: "SO\u2084\u00b2\u207b", 1: "HCO\u2083\u207b", 2: "Cl\u207b"}
 
 
 class TestNiceTickMax:
@@ -18,58 +39,163 @@ class TestNiceTickMax:
         assert _nice_tick_max(1) == 1
 
 
-class TestPlotStiff:
-    def test_returns_figure_spec(self):
-        spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3, title="Well 1")
+class TestStiffSpecContract:
+    _SAMPLE = dict(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3)
+
+    def _spec(self, **kw):
+        return plot_stiff(**{**self._SAMPLE, **kw})
+
+    def test_returns_figure_spec_with_unchanged_template_name(self):
+        spec = self._spec()
+        assert isinstance(spec, FigureSpec)
         assert spec.template_name == "stiff"
 
-    def test_stiff_coord(self):
-        spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3)
+    def test_coord_is_cartesian(self):
+        spec = self._spec()
         assert isinstance(spec.coord, CoordCartesian)
+        assert spec.coord.name == "cartesian"
 
-    def test_custom_figsize(self):
+    def test_symmetric_xlim_about_zero(self):
+        spec = self._spec()
+        xlo, xhi = spec.settings["xlim"]
+        assert xlo == pytest.approx(-xhi)
+        assert xlo < 0.0 < xhi
+
+    def test_x_ruler_uses_half_tick_max(self):
+        spec = self._spec()
+        tick_max = _nice_tick_max(max(self._SAMPLE.values()))
+        assert spec.settings["xlim"] == (-1.5 * tick_max, 1.5 * tick_max)
+        assert spec.settings["tick_step"] == pytest.approx(tick_max / 2.0)
+        assert spec.settings["abs_ticks"] is True
+        assert spec.settings["xlabel"] == "meq/L"
+
+    def test_row_grid_step(self):
+        assert self._spec().settings["grid_step"] == 1
+
+    def test_ylim_room_above_and_below_rows(self):
+        assert self._spec().settings["ylim"] == (-0.55, 2.5)
+
+    def test_cation_labels_declared_on_left_y(self):
+        spec = self._spec()
+        assert spec.settings["y_tick_labels"] == CATIONS
+
+    def test_anion_labels_declared_on_secondary_y(self):
+        spec = self._spec()
+        assert spec.settings["secondary_y"]["tick_labels"] == ANIONS
+
+    def test_secondary_y_range_matches_ylim_for_row_alignment(self):
+        spec = self._spec()
+        assert spec.settings["secondary_y"]["range"] == list(spec.settings["ylim"])
+
+
+class TestPlotStiffLayersAndData:
+    def test_figsize_honored(self):
         spec = plot_stiff(ca=1, mg=1, na_k=1, cl=1, hco3=1, so4=1, figsize=(8, 8))
         assert spec.settings["figsize"] == (8, 8)
 
-    def test_title(self):
+    def test_title_lands_in_settings(self):
         spec = plot_stiff(ca=1, mg=1, na_k=1, cl=1, hco3=1, so4=1, title="Test")
         assert spec.settings["title"] == "Test"
 
-    def test_polygon_layer(self):
+    def test_polygon_raw_signed_meq_coordinates(self):
         spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3)
-        polygon = spec.layers[0]
-        assert isinstance(polygon.geom, GeomPolygon)
-        assert "x" in polygon.visual_mapping
-        assert "y" in polygon.visual_mapping
-        assert polygon.visual_mapping["color"] == "lightblue"
-
-    def test_polygon_vertices(self):
-        spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3)
-        x = spec.data["x"]
-        y = spec.data["y"]
+        x = spec.data["x"].tolist()
+        y = spec.data["y"].tolist()
         assert len(x) == len(y) == 7
-        # Correct Stiff polygon trace (no origin): top-left → mid-left → bottom-left → bottom-right → mid-right → top-right → close
-        assert y.iloc[0] == 2.0                           # Na+K at top-left
-        assert y.iloc[1] == 1.0                           # Ca at mid-left
-        assert y.iloc[2] == 0.0                           # Mg at bottom-left
-        assert y.iloc[3] == 0.0                           # SO4 at bottom-right
-        assert y.iloc[4] == 1.0                           # HCO3 at mid-right
-        assert y.iloc[5] == 2.0                           # Cl at top-right
-        assert y.iloc[6] == 2.0                           # close back to Na+K
+        # Cations on the left are negative (-na_k, -ca, -mg) at y = 2, 1, 0.
+        assert x[:3] == [-8, -10, -5]
+        assert y[:3] == [2, 1, 0]
+        # Anions on the right are positive (+cl, +hco3, +so4) at y = 0, 1, 2.
+        assert x[3:6] == [12, 15, 3]
+        assert y[3:6] == [0, 1, 2]
+        # Closing back to the first vertex (-na_k, y=2).
+        assert x[6] == -8 and y[6] == 2
 
-    def test_polygon_trace_left_to_right(self):
+    def test_polygon_vertices_signed_by_side(self):
         spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3)
-        x = spec.data["x"]
-        # Left side: all negative x (cations)
-        assert x.iloc[0] < 0 and x.iloc[1] < 0 and x.iloc[2] < 0
-        # Right side: all positive x (anions)
-        assert x.iloc[3] > 0 and x.iloc[4] > 0 and x.iloc[5] > 0
+        x = spec.data["x"].tolist()
+        assert all(v < 0 for v in x[:3])
+        assert all(v > 0 for v in x[3:6])
 
-    def test_render_stiff(self):
+    def test_layers_are_polygon_abline_line(self):
+        spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3)
+        assert [layer.geom.name for layer in spec.layers] == ["polygon", "abline", "line"]
+        polygon = spec.layers[0].geom
+        assert isinstance(polygon, GeomPolygon)
+        assert polygon.edgecolor == "black"
+        assert polygon.edgewidth == 1.5
+        assert spec.layers[0].visual_mapping["color"] == "lightblue"
+        center = spec.layers[1].geom
+        assert isinstance(center, GeomAbline)
+        assert center.x1 == 0.0 and center.x2 == 0.0
+        assert spec.layers[1].visual_mapping["style"] == "dashed"
+        mid = spec.layers[2].geom
+        assert isinstance(mid, GeomLine)
+
+    def test_serialization_roundtrip_preserves_data_and_settings(self):
+        spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3, title="Well 1")
+        restored = spec_from_json(spec_to_json(spec))
+        assert restored.template_name == "stiff"
+        pd.testing.assert_frame_equal(restored.data, spec.data)
+        assert restored.settings["title"] == "Well 1"
+        assert restored.settings["xlabel"] == "meq/L"
+        assert isinstance(restored.coord, CoordCartesian)
+        axis = parse_axis_settings(restored.settings, restored.coord)
+        source = parse_axis_settings(spec.settings, spec.coord)
+        assert axis.xlim == source.xlim
+        assert axis.tick_step == source.tick_step
+        assert axis.abs_ticks is True
+        # JSON normalizes dict keys to strings; compare after casting back.
+        cation_labels = {int(k): v for k, v in restored.settings["y_tick_labels"].items()}
+        assert cation_labels == CATIONS
+        anion_labels = {
+            int(k): v
+            for k, v in restored.settings["secondary_y"]["tick_labels"].items()
+        }
+        assert anion_labels == ANIONS
+
+    def test_serialization_roundtrip_preserves_layers(self):
+        spec = plot_stiff(ca=1, mg=1, na_k=1, cl=8, hco3=1, so4=1)
+        restored = spec_from_json(spec_to_json(spec))
+        assert [layer.geom.name for layer in restored.layers] == ["polygon", "abline", "line"]
+        assert isinstance(restored.layers[0].geom, GeomPolygon)
+
+
+class TestStiffRenderSmoke:
+    def _render(self):
         from geofig_engine.renderers import MatplotlibRenderer
+
         renderer = MatplotlibRenderer()
-        spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3)
+        spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3, title="Smoke")
         assert renderer.supports(spec) is True
-        fig = renderer.render(spec)
-        assert fig is not None
+        return renderer.render(spec), spec
+
+    def test_single_axes_with_filled_polygon(self):
+        fig, _ = self._render()
         assert len(fig.axes) == 1
+        ax = fig.axes[0]
+        assert any(isinstance(p, MplPolygon) for p in ax.patches)
+
+    def test_cation_and_anion_labels_render(self):
+        fig, _ = self._render()
+        texts = [t.get_text() for t in fig.axes[0].texts]
+        for label in (*CATIONS.values(), *ANIONS.values()):
+            assert label in texts
+
+    def test_meq_caption_renders(self):
+        fig, _ = self._render()
+        texts = {t.get_text() for t in fig.axes[0].texts}
+        assert "meq/L" in texts
+
+    def test_abs_x_tick_labels(self):
+        fig, _ = self._render()
+        ticks = {
+            t.get_text()
+            for t in fig.axes[0].texts
+            if t.get_text().isdigit() and np.asarray(t.get_position())[1] < 0
+        }
+        assert ticks == {"0", "10", "20"}
+
+    def test_title_renders_as_suptitle(self):
+        fig, _ = self._render()
+        assert fig._suptitle.get_text() == "Smoke"

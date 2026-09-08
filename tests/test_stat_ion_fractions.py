@@ -182,7 +182,7 @@ class TestLegacyParity:
         )
 
     def test_legacy_column_defaults_align(self):
-        # Default groups mirror PiperCoord's left/right triangle conventions.
+        # Default groups mirror the piper template's left/right triangle conventions.
         stat = StatIonFractions()
         assert [list(g) for g in stat.cation_groups] == [["Ca"], ["Mg"], ["Na", "K"]]
         assert [list(g) for g in stat.anion_groups] == [["HCO3", "CO3"], ["SO4"], ["Cl"]]
@@ -289,7 +289,7 @@ class TestSharedInstanceRouting:
 
         # Mapping strings resolved to identical stat-output series
         expected = stat.compute(df)
-        vm0, vm1, vm2 = (l.visual_mapping for l in spec.layers)
+        vm0, vm1, vm2 = (layer.visual_mapping for layer in spec.layers)
         pd.testing.assert_series_equal(vm0["x"], expected["cation_f0"])
         pd.testing.assert_series_equal(vm1["y"], expected["anion_f2"])
         pd.testing.assert_series_equal(vm2["x"], expected["dia_anion_pct"])
