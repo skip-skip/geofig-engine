@@ -265,9 +265,14 @@ Coord:
 Built-in Coords:
 - `CoordCartesian` – standard x/y plane (default)
 - `CoordPolar` – polar coordinates (radial + angular)
-- `CoordTransformed` – arbitrary scale transforms (log, sqrt, etc.)
-- `CoordFlip` – swapped x/y axes
+- `CoordFlipped` – swapped x/y axes
 - `CoordFixed` – fixed aspect ratio
+
+Advanced figures (e.g. Piper, Stiff) are ordinary cartesian/ternary figures: they
+compose `CoordCartesian` / `TernaryCoord` with nested `FigureSpec` children or
+settings-driven frames. The Stiff diagram is a cartesian template (`CoordCartesian`
+with named/absolute tick labels and a `GeomPolygon` layer); there are no dedicated
+coord subclasses for it. Dependency rules are unchanged.
 
 Coords must:
 - operate on pre-scaled visual values

@@ -54,10 +54,10 @@ Implemented via GoG composition:
 ## ✅ Phase 14 — Specialized coord systems
 Complex multi-element diagrams that don't fit a single Coord + Geom.
 
-- **PiperCoord** — ternary cation/anion triangles + diamond projection. Front-end handles mg/L→meq/L conversion, temperature-dependent pKa for alkalinity speciation, combined Na+K / HCO3+CO3.
-  - `build_piper_specs()` → factory function creating a FigureSpec with PiperCoord (renderer creates 3-panel GridSpec)
+- **Piper** — ternary cation/anion triangles + diamond projection, expressed as a `FigureSpec` with `TernaryCoord` children on linked axes. Front-end handles mg/L→meq/L conversion, temperature-dependent pKa for alkalinity speciation, combined Na+K / HCO3+CO3.
+  - `build_piper_specs()` → factory function returning the three-child `FigureSpec` (left/right triangles + diamond)
   - Optional overlay API via `piper_overlay_diamond()`
-- **StiffCoord** — 6-axis polygon per sample. Single-sample function, not a general-purpose geom.
+- **Stiff** — 6-axis polygon per sample, now an ordinary `CoordCartesian` figure built from the frame + `GeomPolygon` layer machinery (see Phase 14.59).
   - Standalone function `plot_stiff(ca, mg, na_k, cl, hco3, so4, ...)` returning a FigureSpec
 - **Classification plot templates** (composition over inheritance — reuse GeomPoint + annotation layers):
   - `npr_nnp(mapping)` template adding shaded bands + quadrant labels (GeomRect + GeomAbline + GeomText)
@@ -368,6 +368,43 @@ decoupled from the underlying data column names.
 - **Tests** — render asserts all six superscripted ion labels + the HCO3/CO3 compound
   + the two diamond titles; display labels don't alter data channels; custom override;
   TernaryCoord `labels` serialization round-trip. Full suite: **972 passed**.
+
+---
+
+## ✅ Phase 14.59 — Stiff-as-cartesian migration (1039 tests)
+
+The Stiff diagram became an ordinary `CoordCartesian` figure built from the
+declarative frame + layer machinery, and the `StiffCoord` / deprecated `PiperCoord`
+coordinate types were removed entirely.
+
+- **Named + absolute tick labels** — per-axis flat settings keys
+  `x_abs_ticks` / `y_abs_ticks` and `x_tick_labels` / `y_tick_labels` (with
+  `abs_ticks_eff()` / `tick_labels_eff()` helpers), read by `parse_axis_settings`;
+  `parse_secondary_settings` inherits orientation-prefixed defaults so secondary
+  axes can declare their own named rows.
+- **Framed xlabel caption** — an `xlabel` caption (e.g. `"meq/L"`) rendered below
+  the cartesian frame alongside the tick labels.
+- **`GeomPolygon`** — first-class closed filled-polygon geom (`ax.fill`,
+  auto-closing), with optional outline `edgecolor` / `edgealpha` / `edgewidth` /
+  `edgestyle`; replaces the shape-special-cased area-handler path.
+- **Stiff as cartesian template** — `templates/stiff.py` returns a `CoordCartesian`
+  `FigureSpec`: raw signed meq/L vertices (7-point closed ring; cations negative on
+  the left, anions positive on the right), symmetric `xlim = ±1.5·tick_max`,
+  `tick_step = tick_max/2`, `abs_ticks`, `xlabel = "meq/L"`, named cation rows via
+  `y_tick_labels` and anion rows via `secondary_y.tick_labels` (the secondary
+  `range` equals `ylim = (-0.55, 2.5)` so both label columns align at y = 0, 1, 2);
+  a light-blue filled `GeomPolygon` plus dashed center `GeomAbline` and mid-row
+  `GeomLine` reference. `figsize` and `title` flow through `settings`; the framed
+  title renders once as `fig.suptitle` (children keep their own edge titles).
+- **Coord removals** — `StiffCoord` and `PiperCoord` deleted from `core/coord.py`,
+  their serializer branches removed (`coord_from_dict` rejects unknown types), and
+  the renderer `StiffCoord` dispatch + stiff-drawing section deleted. No references
+  remain in `src/` or the tests.
+- **Tests** — stiff tests rewritten to the spec-level contract: cartesian coord,
+  symmetric limits, half-tick-max ruler, cation/anion named rows, raw signed
+  polygon coordinates, serialization round-trip, render smoke (single axis, filled
+  polygon, labels, caption, suptitle). New `tests/test_polygon.py` covers
+  `GeomPolygon` model/render/serialization. Full suite: **1039 passed**.
 
 ---
 
