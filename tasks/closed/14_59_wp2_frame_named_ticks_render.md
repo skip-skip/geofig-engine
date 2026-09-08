@@ -1,6 +1,6 @@
 # Phase 14.59: Frame renderer support for named & absolute ticks
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.59
 **Dependencies**: `14_59_wp1_axis_named_ticks` (axis model)
 

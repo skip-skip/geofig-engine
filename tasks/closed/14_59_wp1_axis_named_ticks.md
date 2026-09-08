@@ -1,6 +1,6 @@
 # Phase 14.59: Absolute-value & named tick labels for cartesian frames
 
-**Status**: open
+**Status**: complete
 **Phase**: 14.59
 **Dependencies**: `14_58` (piper charge labels)
 
