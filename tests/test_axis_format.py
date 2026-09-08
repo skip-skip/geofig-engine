@@ -1211,8 +1211,14 @@ def test_native_title_xlabel_ylabel_use_generic_fontsize():
     assert ax.yaxis.label.get_fontsize() == 9.0
 
 def test_ternary_frame_title_uses_resolved_title():
-    # Ternary drawn frame's title text (drawn on the axes) uses resolve_fontsize("title").
-    ternary_layers = [
+    # A top-level framed spec's title renders once as the figure suptitle
+    # (sized via resolve_fontsize("suptitle")); nested children keep their
+    # own box-top edge titles.
+    import matplotlib
+    matplotlib.use("Agg")
+    from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
+
+    ternary_layers = lambda: [
         LayerSpec(
             geom=GeomLine(),
             stat=StatIdentity(),
@@ -1223,37 +1229,30 @@ def test_ternary_frame_title_uses_resolved_title():
             },
         )
     ]
-    ax = _render_single_top(
-        {"title": "TRI TITLE"}, coord=TernaryCoord(), layers=ternary_layers
-    )
-    sized = [
-        t.get_fontsize()
-        for t in ax.texts
-        if t.get_text() == "TRI TITLE"
-    ]
-    assert sized == [7.0]  # built-in default
 
-    ax = _render_single_top(
-        {"title": "TRI TITLE", "title_fontsize": 13},
-        coord=TernaryCoord(), layers=ternary_layers,
-    )
-    sized = [
-        t.get_fontsize()
-        for t in ax.texts
-        if t.get_text() == "TRI TITLE"
-    ]
-    assert sized == [13.0]
+    def render(settings):
+        spec = FigureSpec(
+            data=pd.DataFrame({"v": [0.0, 1.0, 2.0]}),
+            mappings={},
+            settings={"figsize": (8, 8), **settings},
+            context={},
+            template_name="test",
+            coord=TernaryCoord(),
+            layers=ternary_layers(),
+        )
+        return MatplotlibRenderer().render(spec)
 
-    ax = _render_single_top(
-        {"title": "TRI TITLE", "fontsize": 14},
-        coord=TernaryCoord(), layers=ternary_layers,
-    )
-    sized = [
-        t.get_fontsize()
-        for t in ax.texts
-        if t.get_text() == "TRI TITLE"
-    ]
-    assert sized == [14.0]  # generic fallback
+    fig = render({"title": "TRI TITLE"})
+    assert fig._suptitle.get_text() == "TRI TITLE"
+    assert fig._suptitle.get_fontsize() == 14.0  # built-in default
+    texts = [t.get_text() for t in fig.axes[0].texts]
+    assert texts.count("TRI TITLE") == 0  # no box-top edge title duplicate
+
+    fig = render({"title": "TRI TITLE", "suptitle_fontsize": 13})
+    assert fig._suptitle.get_fontsize() == 13.0
+
+    fig = render({"title": "TRI TITLE", "fontsize": 14})
+    assert fig._suptitle.get_fontsize() == 14.0  # generic fallback
 
 def test_ternary_ion_labels_follow_own_edge_tangent():
     # Regression: all three ion labels used the base edge tangent (1,0), so under
@@ -1593,3 +1592,175 @@ def test_roundtrip_tick_labels_string_keys_reparse_as_floats():
         {"xlim": (0, 100), "tick_labels": s["tick_labels"]}, CoordCartesian()
     )
     assert a.tick_labels == {0.0: "a", 2.0: "c"}
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.59 WP2: frame rendering of named / absolute ticks and captions
+# ---------------------------------------------------------------------------
+
+
+def test_frame_named_ticks_render_at_exact_positions_including_edges():
+    ax = _render_single_top(
+        {
+            "xlim": (0, 100),
+            "ylim": (0, 100),
+            "tick_step": 20,
+            "x_tick_labels": {0: "start", 50: "mid", 100: "end"},
+        }
+    )
+    texts = {t.get_text(): np.asarray(t.get_position()) for t in ax.texts}
+    assert texts["start"][0] == 0.0
+    assert texts["mid"][0] == 50.0
+    assert texts["end"][0] == 100.0
+    assert texts["start"][1] < 0.0  # bottom edge strip
+    assert texts["end"][1] < 0.0
+    # Named labels suppress the numeric ticks on that (bottom) axis only;
+    # the left-edge y axis keeps its interior numeric ticks.
+    bottom = [t.get_text() for t in ax.texts if np.asarray(t.get_position())[1] < 0]
+    assert set(bottom) == {"start", "mid", "end"}
+    assert len(ax.texts) > 3  # y tick labels still present
+
+
+def test_frame_named_ticks_are_left_axis_only_and_unreversed():
+    # y-only named labels (stiff-style) leave the x axis numeric and render at
+    # the literal local positions (no reversal applied).
+    ax = _render_single_top(
+        {
+            "xlim": (0, 100),
+            "ylim": (0, 100),
+            "tick_step": 20,
+            "y_tick_labels": {0: "bottom", 100: "top"},
+        }
+    )
+    left = [t.get_text() for t in ax.texts if np.asarray(t.get_position())[0] < 0]
+    assert set(left) == {"bottom", "top"}
+    pos = {t.get_text(): np.asarray(t.get_position()) for t in ax.texts}
+    assert pos["bottom"][0] < 0.0 and pos["bottom"][1] == 0.0
+    assert pos["top"][0] < 0.0 and pos["top"][1] == 100.0
+    bottom = [t.get_text() for t in ax.texts if np.asarray(t.get_position())[1] < 0]
+    assert "20" in bottom  # x axis still numeric
+
+
+def test_frame_abs_ticks_render_absolute_labels():
+    ax = _render_single_top(
+        {"xlim": (-50, 50), "ylim": (0, 100), "tick_step": 20, "x_abs_ticks": True}
+    )
+    bottom = [t.get_text() for t in ax.texts if np.asarray(t.get_position())[1] < 0]
+    assert set(bottom) == {"10", "30"}  # -30,-10,10,30 all shown as positive
+
+
+def test_frame_secondary_named_ticks_render_including_edges():
+    ax = _render_single_top(
+        {
+            "xlim": (0, 100),
+            "ylim": (0, 100),
+            "tick_step": 20,
+            "secondary_x": {
+                "range": [0, 100],
+                "tick_labels": {0: "bottom", 100: "top"},
+            },
+        }
+    )
+    top = [t.get_text() for t in ax.texts if np.asarray(t.get_position())[1] > 100]
+    assert set(top) == {"bottom", "top"}
+
+
+def test_frame_secondary_inherits_primary_abs_ticks():
+    ax = _render_single_top(
+        {
+            "xlim": (0, 100),
+            "ylim": (0, 100),
+            "tick_step": 20,
+            "y_abs_ticks": True,
+            "secondary_y": {"range": [-100, 0]},
+        }
+    )
+    right = [t.get_text() for t in ax.texts if np.asarray(t.get_position())[0] > 100]
+    assert right and all(not txt.startswith("-") for txt in right)
+    assert set(right) == {"20", "40", "60", "80"}  # -80..-20 shown as positive
+
+
+def test_frame_xlabel_ylabel_captions_position_and_rotation():
+    ax = _render_single_top(
+        {
+            "xlim": (0, 100),
+            "ylim": (0, 100),
+            "tick_step": 20,
+            "xlabel": "X CAP",
+            "ylabel": "Y CAP",
+        }
+    )
+    by_text = {t.get_text(): t for t in ax.texts}
+    xpos = np.asarray(by_text["X CAP"].get_position())
+    ypos = np.asarray(by_text["Y CAP"].get_position())
+    assert by_text["X CAP"].get_rotation() == 0.0
+    assert by_text["Y CAP"].get_rotation() == 90.0
+    assert xpos[0] == pytest.approx(50.0) and xpos[1] < 0.0  # below bottom edge
+    assert ypos[1] == pytest.approx(50.0) and ypos[0] < 0.0  # left of left edge
+
+
+def test_top_level_framed_title_rendered_once_as_suptitle():
+    from geofig_engine.renderers.matplotlib.renderer import MatplotlibRenderer
+
+    spec = FigureSpec(
+        data=pd.DataFrame({"v": [0.0, 1.0]}),
+        mappings={},
+        settings={
+            "figsize": (8, 8),
+            "xlim": (0, 100),
+            "ylim": (0, 100),
+            "tick_step": 20,
+            "title": "ONCE",
+        },
+        context={},
+        template_name="test",
+        layers=[
+            LayerSpec(
+                geom=GeomLine(),
+                stat=StatIdentity(),
+                visual_mapping={
+                    "x": pd.Series([0.0, 100.0]),
+                    "y": pd.Series([0.0, 100.0]),
+                },
+            )
+        ],
+    )
+    fig = MatplotlibRenderer().render(spec)
+    assert fig._suptitle.get_text() == "ONCE"
+    assert not any(t.get_text() == "ONCE" for t in fig.axes[0].texts)
+
+
+def test_parse_axis_settings_per_axis_tick_overrides():
+    a = parse_axis_settings(
+        {
+            "xlim": (0, 100),
+            "x_abs_ticks": True,
+            "y_abs_ticks": False,
+            "x_tick_labels": {0: "a"},
+            "y_tick_labels": {1: "b"},
+        },
+        CoordCartesian(),
+    )
+    assert a.x_abs_ticks is True
+    assert a.y_abs_ticks is False
+    assert a.x_tick_labels == {0.0: "a"}
+    assert a.y_tick_labels == {1.0: "b"}
+    assert a.abs_ticks_eff("x") is True
+    assert a.abs_ticks_eff("y") is False
+
+
+def test_effective_tick_helpers_fall_back_to_shared_settings():
+    a = AxisFormat(
+        abs_ticks=False, tick_labels={2: "z"}, x_abs_ticks=True, y_tick_labels={3: "w"}
+    )
+    assert a.abs_ticks_eff("x") is True   # per-axis wins
+    assert a.abs_ticks_eff("y") is False  # shared fallback
+    assert a.tick_labels_eff("x") == {2.0: "z"}  # shared fallback
+    assert a.tick_labels_eff("y") == {3.0: "w"}  # per-axis wins
+
+
+def test_per_axis_tick_overrides_validate_types():
+    with pytest.raises(ValueError, match="abs_ticks"):
+        AxisFormat(x_abs_ticks="yes")
+    with pytest.raises(ValueError, match="tick_labels"):
+        AxisFormat(y_tick_labels=[("a", 1)])

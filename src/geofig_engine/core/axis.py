@@ -193,6 +193,10 @@ class AxisFormat:
     tick_format: str = ":g"
     abs_ticks: bool = False
     tick_labels: dict[float, str] = field(default_factory=dict)
+    x_abs_ticks: bool | None = None
+    y_abs_ticks: bool | None = None
+    x_tick_labels: dict[float, str] | None = None
+    y_tick_labels: dict[float, str] | None = None
 
     # Appearance-preserving style knobs. All font-* knobs are float|None
     # ("None" == not set); the effective size is resolved at render time by
@@ -267,6 +271,14 @@ class AxisFormat:
         object.__setattr__(self, "tick_format", self._validate_tick_format(self.tick_format))
         object.__setattr__(self, "abs_ticks", _bool_value(self.abs_ticks, "abs_ticks"))
         object.__setattr__(self, "tick_labels", _tick_labels(self.tick_labels))
+        for name in ("x_abs_ticks", "y_abs_ticks"):
+            value = getattr(self, name)
+            if value is not None and not isinstance(value, bool):
+                raise ValueError(f"{name} must be a bool or None, got {value!r}")
+        for name in ("x_tick_labels", "y_tick_labels"):
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(self, name, _tick_labels(value, name))
 
         # Font-size knobs: each is float|None; validate any set value as a
         # strictly positive real number. `_positive` coerces to float and
@@ -389,6 +401,24 @@ class AxisFormat:
             else self.label_policy
         )
 
+    def abs_ticks_eff(self, axis_key: str) -> bool:
+        """Effective absolute-tick flag for one axis.
+
+        Per-axis ``x_abs_ticks``/``y_abs_ticks`` win over the shared
+        ``abs_ticks`` when set.
+        """
+        per = self.x_abs_ticks if axis_key == "x" else self.y_abs_ticks
+        return per if per is not None else self.abs_ticks
+
+    def tick_labels_eff(self, axis_key: str) -> dict[float, str]:
+        """Effective named tick labels for one axis.
+
+        Per-axis ``x_tick_labels``/``y_tick_labels`` win over the shared
+        ``tick_labels`` when set.
+        """
+        per = self.x_tick_labels if axis_key == "x" else self.y_tick_labels
+        return per if per is not None else self.tick_labels
+
 
 def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
     """Read axis-formatting into an :class:`AxisFormat`, validated.
@@ -398,7 +428,9 @@ def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
     ``axis_arrows``, ``x_reversed``/``y_reversed``, ``label_policy``,
     ``axis_label_policy``/``tick_label_policy``, ``xscale``/
     ``yscale``, ``time_format``,
-    ``tick_format``, ``abs_ticks``, ``tick_labels``, font-size keys
+    ``tick_format``, ``abs_ticks``, ``tick_labels`` and per-axis
+    ``x_abs_ticks``/``y_abs_ticks``
+    ``x_tick_labels``/``y_tick_labels`` overrides, font-size keys
     (``fontsize`` plus the per-element
     ``*_fontsize`` knobs), polar toggles, ...) and maps them into the equivalent
     :class:`AxisFormat` fields / ``options``.
@@ -456,6 +488,10 @@ def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
         tick_format=_pick("tick_format", default=":g"),
         abs_ticks=_pick("abs_ticks", default=False),
         tick_labels=_pick("tick_labels", default={}),
+        x_abs_ticks=_pick("x_abs_ticks"),
+        y_abs_ticks=_pick("y_abs_ticks"),
+        x_tick_labels=_pick("x_tick_labels"),
+        y_tick_labels=_pick("y_tick_labels"),
         axis_arrow_offset=_pick("axis_arrow_offset"),
         fontsize=_pick("fontsize"),
         tick_fontsize=_pick("tick_fontsize"),

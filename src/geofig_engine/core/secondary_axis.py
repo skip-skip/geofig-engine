@@ -273,6 +273,9 @@ def parse_secondary_settings(
             ``tick_labels`` are inherited when a secondary declaration omits them
             (the child's frame ``grid_step``/``tick_step``/``label_policy``,
             those axes' effective policies, and primary tick-label formatting).
+            Per-axis primaries may pass ``x_abs_ticks``/``y_abs_ticks`` and
+            ``x_tick_labels``/``y_tick_labels`` so each secondary inherits its
+            own primary axis.
 
     Returns a dict keyed by orientation (``"x"``/``"y"``) of validated
     :class:`SecondaryAxis`. Absent declarations are skipped; malformed ones
@@ -319,10 +322,18 @@ def parse_secondary_settings(
             label=raw.get("label", ""),
             primary_range=primary_by_orientation[orientation],
             abs_ticks=raw.get(
-                "abs_ticks", defaults.get("abs_ticks", False)
+                "abs_ticks",
+                defaults.get(
+                    f"{orientation}_abs_ticks",
+                    defaults.get("abs_ticks", False),
+                ),
             ),
             tick_labels=raw.get(
-                "tick_labels", defaults.get("tick_labels", {})
+                "tick_labels",
+                defaults.get(
+                    f"{orientation}_tick_labels",
+                    defaults.get("tick_labels", {}),
+                ),
             ),
         )
     return result

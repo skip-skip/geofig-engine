@@ -141,6 +141,11 @@ _ARROW_OFFSET_MULT = 2.0
 # (~0.045 world units) instead of the previous ``0.20 * range`` gap.
 _SECONDARY_TITLE_OFFSET_MULT = 2.8
 
+# Axis-caption (xlabel/ylabel) offset, expressed as a multiple of the tick-label
+# offset ``d``, so captions clear the tick-label strip (``d``) and the optional
+# axis arrows (``2d``).
+_CAPTION_OFFSET_MULT = 4.5
+
 
 def _tick_label(value: float, fmt: str) -> str:
     """Format a numeric tick label with a format-spec string.
@@ -390,6 +395,11 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
       - ``label_policy``: "upright" or "parallel" (default "upright")
       - ``title``: world-side label above the box
       - ``tick_format``: format-spec for numeric tick labels
+      - ``abs_ticks`` (per-axis via ``x_abs_ticks``/``y_abs_ticks``): draw
+        numeric tick labels as absolute values
+      - ``tick_labels`` (per-axis via ``x_tick_labels``/``y_tick_labels``):
+        named tick labels at exact positions, including the frame edges
+      - ``xlabel``/``ylabel``: world-side axis captions below/left of the box
       - ``secondary_x``/``secondary_y``: extra scales drawn along the top/right
         edges, mapped linearly onto the primary ``limits`` (see
         :mod:`geofig_engine.core.secondary_axis`).
@@ -420,6 +430,10 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
             "label_policy": axis.label_policy,
             "axis_label_policy": axis.axis_label_policy_eff(),
             "tick_label_policy": axis.tick_label_policy_eff(),
+            "x_abs_ticks": axis.abs_ticks_eff("x"),
+            "y_abs_ticks": axis.abs_ticks_eff("y"),
+            "x_tick_labels": axis.tick_labels_eff("x"),
+            "y_tick_labels": axis.tick_labels_eff("y"),
         },
     )
 
@@ -457,34 +471,62 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
         d_arrow = _ARROW_OFFSET_MULT * d
 
     # -- tick labels on bottom edge (world-side text) --
-    # X-axis ticks at tick_step along the bottom (ylo) edge, interior only.
-    for tx in np.arange(xlo, xhi + 0.5 * tick_step, tick_step):
-        if xlo - 1e-9 <= tx <= xlo + 1e-9 or xhi - 1e-9 <= tx <= xhi + 1e-9:
-            continue
-        tval = xlo + xhi - tx if axis.x_reversed else tx
-        w = _apply_matrix_pts(matrix, [(tx, ylo - d)])[0]
-        ax.text(w[0], w[1], _tick_label(tval, tick_fmt), ha="center", va="top", fontsize=tick_fs,
-                rotation=label_rotation((1, 0), matrix, policy=tick_policy),
-                clip_on=False)
+    # X-axis ticks at tick_step along the bottom (ylo) edge, interior only —
+    # unless named labels are supplied (``x_tick_labels``/``tick_labels`` on the
+    # x axis), which draw at their exact positions including the frame edges.
+    x_named = axis.tick_labels_eff("x")
+    if x_named:
+        for tx, label in sorted(x_named.items()):
+            w = _apply_matrix_pts(matrix, [(tx, ylo - d)])[0]
+            ax.text(w[0], w[1], label, ha="center", va="top", fontsize=tick_fs,
+                    rotation=label_rotation((1, 0), matrix, policy=tick_policy),
+                    clip_on=False)
+    else:
+        for tx in np.arange(xlo, xhi + 0.5 * tick_step, tick_step):
+            if xlo - 1e-9 <= tx <= xlo + 1e-9 or xhi - 1e-9 <= tx <= xhi + 1e-9:
+                continue
+            tval = xlo + xhi - tx if axis.x_reversed else tx
+            if axis.abs_ticks_eff("x"):
+                tval = abs(tval)
+            w = _apply_matrix_pts(matrix, [(tx, ylo - d)])[0]
+            ax.text(w[0], w[1], _tick_label(tval, tick_fmt), ha="center", va="top", fontsize=tick_fs,
+                    rotation=label_rotation((1, 0), matrix, policy=tick_policy),
+                    clip_on=False)
 
     # -- tick labels on left edge (world-side text) --
-    for ty in np.arange(ylo, yhi + 0.5 * tick_step, tick_step):
-        if ylo - 1e-9 <= ty <= ylo + 1e-9 or yhi - 1e-9 <= ty <= yhi + 1e-9:
-            continue
-        tval = ylo + yhi - ty if axis.y_reversed else ty
-        w = _apply_matrix_pts(matrix, [(xlo - d, ty)])[0]
-        ax.text(w[0], w[1], _tick_label(tval, tick_fmt), ha="right", va="center", fontsize=tick_fs,
-                rotation=label_rotation((0, 1), matrix, policy=tick_policy),
-                clip_on=False)
+    y_named = axis.tick_labels_eff("y")
+    if y_named:
+        for ty, label in sorted(y_named.items()):
+            w = _apply_matrix_pts(matrix, [(xlo - d, ty)])[0]
+            ax.text(w[0], w[1], label, ha="right", va="center", fontsize=tick_fs,
+                    rotation=label_rotation((0, 1), matrix, policy=tick_policy),
+                    clip_on=False)
+    else:
+        for ty in np.arange(ylo, yhi + 0.5 * tick_step, tick_step):
+            if ylo - 1e-9 <= ty <= ylo + 1e-9 or yhi - 1e-9 <= ty <= yhi + 1e-9:
+                continue
+            tval = ylo + yhi - ty if axis.y_reversed else ty
+            if axis.abs_ticks_eff("y"):
+                tval = abs(tval)
+            w = _apply_matrix_pts(matrix, [(xlo - d, ty)])[0]
+            ax.text(w[0], w[1], _tick_label(tval, tick_fmt), ha="right", va="center", fontsize=tick_fs,
+                    rotation=label_rotation((0, 1), matrix, policy=tick_policy),
+                    clip_on=False)
 
     # -- tick labels on top edge from secondary x (world-side text) --
     if "x" in secondary:
         sec = secondary["x"]
         for sv, lx in sec.tick_coordinates():
-            if xlo - 1e-9 <= lx <= xlo + 1e-9 or xhi - 1e-9 <= lx <= xhi + 1e-9:
-                continue
+            if not sec.tick_labels:
+                if xlo - 1e-9 <= lx <= xlo + 1e-9 or xhi - 1e-9 <= lx <= xhi + 1e-9:
+                    continue
+            label = (
+                sec.tick_labels[sv]
+                if sec.tick_labels
+                else _tick_label(abs(sv) if sec.abs_ticks else sv, tick_fmt)
+            )
             w = _apply_matrix_pts(matrix, [(lx, yhi + d)])[0]
-            ax.text(w[0], w[1], _tick_label(sv, tick_fmt), ha="center", va="bottom", fontsize=tick_fs,
+            ax.text(w[0], w[1], label, ha="center", va="bottom", fontsize=tick_fs,
                     rotation=label_rotation((1, 0), matrix, policy=sec.tick_label_policy_eff()),
                     clip_on=False)
 
@@ -492,10 +534,16 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     if "y" in secondary:
         sec = secondary["y"]
         for sv, ly in sec.tick_coordinates():
-            if ylo - 1e-9 <= ly <= ylo + 1e-9 or yhi - 1e-9 <= ly <= yhi + 1e-9:
-                continue
+            if not sec.tick_labels:
+                if ylo - 1e-9 <= ly <= ylo + 1e-9 or yhi - 1e-9 <= ly <= yhi + 1e-9:
+                    continue
+            label = (
+                sec.tick_labels[sv]
+                if sec.tick_labels
+                else _tick_label(abs(sv) if sec.abs_ticks else sv, tick_fmt)
+            )
             w = _apply_matrix_pts(matrix, [(xhi + d, ly)])[0]
-            ax.text(w[0], w[1], _tick_label(sv, tick_fmt), ha="left", va="center", fontsize=tick_fs,
+            ax.text(w[0], w[1], label, ha="left", va="center", fontsize=tick_fs,
                     rotation=label_rotation((0, 1), matrix, policy=sec.tick_label_policy_eff()),
                     clip_on=False)
 
@@ -513,7 +561,22 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
                 rotation=label_rotation((0, 1), matrix, policy=sec.axis_label_policy_eff()),
                 clip_on=False)
 
+    # -- axis captions (world-side text, beyond ticks and arrows) --
+    if axis.xlabel:
+        w = _apply_matrix_pts(
+            matrix, [((xlo + xhi) / 2.0, ylo - _CAPTION_OFFSET_MULT * d)]
+        )[0]
+        ax.text(w[0], w[1], axis.xlabel, ha="center", va="top", fontsize=axis.resolve_fontsize("xlabel"),
+                rotation=0, clip_on=False)
+    if axis.ylabel:
+        w = _apply_matrix_pts(
+            matrix, [(xlo - _CAPTION_OFFSET_MULT * d, (ylo + yhi) / 2.0)]
+        )[0]
+        ax.text(w[0], w[1], axis.ylabel, ha="center", va="center", fontsize=axis.resolve_fontsize("ylabel"),
+                rotation=90, clip_on=False)
+
     # -- edge title (world-side text) --
+
     if title:
         wt = _apply_matrix_pts(matrix, [((xlo + xhi) / 2.0, yhi + 0.12 * (yhi - ylo))])[0]
         ax.text(wt[0], wt[1], title, ha="center", va="bottom", fontsize=title_fs,
@@ -659,8 +722,14 @@ class MatplotlibRenderer(BaseRenderer):
         affine = _affine_from_matrix(spec.transform.matrix())
 
         # Frame first (below data): identity affine (local == world).
+        # A top-level framed spec's ``title`` is rendered once as the figure
+        # suptitle below; drop it from the frame so the box-top edge title is
+        # not drawn a second time.
+        frame_spec = dataclasses.replace(
+            spec, settings={k: v for k, v in spec.settings.items() if k != "title"}
+        )
         snapshot = self._snapshot_artists(ax)
-        self._draw_frame(ax, spec)
+        self._draw_frame(ax, frame_spec)
         for artist in self._new_artists(ax, snapshot):
             if not isinstance(artist, matplotlib.text.Text):
                 artist.set_transform(affine + ax.transData)
