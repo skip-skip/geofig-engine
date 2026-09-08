@@ -1,5 +1,5 @@
-from geofig_engine.core.coord import StiffCoord
-from geofig_engine.core.geom import GeomArea
+from geofig_engine.core.coord import CoordCartesian, StiffCoord
+from geofig_engine.core.geom import GeomPolygon
 from geofig_engine.renderers.matplotlib.renderer import _nice_tick_max
 from geofig_engine.templates import plot_stiff
 from geofig_engine.serialize import coord_to_dict, coord_from_dict
@@ -47,7 +47,7 @@ class TestPlotStiff:
 
     def test_stiff_coord(self):
         spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3)
-        assert isinstance(spec.coord, StiffCoord)
+        assert isinstance(spec.coord, CoordCartesian)
 
     def test_custom_figsize(self):
         spec = plot_stiff(ca=1, mg=1, na_k=1, cl=1, hco3=1, so4=1, figsize=(8, 8))
@@ -55,16 +55,15 @@ class TestPlotStiff:
 
     def test_title(self):
         spec = plot_stiff(ca=1, mg=1, na_k=1, cl=1, hco3=1, so4=1, title="Test")
-        assert spec.settings.get("title") is None
+        assert spec.settings["title"] == "Test"
 
     def test_polygon_layer(self):
         spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3)
-        assert len(spec.layers) == 1
-        layer = spec.layers[0]
-        assert isinstance(layer.geom, GeomArea)
-        assert "x" in layer.visual_mapping
-        assert "y" in layer.visual_mapping
-        assert layer.visual_mapping["color"] == "lightblue"
+        polygon = spec.layers[0]
+        assert isinstance(polygon.geom, GeomPolygon)
+        assert "x" in polygon.visual_mapping
+        assert "y" in polygon.visual_mapping
+        assert polygon.visual_mapping["color"] == "lightblue"
 
     def test_polygon_vertices(self):
         spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3)
