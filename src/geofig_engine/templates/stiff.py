@@ -63,6 +63,8 @@ def plot_stiff(
         "tick_step": half,
         "grid": False,
         "label_offset": 0.15,
+        "majortick_length": 0.06,
+        "majortick_offset": 0,
         "abs_ticks": True,
         "xlabel": "meq/L",
         "y_tick_labels": {
