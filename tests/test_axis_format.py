@@ -996,7 +996,7 @@ def test_top_level_cartesian_framed_renders_via_draw_frame():
     )
     texts = [t.get_text() for t in ax.texts]
     assert "20" in texts and "80" in texts
-    assert ax.get_aspect() == 1
+    assert ax.get_aspect() != 1
     assert len(ax.lines) > 1
 
 

@@ -199,3 +199,11 @@ class TestStiffRenderSmoke:
     def test_title_renders_as_suptitle(self):
         fig, _ = self._render()
         assert fig._suptitle.get_text() == "Smoke"
+
+    def test_y_limits_are_not_collapsed_by_equal_aspect(self):
+        """Regression: the wide stiff frame must not squash the y range."""
+        fig, _ = self._render()
+        ax = fig.axes[0]
+        y0, y1 = ax.get_ylim()
+        assert y1 - y0 < 8  # aspect-equal would expand this to ~50+
+        assert ax.get_aspect() != 1

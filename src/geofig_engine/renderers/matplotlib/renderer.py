@@ -737,7 +737,11 @@ class MatplotlibRenderer(BaseRenderer):
         xlim, ylim = self._children_world_limits([spec])
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
-        ax.set_aspect("equal")
+        if isinstance(spec.coord, TernaryCoord):
+            # The equilateral triangle requires 1:1 data units. Top-level
+            # cartesian frames (e.g. the wide Stiff box) keep the default
+            # aspect so the frame fills the figure instead of collapsing.
+            ax.set_aspect("equal")
 
         title = spec.settings.get("title")
         if title:
