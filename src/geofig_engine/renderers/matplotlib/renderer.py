@@ -384,6 +384,19 @@ def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
             )
 
 
+def _draw_tick_marks(ax, matrix, xs, edge_y, d, direction=1.0):
+    """Short nubs on a box edge at tick positions, stamped by *matrix*.
+
+    A tick runs from ``(x, edge_y)`` a short way outward (toward the label
+    strip) and stays clear of the label text: length ``0.4*d``.
+    """
+    s = 0.4 * d * direction
+    for tx in xs:
+        w0 = _apply_matrix_pts(matrix, [(tx, edge_y)])[0]
+        w1 = _apply_matrix_pts(matrix, [(tx, edge_y + s)])[0]
+        ax.plot([w0[0], w1[0]], [w0[1], w1[1]], color="black", linewidth=1.0, zorder=2)
+
+
 def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     """Draw a cartesian axis frame in local space, stamped by *matrix*.
 
@@ -483,9 +496,10 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
                     rotation=label_rotation((1, 0), matrix, policy=tick_policy),
                     clip_on=False)
     else:
-        for tx in np.arange(xlo, xhi + 0.5 * tick_step, tick_step):
-            if xlo - 1e-9 <= tx <= xlo + 1e-9 or xhi - 1e-9 <= tx <= xhi + 1e-9:
-                continue
+        xs = [tx for tx in np.arange(xlo, xhi + 0.5 * tick_step, tick_step)
+              if not xlo - 1e-9 <= tx <= xlo + 1e-9 and not xhi - 1e-9 <= tx <= xhi + 1e-9]
+        _draw_tick_marks(ax, matrix, xs, ylo, d)
+        for tx in xs:
             tval = xlo + xhi - tx if axis.x_reversed else tx
             if axis.abs_ticks_eff("x"):
                 tval = abs(tval)

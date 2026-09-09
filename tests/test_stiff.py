@@ -213,6 +213,23 @@ class TestStiffRenderSmoke:
         ax = fig.axes[0]
         assert not any(line.get_linestyle() == ":" for line in ax.lines)
 
+    def test_x_axis_tick_marks_at_interval_numbers(self):
+        fig, spec = self._render()
+        ax = fig.axes[0]
+        ylo, yhi = spec.settings["ylim"]
+        d = spec.settings["label_offset"]
+        nub_bottom, nub_top = ylo, ylo + 0.4 * d
+        nubs = {}
+        for line in ax.lines:
+            xs = np.asarray(line.get_xdata())
+            ys = np.asarray(line.get_ydata())
+            if len(xs) == 2 and np.allclose(xs, xs[0]) and ys[1] - ys[0] == pytest.approx(0.4 * d):
+                nubs[round(float(xs[0]), 6)] = (float(min(ys)), float(max(ys)))
+        for tx in (-20, -10, 0, 10, 20):
+            assert tx in nubs, f"missing nub at x={tx}"
+            assert nubs[tx][0] == pytest.approx(nub_bottom, abs=1e-9)
+            assert nubs[tx][1] == pytest.approx(nub_top, abs=1e-9)
+
     def test_title_renders_as_suptitle(self):
         fig, _ = self._render()
         assert fig._suptitle.get_text() == "Smoke"
