@@ -493,6 +493,7 @@ def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
         x_tick_labels=_pick("x_tick_labels"),
         y_tick_labels=_pick("y_tick_labels"),
         axis_arrow_offset=_pick("axis_arrow_offset"),
+        label_offset=_pick("label_offset"),
         fontsize=_pick("fontsize"),
         tick_fontsize=_pick("tick_fontsize"),
         axis_label_fontsize=_pick("axis_label_fontsize"),

@@ -1,7 +1,7 @@
 import pandas as pd
 
 from geofig_engine.core.coord import CoordCartesian
-from geofig_engine.core.geom import GeomAbline, GeomLine, GeomPolygon
+from geofig_engine.core.geom import GeomAbline, GeomPolygon
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.core.stat import StatIdentity
 from geofig_engine.core.spec import build_spec
@@ -61,7 +61,8 @@ def plot_stiff(
         "xlim": xlim,
         "ylim": (ylo, yhi),
         "tick_step": half,
-        "grid_step": 1,
+        "grid": False,
+        "label_offset": 0.15,
         "abs_ticks": True,
         "xlabel": "meq/L",
         "y_tick_labels": {
@@ -96,16 +97,6 @@ def plot_stiff(
             geom=GeomAbline(x1=0, y1=ylo, x2=0, y2=yhi),
             stat=StatIdentity(),
             visual_mapping={"color": "black", "style": "dashed"},
-        ),
-        LayerSpec(
-            # Mid horizontal line at y = 1 (two-point segment).
-            geom=GeomLine(),
-            stat=StatIdentity(),
-            visual_mapping={
-                "x": [xlim[0], xlim[1]],
-                "y": [1, 1],
-                "color": "black",
-            },
         ),
     ]
 

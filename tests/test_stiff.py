@@ -15,7 +15,7 @@ from matplotlib.patches import Polygon as MplPolygon
 
 from geofig_engine.core.axis import parse_axis_settings
 from geofig_engine.core.coord import CoordCartesian
-from geofig_engine.core.geom import GeomAbline, GeomLine, GeomPolygon
+from geofig_engine.core.geom import GeomAbline, GeomPolygon
 from geofig_engine.core.spec import FigureSpec
 from geofig_engine.renderers.matplotlib.renderer import _nice_tick_max
 from geofig_engine.serialize import spec_from_json, spec_to_json
@@ -69,8 +69,9 @@ class TestStiffSpecContract:
         assert spec.settings["abs_ticks"] is True
         assert spec.settings["xlabel"] == "meq/L"
 
-    def test_row_grid_step(self):
-        assert self._spec().settings["grid_step"] == 1
+    def test_row_grid_off(self):
+        spec = self._spec()
+        assert spec.settings["grid"] is False
 
     def test_ylim_room_above_and_below_rows(self):
         assert self._spec().settings["ylim"] == (-0.55, 2.5)
@@ -117,9 +118,9 @@ class TestPlotStiffLayersAndData:
         assert all(v < 0 for v in x[:3])
         assert all(v > 0 for v in x[3:6])
 
-    def test_layers_are_polygon_abline_line(self):
+    def test_layers_are_polygon_abline(self):
         spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3)
-        assert [layer.geom.name for layer in spec.layers] == ["polygon", "abline", "line"]
+        assert [layer.geom.name for layer in spec.layers] == ["polygon", "abline"]
         polygon = spec.layers[0].geom
         assert isinstance(polygon, GeomPolygon)
         assert polygon.edgecolor == "black"
@@ -129,8 +130,6 @@ class TestPlotStiffLayersAndData:
         assert isinstance(center, GeomAbline)
         assert center.x1 == 0.0 and center.x2 == 0.0
         assert spec.layers[1].visual_mapping["style"] == "dashed"
-        mid = spec.layers[2].geom
-        assert isinstance(mid, GeomLine)
 
     def test_serialization_roundtrip_preserves_data_and_settings(self):
         spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3, title="Well 1")
@@ -157,7 +156,7 @@ class TestPlotStiffLayersAndData:
     def test_serialization_roundtrip_preserves_layers(self):
         spec = plot_stiff(ca=1, mg=1, na_k=1, cl=8, hco3=1, so4=1)
         restored = spec_from_json(spec_to_json(spec))
-        assert [layer.geom.name for layer in restored.layers] == ["polygon", "abline", "line"]
+        assert [layer.geom.name for layer in restored.layers] == ["polygon", "abline"]
         assert isinstance(restored.layers[0].geom, GeomPolygon)
 
 
@@ -195,6 +194,21 @@ class TestStiffRenderSmoke:
             if t.get_text().isdigit() and np.asarray(t.get_position())[1] < 0
         }
         assert ticks == {"0", "10", "20"}
+
+    def test_x_labels_and_caption_within_viewport(self):
+        """Regression: the x-scale and meq/L caption must not clip off-canvas."""
+        fig, _ = self._render()
+        ax = fig.axes[0]
+        ymin = ax.get_ylim()[0]
+        labels = {t.get_text(): t for t in ax.texts}
+        for text in (labels.get("meq/L"), labels.get("10"), labels.get("20")):
+            assert text is not None
+            assert text.get_position()[1] >= ymin - 1e-9
+
+    def test_no_interior_grid_or_mid_line(self):
+        fig, _ = self._render()
+        ax = fig.axes[0]
+        assert not any(line.get_linestyle() == ":" for line in ax.lines)
 
     def test_title_renders_as_suptitle(self):
         fig, _ = self._render()

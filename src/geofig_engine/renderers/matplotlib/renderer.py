@@ -447,18 +447,19 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     box_arr = np.array(box, dtype=float)
     ax.plot(box_arr[:, 0], box_arr[:, 1], color="black", linewidth=frame_lw, zorder=2)
 
-    # -- internal grid (local space) --
-    xs = list(np.arange(xlo + grid_step, xhi, grid_step))
-    ys = list(np.arange(ylo + grid_step, yhi, grid_step))
-    for gx in xs:
-        g = [(gx, y0), (gx, y1)]
-        ax.plot([g[0][0], g[1][0]], [g[0][1], g[1][1]], color=grid_style.get("color", "gray"),
-                linewidth=grid_style.get("linewidth", 0.3), linestyle=grid_style.get("linestyle", ":"),
-                zorder=1)
-    for gy in ys:
-        ax.plot([x0, x1], [gy, gy], color=grid_style.get("color", "gray"),
-                linewidth=grid_style.get("linewidth", 0.3), linestyle=grid_style.get("linestyle", ":"),
-                zorder=1)
+    # -- internal grid (local space, opt-out via ``grid: false``) --
+    if axis.grid is not False:
+        xs = list(np.arange(xlo + grid_step, xhi, grid_step))
+        ys = list(np.arange(ylo + grid_step, yhi, grid_step))
+        for gx in xs:
+            g = [(gx, y0), (gx, y1)]
+            ax.plot([g[0][0], g[1][0]], [g[0][1], g[1][1]], color=grid_style.get("color", "gray"),
+                    linewidth=grid_style.get("linewidth", 0.3), linestyle=grid_style.get("linestyle", ":"),
+                    zorder=1)
+        for gy in ys:
+            ax.plot([x0, x1], [gy, gy], color=grid_style.get("color", "gray"),
+                    linewidth=grid_style.get("linewidth", 0.3), linestyle=grid_style.get("linestyle", ":"),
+                    zorder=1)
 
     # -- tick-label offset from the edge (default derived from limits size) --
     d = axis.label_offset
@@ -737,6 +738,26 @@ class MatplotlibRenderer(BaseRenderer):
         xlim, ylim = self._children_world_limits([spec])
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
+        if isinstance(spec.coord, CoordCartesian):
+            axis = parse_axis_settings(spec.settings, spec.coord)
+            if axis.xlim is not None and axis.ylim is not None:
+                # The cartesian frame can draw tick labels/captions outside the
+                # box (e.g. the wide Stiff frame's x-scale and "meq/L" below the
+                # polygon). Extend the world limits to keep that text-strip
+                # inside the viewport instead of clipping at the figure edge.
+                x0, x1 = axis.xlim
+                y0, y1 = axis.ylim
+                d = axis.label_offset if axis.label_offset is not None else (x1 - x0) / 20.0
+                xlim = (
+                    min(xlim[0], x0 - _CAPTION_OFFSET_MULT * d),
+                    max(xlim[1], x1 + _CAPTION_OFFSET_MULT * d),
+                )
+                ylim = (
+                    min(ylim[0], y0 - (_CAPTION_OFFSET_MULT + 1.0) * d),
+                    max(ylim[1], y1 + (_SECONDARY_TITLE_OFFSET_MULT + 1.0) * d),
+                )
+                ax.set_xlim(xlim)
+                ax.set_ylim(ylim)
         if isinstance(spec.coord, TernaryCoord):
             # The equilateral triangle requires 1:1 data units. Top-level
             # cartesian frames (e.g. the wide Stiff box) keep the default
