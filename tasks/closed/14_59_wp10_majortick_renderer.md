@@ -1,6 +1,6 @@
 # Phase 14.59: Majortick renderer
 
-**Status**: open
+**Status**: closed
 **Phase**: 14.59
 **Dependencies**: `14_59_wp8_majortick_axis_model`, `14_59_wp9_majortick_secondary`
 

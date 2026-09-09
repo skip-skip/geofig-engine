@@ -1,6 +1,6 @@
 # Phase 14.59: Update stiff majortick tests
 
-**Status**: open
+**Status**: closed
 **Phase**: 14.59
 **Dependencies**: `14_59_wp10_majortick_renderer`, `14_59_wp11_stiff_majorticks`
 

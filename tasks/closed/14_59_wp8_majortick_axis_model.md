@@ -1,6 +1,6 @@
 # Phase 14.59: Majortick axis model
 
-**Status**: open
+**Status**: closed
 **Phase**: 14.59
 **Dependencies**: none (foundation for `14_59_wp9`–`14_59_wp17`)
 
