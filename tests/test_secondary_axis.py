@@ -256,6 +256,48 @@ class TestParseSecondarySettings:
         assert axis.axis_label_policy_eff() == "upright"
         assert axis.tick_label_policy_eff() == "parallel"
 
+    def test_inherits_frame_majortick_defaults(self):
+        axes = parse_secondary_settings(
+            {"secondary_x": {"range": [100, 0]}},
+            xlim=(0, 200),
+            ylim=(0, 200),
+            defaults={
+                "majortick_length": 0.06,
+                "majortick_offset": 0.25,
+                "majortick_width": 2.0,
+                "majortick_color": "tab:red",
+            },
+        )
+        axis = axes["x"]
+        assert axis.majortick_length == 0.06
+        assert axis.majortick_offset == 0.25
+        assert axis.majortick_width == 2.0
+        assert axis.majortick_color == "tab:red"
+
+    def test_secondary_majortick_values_override_frame_defaults(self):
+        axes = parse_secondary_settings(
+            {
+                "secondary_y": {
+                    "range": [0, 2],
+                    "majortick_length": 0.3,
+                    "majortick_offset": 1,
+                    "majortick_width": 3.5,
+                    "majortick_color": "blue",
+                }
+            },
+            defaults={
+                "majortick_length": 0.06,
+                "majortick_offset": 0.0,
+                "majortick_width": 1.0,
+                "majortick_color": "black",
+            },
+        )
+        axis = axes["y"]
+        assert axis.majortick_length == 0.3
+        assert axis.majortick_offset == 1
+        assert axis.majortick_width == 3.5
+        assert axis.majortick_color == "blue"
+
     def test_explicit_xlim_ylim_override_settings(self):
         axes = parse_secondary_settings(
             {"xlim": (0, 50), "ylim": (0, 50), "secondary_x": {"range": [50, 0]}},

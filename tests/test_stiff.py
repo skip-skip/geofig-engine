@@ -236,6 +236,28 @@ class TestStiffRenderSmoke:
             )
             assert line.get_color() == spec.settings.get("majortick_color", "black")
 
+    def test_named_rows_get_majorticks_on_both_flanks(self):
+        fig, spec = self._render()
+        ax = fig.axes[0]
+        length = spec.settings["majortick_length"]
+        xlo, xhi = spec.settings["xlim"]
+        left_rows, right_rows = set(), set()
+        for line in ax.lines:
+            xs = np.asarray(line.get_xdata())
+            ys = np.asarray(line.get_ydata())
+            if len(xs) != 2 or not np.allclose(ys, ys[0]):
+                continue
+            if abs(xs[1] - xs[0]) != pytest.approx(length):
+                continue
+            y = round(float(ys[0]), 6)
+            if min(xs) == pytest.approx(xlo - length) and max(xs) == pytest.approx(xlo):
+                left_rows.add(y)
+            if min(xs) == pytest.approx(xhi) and max(xs) == pytest.approx(xhi + length):
+                right_rows.add(y)
+        # Named rows are interior labels, so only y = 0, 1, 2 get ticks.
+        assert left_rows == {0.0, 1.0, 2.0}
+        assert right_rows == {0.0, 1.0, 2.0}
+
     def test_title_renders_as_suptitle(self):
         fig, _ = self._render()
         assert fig._suptitle.get_text() == "Smoke"

@@ -49,10 +49,11 @@ def _render(settings):
     return renderer.render(spec).axes[0]
 
 
-def _nubs_for_edge(ax, edge):
+def _nubs_for_edge(ax, edge, length=L):
     """Map each tick's along-edge coordinate to its (interior, exterior) tip.
 
-    Majortick segments are axis-aligned 2-point lines of exact length L.  A
+    Majortick segments are axis-aligned 2-point lines of exact length *length*
+    (in practice ``L``, but overridden to test per-secondary values).  A
     segment belongs to an edge when its extent spans that edge's coordinate
     (true for every offset in [0, 1]), which also disambiguates overlapping
     top/bottom and left/right keys.
@@ -65,13 +66,13 @@ def _nubs_for_edge(ax, edge):
         if len(xs) != 2:
             continue
         if edge in ("bottom", "top"):
-            if not (np.allclose(xs, xs[0]) and abs(ys[1] - ys[0]) == pytest.approx(L)):
+            if not (np.allclose(xs, xs[0]) and abs(ys[1] - ys[0]) == pytest.approx(length)):
                 continue
             if not min(ys) <= anchor <= max(ys):
                 continue
             nubs[round(float(xs[0]), 6)] = (float(ys[0]), float(ys[1]))
         else:
-            if not (np.allclose(ys, ys[0]) and abs(xs[1] - xs[0]) == pytest.approx(L)):
+            if not (np.allclose(ys, ys[0]) and abs(xs[1] - xs[0]) == pytest.approx(length)):
                 continue
             if not min(xs) <= anchor <= max(xs):
                 continue
@@ -138,3 +139,65 @@ def test_no_majorticks_without_majortick_length():
     )
     for edge in ("bottom", "top", "left", "right"):
         assert _nubs_for_edge(ax, edge) == {}
+
+
+def test_named_edges_tick_at_all_label_positions_including_frame_edges():
+    ax = _render(
+        {
+            "xlim": (XLO, XHI),
+            "ylim": (YLO, YHI),
+            "majortick_length": L,
+            "majortick_offset": 0,
+            "grid": False,
+            "y_tick_labels": {0: "a", 1: "b", 2: "c", 3: "d", 4: "e"},
+            "secondary_y": {
+                "range": (YLO, YHI),
+                "tick_labels": {0: "A", 2: "C", 4: "E"},
+            },
+        }
+    )
+    assert sorted(_nubs_for_edge(ax, "left")) == [0.0, 1.0, 2.0, 3.0, 4.0]
+    # Frame edges y = ylo and y = yhi get ticks too.
+    assert sorted(_nubs_for_edge(ax, "right")) == [0.0, 2.0, 4.0]
+
+
+def test_top_edge_inherits_frame_majortick_length():
+    ax = _render(
+        {
+            "xlim": (XLO, XHI),
+            "ylim": (YLO, YHI),
+            "tick_step": 1,
+            "majortick_length": L,
+            "majortick_offset": 0,
+            "grid": False,
+            "secondary_x": {"range": (XLO, XHI), "tick_step": 1},
+        }
+    )
+    top = _nubs_for_edge(ax, "top")
+    assert sorted(top) == [1.0, 2.0, 3.0]
+    assert top[1] == pytest.approx((YHI, YHI + L))
+
+
+def test_secondary_override_beats_frame_majortick_length():
+    ax = _render(
+        {
+            "xlim": (XLO, XHI),
+            "ylim": (YLO, YHI),
+            "tick_step": 1,
+            "majortick_length": L,
+            "majortick_offset": 0,
+            "grid": False,
+            "secondary_y": {
+                "range": (YLO, YHI),
+                "tick_step": 1,
+                "majortick_length": 2 * L,
+            },
+        }
+    )
+    left = _nubs_for_edge(ax, "left")
+    right = _nubs_for_edge(ax, "right", length=2 * L)
+    for pos in POSITIONS:
+        iy, ey = left[pos]
+        assert abs(ey - iy) == pytest.approx(L)  # frame-level length
+        ixs, exs = right[pos]
+        assert abs(exs - ixs) == pytest.approx(2 * L)  # secondary override
