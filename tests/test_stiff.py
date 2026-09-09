@@ -15,7 +15,7 @@ from matplotlib.patches import Polygon as MplPolygon
 
 from geofig_engine.core.axis import parse_axis_settings
 from geofig_engine.core.coord import CoordCartesian
-from geofig_engine.core.geom import GeomAbline, GeomPolygon
+from geofig_engine.core.geom import GeomLine, GeomPolygon
 from geofig_engine.core.spec import FigureSpec
 from geofig_engine.renderers.matplotlib.renderer import _nice_tick_max
 from geofig_engine.serialize import spec_from_json, spec_to_json
@@ -118,18 +118,21 @@ class TestPlotStiffLayersAndData:
         assert all(v < 0 for v in x[:3])
         assert all(v > 0 for v in x[3:6])
 
-    def test_layers_are_polygon_abline(self):
+    def test_layers_are_polygon_and_clipped_dashed_center(self):
         spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3)
-        assert [layer.geom.name for layer in spec.layers] == ["polygon", "abline"]
+        assert [layer.geom.name for layer in spec.layers] == ["polygon", "line"]
         polygon = spec.layers[0].geom
         assert isinstance(polygon, GeomPolygon)
         assert polygon.edgecolor == "black"
         assert polygon.edgewidth == 1.5
         assert spec.layers[0].visual_mapping["color"] == "lightblue"
-        center = spec.layers[1].geom
-        assert isinstance(center, GeomAbline)
-        assert center.x1 == 0.0 and center.x2 == 0.0
-        assert spec.layers[1].visual_mapping["style"] == "dashed"
+        divider = spec.layers[1]
+        assert isinstance(divider.geom, GeomLine)
+        assert divider.visual_mapping["x"] == [0, 0]
+        # The segment spans exactly the frame box so it never leaks past the
+        # axis bounds into the caption strip or above the box.
+        assert divider.visual_mapping["y"] == list(spec.settings["ylim"])
+        assert divider.visual_mapping["style"] == "dashed"
 
     def test_serialization_roundtrip_preserves_data_and_settings(self):
         spec = plot_stiff(ca=10, mg=5, na_k=8, cl=12, hco3=15, so4=3, title="Well 1")
@@ -156,7 +159,7 @@ class TestPlotStiffLayersAndData:
     def test_serialization_roundtrip_preserves_layers(self):
         spec = plot_stiff(ca=1, mg=1, na_k=1, cl=8, hco3=1, so4=1)
         restored = spec_from_json(spec_to_json(spec))
-        assert [layer.geom.name for layer in restored.layers] == ["polygon", "abline"]
+        assert [layer.geom.name for layer in restored.layers] == ["polygon", "line"]
         assert isinstance(restored.layers[0].geom, GeomPolygon)
 
 

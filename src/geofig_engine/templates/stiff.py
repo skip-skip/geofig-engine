@@ -1,7 +1,7 @@
 import pandas as pd
 
 from geofig_engine.core.coord import CoordCartesian
-from geofig_engine.core.geom import GeomAbline, GeomPolygon
+from geofig_engine.core.geom import GeomLine, GeomPolygon
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.core.stat import StatIdentity
 from geofig_engine.core.spec import build_spec
@@ -93,10 +93,16 @@ def plot_stiff(
             },
         ),
         LayerSpec(
-            # Dashed center line at x = 0 (two-point abline).
-            geom=GeomAbline(x1=0, y1=ylo, x2=0, y2=yhi),
+            # Dashed cation/anion divider at x = 0, clipped to the frame box
+            # bounds (a bounded segment, not an infinite abline).
+            geom=GeomLine(),
             stat=StatIdentity(),
-            visual_mapping={"color": "black", "style": "dashed"},
+            visual_mapping={
+                "x": [0, 0],
+                "y": [ylo, yhi],
+                "color": "black",
+                "style": "dashed",
+            },
         ),
     ]
 
