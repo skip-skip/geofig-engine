@@ -384,17 +384,46 @@ def _draw_ternary_frame(ax, axis: AxisFormat, matrix, coord):
             )
 
 
-def _draw_tick_marks(ax, matrix, xs, edge_y, d, direction=1.0):
-    """Short nubs on a box edge at tick positions, stamped by *matrix*.
+_EDGE_INTERIOR = {
+    "bottom": (0.0, 1.0),
+    "top": (0.0, -1.0),
+    "left": (1.0, 0.0),
+    "right": (-1.0, 0.0),
+}
 
-    A tick runs from ``(x, edge_y)`` a short way outward (toward the label
-    strip) and stays clear of the label text: length ``0.4*d``.
+
+def _draw_majorticks(ax, matrix, positions, edge, box, length, offset, width, color):
+    """Major-tick nubs on a frame edge, stamped by *matrix*.
+
+    Args:
+        positions: tick positions along the edge in local frame space
+            (x-coordinates for ``bottom``/``top``, y-coordinates for
+            ``left``/``right``).
+        edge: one of ``"bottom"``/``"top"``/``"left"``/``"right"``, which
+            fixes the interior unit vector (toward the box center).
+        box: ``(xlo, xhi, ylo, yhi)`` edge constants.
+        length: tick line length in local units.
+        offset: where the frame edge crosses the tick line, measured from the
+            interior tip — ``0`` = wholly exterior, ``1`` = wholly interior,
+            ``0.5`` = bisected.
+        width/color: tick line styling (points / matplotlib color).
     """
-    s = 0.4 * d * direction
-    for tx in xs:
-        w0 = _apply_matrix_pts(matrix, [(tx, edge_y)])[0]
-        w1 = _apply_matrix_pts(matrix, [(tx, edge_y + s)])[0]
-        ax.plot([w0[0], w1[0]], [w0[1], w1[1]], color="black", linewidth=1.0, zorder=2)
+    if length is None or length <= 0 or not positions:
+        return
+    xlo, xhi, ylo, yhi = box
+    di, dj = _EDGE_INTERIOR[edge]
+    for t in positions:
+        if edge in ("bottom", "top"):
+            base = (float(t), ylo if edge == "bottom" else yhi)
+        else:
+            base = (xlo if edge == "left" else xhi, float(t))
+        interior_tip = (base[0] + offset * length * di, base[1] + offset * length * dj)
+        exterior_tip = (
+            base[0] - (1.0 - offset) * length * di,
+            base[1] - (1.0 - offset) * length * dj,
+        )
+        w0, w1 = _apply_matrix_pts(matrix, [interior_tip, exterior_tip])
+        ax.plot([w0[0], w1[0]], [w0[1], w1[1]], color=color, linewidth=width, zorder=2)
 
 
 def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
@@ -416,6 +445,9 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
       - ``secondary_x``/``secondary_y``: extra scales drawn along the top/right
         edges, mapped linearly onto the primary ``limits`` (see
         :mod:`geofig_engine.core.secondary_axis`).
+      - ``majortick_length``/``majortick_offset``/``majortick_width``/
+        ``majortick_color``: major-tick nubs on every edge that has ticks
+        (seconary edges inherit unless overridden in their own dict).
 
     All geometry (box + gridlines) is drawn in local space and later stamped
     with the child's affine, exactly like data. Tick labels and title are
@@ -447,6 +479,10 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
             "y_abs_ticks": axis.abs_ticks_eff("y"),
             "x_tick_labels": axis.tick_labels_eff("x"),
             "y_tick_labels": axis.tick_labels_eff("y"),
+            "majortick_length": axis.majortick_length,
+            "majortick_offset": axis.majortick_offset,
+            "majortick_width": axis.majortick_width,
+            "majortick_color": axis.majortick_color,
         },
     )
 
@@ -484,12 +520,27 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     if d_arrow is None:
         d_arrow = _ARROW_OFFSET_MULT * d
 
+    box = (xlo, xhi, ylo, yhi)
+
+    # -- majorticks (opt-in via ``majortick_length``) --
+    mk_length = axis.majortick_length
+    if mk_length is not None:
+        mk_offset = 0.0 if axis.majortick_offset is None else axis.majortick_offset
+        mk_width = 1.0 if axis.majortick_width is None else axis.majortick_width
+        mk_color = "black" if axis.majortick_color is None else axis.majortick_color
+
+    def _majorticks(box_edge, positions):
+        if mk_length is not None:
+            _draw_majorticks(ax, matrix, list(positions), box_edge, box, mk_length,
+                             mk_offset, mk_width, mk_color)
+
     # -- tick labels on bottom edge (world-side text) --
     # X-axis ticks at tick_step along the bottom (ylo) edge, interior only —
     # unless named labels are supplied (``x_tick_labels``/``tick_labels`` on the
     # x axis), which draw at their exact positions including the frame edges.
     x_named = axis.tick_labels_eff("x")
     if x_named:
+        _majorticks("bottom", sorted(x_named))
         for tx, label in sorted(x_named.items()):
             w = _apply_matrix_pts(matrix, [(tx, ylo - d)])[0]
             ax.text(w[0], w[1], label, ha="center", va="top", fontsize=tick_fs,
@@ -498,7 +549,7 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     else:
         xs = [tx for tx in np.arange(xlo, xhi + 0.5 * tick_step, tick_step)
               if not xlo - 1e-9 <= tx <= xlo + 1e-9 and not xhi - 1e-9 <= tx <= xhi + 1e-9]
-        _draw_tick_marks(ax, matrix, xs, ylo, d)
+        _majorticks("bottom", xs)
         for tx in xs:
             tval = xlo + xhi - tx if axis.x_reversed else tx
             if axis.abs_ticks_eff("x"):
@@ -511,15 +562,17 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     # -- tick labels on left edge (world-side text) --
     y_named = axis.tick_labels_eff("y")
     if y_named:
+        _majorticks("left", sorted(y_named))
         for ty, label in sorted(y_named.items()):
             w = _apply_matrix_pts(matrix, [(xlo - d, ty)])[0]
             ax.text(w[0], w[1], label, ha="right", va="center", fontsize=tick_fs,
                     rotation=label_rotation((0, 1), matrix, policy=tick_policy),
                     clip_on=False)
     else:
-        for ty in np.arange(ylo, yhi + 0.5 * tick_step, tick_step):
-            if ylo - 1e-9 <= ty <= ylo + 1e-9 or yhi - 1e-9 <= ty <= yhi + 1e-9:
-                continue
+        ys = [ty for ty in np.arange(ylo, yhi + 0.5 * tick_step, tick_step)
+              if not ylo - 1e-9 <= ty <= ylo + 1e-9 and not yhi - 1e-9 <= ty <= yhi + 1e-9]
+        _majorticks("left", ys)
+        for ty in ys:
             tval = ylo + yhi - ty if axis.y_reversed else ty
             if axis.abs_ticks_eff("y"):
                 tval = abs(tval)
@@ -528,9 +581,18 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
                     rotation=label_rotation((0, 1), matrix, policy=tick_policy),
                     clip_on=False)
 
+    def _secondary_majorticks(box_edge, sec):
+        if sec.majortick_length is not None:
+            offset = 0.0 if sec.majortick_offset is None else sec.majortick_offset
+            width = 1.0 if sec.majortick_width is None else sec.majortick_width
+            color = "black" if sec.majortick_color is None else sec.majortick_color
+            _draw_majorticks(ax, matrix, [lx for _, lx in sec.tick_coordinates()],
+                             box_edge, box, sec.majortick_length, offset, width, color)
+
     # -- tick labels on top edge from secondary x (world-side text) --
     if "x" in secondary:
         sec = secondary["x"]
+        _secondary_majorticks("top", sec)
         for sv, lx in sec.tick_coordinates():
             if not sec.tick_labels:
                 if xlo - 1e-9 <= lx <= xlo + 1e-9 or xhi - 1e-9 <= lx <= xhi + 1e-9:
@@ -548,6 +610,7 @@ def _draw_cartesian_axis(ax, axis: AxisFormat, matrix):
     # -- tick labels on right edge from secondary y (world-side text) --
     if "y" in secondary:
         sec = secondary["y"]
+        _secondary_majorticks("right", sec)
         for sv, ly in sec.tick_coordinates():
             if not sec.tick_labels:
                 if ylo - 1e-9 <= ly <= ylo + 1e-9 or yhi - 1e-9 <= ly <= yhi + 1e-9:
