@@ -83,6 +83,14 @@ def _positive(value, label: str) -> float:
     return value
 
 
+def _fraction(value, label: str) -> float:
+    """Validate and coerce a real number in the closed interval [0, 1]."""
+    value = _scalar(value, label)
+    if not 0.0 <= value <= 1.0:
+        raise ValueError(f"{label} must be in [0, 1], got {value!r}")
+    return value
+
+
 def _bool_value(value, label: str) -> bool:
     if not isinstance(value, bool):
         raise ValueError(f"{label} must be a bool, got {value!r}")
@@ -166,6 +174,13 @@ class AxisFormat:
     ``grid_style``, ``frame_linewidth``, ``label_offset``) default to the current
     native/custom matplotlib look.
 
+    Major ticks on the drawn frame are controlled by ``majortick_length``
+    (tick line length in local units; ``None`` disables majorticks),
+    ``majortick_offset`` (where the frame edge crosses the tick line, from the
+    interior tip: ``0`` = wholly exterior, ``1`` = wholly interior, ``0.5`` =
+    bisected), ``majortick_width`` (linewidth in points) and ``majortick_color``.
+    They apply to every edge of a drawn cartesian frame that has ticks.
+
     Font sizes resolve per text-element ``kind`` via :meth:`resolve_fontsize`:
     the per-element knob wins, else the generic ``fontsize`` fallback, else a
     built-in default (matched to today's rendered output). All font knobs are
@@ -221,6 +236,10 @@ class AxisFormat:
     frame_linewidth: float = 1.0
     label_offset: float | None = None
     axis_arrow_offset: float | None = None
+    majortick_length: float | None = None
+    majortick_offset: float | None = None
+    majortick_width: float | None = None
+    majortick_color: str | None = None
 
     # Per-coordinate extension
     options: dict[str, Any] = field(default_factory=dict)
@@ -311,6 +330,27 @@ class AxisFormat:
         if self.axis_arrow_offset is not None:
             object.__setattr__(
                 self, "axis_arrow_offset", _scalar(self.axis_arrow_offset, "axis_arrow_offset")
+            )
+
+        if self.majortick_length is not None:
+            object.__setattr__(
+                self, "majortick_length", _scalar(self.majortick_length, "majortick_length")
+            )
+            if self.majortick_length < 0:
+                raise ValueError(
+                    f"majortick_length must be non-negative, got {self.majortick_length!r}"
+                )
+        if self.majortick_offset is not None:
+            object.__setattr__(
+                self, "majortick_offset", _fraction(self.majortick_offset, "majortick_offset")
+            )
+        if self.majortick_width is not None:
+            object.__setattr__(
+                self, "majortick_width", _positive(self.majortick_width, "majortick_width")
+            )
+        if self.majortick_color is not None and not isinstance(self.majortick_color, str):
+            raise ValueError(
+                f"majortick_color must be a string, got {self.majortick_color!r}"
             )
 
         if not isinstance(self.options, dict):
@@ -494,6 +534,10 @@ def parse_axis_settings(settings: Mapping | None, coord=None) -> AxisFormat:
         y_tick_labels=_pick("y_tick_labels"),
         axis_arrow_offset=_pick("axis_arrow_offset"),
         label_offset=_pick("label_offset"),
+        majortick_length=_pick("majortick_length"),
+        majortick_offset=_pick("majortick_offset"),
+        majortick_width=_pick("majortick_width"),
+        majortick_color=_pick("majortick_color"),
         fontsize=_pick("fontsize"),
         tick_fontsize=_pick("tick_fontsize"),
         axis_label_fontsize=_pick("axis_label_fontsize"),
