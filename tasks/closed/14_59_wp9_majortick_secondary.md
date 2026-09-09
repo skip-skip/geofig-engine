@@ -1,6 +1,6 @@
 # Phase 14.59: Majorticks on secondary axes (inheritance)
 
-**Status**: closed
+**Status**: complete
 **Phase**: 14.59
 **Dependencies**: `14_59_wp8_majortick_axis_model`
 
