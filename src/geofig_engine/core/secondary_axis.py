@@ -65,6 +65,14 @@ def _scalar(value, label: str) -> float:
     return float(value)
 
 
+def _fraction(value, label: str) -> float:
+    """Validate and coerce a real number in the closed interval [0, 1]."""
+    value = _scalar(value, label)
+    if not 0.0 <= value <= 1.0:
+        raise ValueError(f"{label} must be in [0, 1], got {value!r}")
+    return value
+
+
 def _tick_labels(value, label: str = "tick_labels") -> dict[float, str]:
     """Validate and normalize a ``{position: label}`` tick-label declaration.
 
@@ -159,6 +167,10 @@ class SecondaryAxis:
     tick_label_policy: str | None = None
     abs_ticks: bool = False
     tick_labels: dict[float, str] = field(default_factory=dict)
+    majortick_length: float | None = None
+    majortick_offset: float | None = None
+    majortick_width: float | None = None
+    majortick_color: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "range", _pair(self.range, "secondary range"))
@@ -198,6 +210,34 @@ class SecondaryAxis:
             raise ValueError(
                 f"secondary {self.orientation!r} position must be one of {allowed}, "
                 f"got {self.position!r}"
+            )
+        _fmt = f"secondary {self.orientation!r} majortick"
+        if self.majortick_length is not None:
+            object.__setattr__(
+                self, "majortick_length", _scalar(self.majortick_length, f"{_fmt}_length")
+            )
+            if self.majortick_length < 0:
+                raise ValueError(
+                    f"secondary {self.orientation!r} majortick_length must be "
+                    f"non-negative, got {self.majortick_length!r}"
+                )
+        if self.majortick_offset is not None:
+            object.__setattr__(
+                self, "majortick_offset", _fraction(self.majortick_offset, f"{_fmt}_offset")
+            )
+        if self.majortick_width is not None:
+            object.__setattr__(
+                self, "majortick_width", _scalar(self.majortick_width, f"{_fmt}_width")
+            )
+            if self.majortick_width <= 0:
+                raise ValueError(
+                    f"secondary {self.orientation!r} majortick_width must be "
+                    f"positive, got {self.majortick_width!r}"
+                )
+        if self.majortick_color is not None and not isinstance(self.majortick_color, str):
+            raise ValueError(
+                f"secondary {self.orientation!r} majortick_color must be a string, "
+                f"got {self.majortick_color!r}"
             )
 
     @property
@@ -334,6 +374,18 @@ def parse_secondary_settings(
                     f"{orientation}_tick_labels",
                     defaults.get("tick_labels", {}),
                 ),
+            ),
+            majortick_length=raw.get(
+                "majortick_length", defaults.get("majortick_length")
+            ),
+            majortick_offset=raw.get(
+                "majortick_offset", defaults.get("majortick_offset")
+            ),
+            majortick_width=raw.get(
+                "majortick_width", defaults.get("majortick_width")
+            ),
+            majortick_color=raw.get(
+                "majortick_color", defaults.get("majortick_color")
             ),
         )
     return result
