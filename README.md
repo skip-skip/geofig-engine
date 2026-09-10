@@ -13,12 +13,14 @@ Requires Python 3.11+. Runtime dependencies are `pandas` and `matplotlib`.
 pip install -e .
 ```
 
-## Quickstart
+## Quickstart (standalone)
+
+No `Dataset` wrapper or upstream package needed — a raw `pandas.DataFrame` is
+accepted and wrapped automatically:
 
 ```python
 import pandas as pd
-from geofig_engine.templates import bivariate
-from geofig_engine.engine import render_template
+from geofig_engine import render_template
 
 df = pd.DataFrame({
     "x": [1, 2, 3, 4, 5],
@@ -26,16 +28,21 @@ df = pd.DataFrame({
     "well": ["A", "A", "B", "B", "B"],
 })
 
-specs, figures, legend = render_template(
-    dataset=df,
-    template=bivariate(mapping={"x": "x", "y": "y", "color": "well"}),
+figures = render_template(
+    data=df,
+    template="bivariate",
+    mapping={"x": "x", "y": "y", "color": "well"},
     settings={"figsize": (8, 6)},
 )
-figures[0].show()
+figures[0].show()  # render_template returns list[Figure]
 ```
 
-Templates, data, and `mapping` values are described by the API reference;
-`render_template` accepts either a `Dataset` object or a `pd.DataFrame`.
+`template` is a key into the exported `TEMPLATES` registry (or a
+`FigureTemplate`/recipe object); `mapping` and `settings` override the
+template defaults per call. `render_template` accepts any `DataProvider`-shaped
+object (e.g. a `DataFrameProvider` or a third-party duck-typed provider);
+`Dataset`-based pipelines are served by the deprecated `render_template_legacy`
+entry, which warns at call time.
 
 ## Documentation
 

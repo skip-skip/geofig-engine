@@ -1,6 +1,6 @@
 # Phase 15: Interop validation (standalone + upstream smoke)
 
-**Status**: open
+**Status**: complete
 **Phase**: 15
 **Version target**: v0.2.0
 **Dependencies**: `15_wp4_render_template`, `15_wp5_legacy_shims`,
