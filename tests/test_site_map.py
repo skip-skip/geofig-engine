@@ -202,12 +202,20 @@ class TestSiteMapTemplate:
     def test_tile_hook_documented(self):
         doc = site_map_builder.__doc__ or ""
         assert "tile" in doc
-        assert "deferred" in doc
+        assert "Esri WorldImagery" in doc
+
+    def test_default_settings_enable_imagery_basemap(self):
+        recipe = get_template("site_map")()
+        basemap = recipe.default_settings["basemap"]
+        assert basemap["provider"] == "esri_world_imagery"
+        assert 0 < basemap["alpha"] <= 1
 
 
 class TestSiteMapRender:
     def test_no_mapping_renders_points_and_labels(self):
-        figures = render_template(data=SAMPLE_DF, template="site_map")
+        figures = render_template(
+            data=SAMPLE_DF, template="site_map", settings={"basemap": None}
+        )
         assert len(figures) == 1
         ax = figures[0].axes[0]
         assert ax.get_title() == SITE_MAP_DEFAULTS["title"]
@@ -220,14 +228,19 @@ class TestSiteMapRender:
         frame = SAMPLE_DF.rename(
             columns={"longitude": "x_coord", "latitude": "y_coord"}
         )
-        figures = render_template(data=frame, template="site_map")
+        figures = render_template(
+            data=frame, template="site_map", settings={"basemap": None}
+        )
         assert len(figures) == 1
         offsets = figures[0].axes[0].collections[0].get_offsets()
         assert np.allclose(sorted(offsets[:, 0]), [-116.5, -116.4, -116.3, -116.2])
 
     def test_color_mapping_colors_points_by_group(self):
         figures = render_template(
-            data=SAMPLE_DF, template="site_map", mapping={"color": "facility"}
+            data=SAMPLE_DF,
+            template="site_map",
+            mapping={"color": "facility"},
+            settings={"basemap": None},
         )
         colors = figures[0].axes[0].collections[0].get_facecolors()
         assert len(colors) == 4
@@ -269,7 +282,9 @@ class TestSiteMapRender:
         assert "B" in legend_texts
 
     def test_boundary_draws_closed_ring(self):
-        figures = render_template(data=MERGED_DF, template="site_map")
+        figures = render_template(
+            data=MERGED_DF, template="site_map", settings={"basemap": None}
+        )
         assert len(figures) == 1
         ax = figures[0].axes[0]
         assert len(ax.lines) == 1
@@ -307,7 +322,10 @@ class TestSiteMapRender:
         # override on the points layer must still render (ungrouped rows get
         # the neutral color instead of an "Invalid RGBA argument: nan").
         figures = render_template(
-            data=MERGED_DF, template="site_map", mapping={"color": "facility"}
+            data=MERGED_DF,
+            template="site_map",
+            mapping={"color": "facility"},
+            settings={"basemap": None},
         )
         assert len(figures) == 1
         offsets = figures[0].axes[0].collections[0].get_offsets()
@@ -315,7 +333,9 @@ class TestSiteMapRender:
 
     def test_labels_optional(self):
         frame = SAMPLE_DF.drop(columns=["name"])
-        figures = render_template(data=frame, template="site_map")
+        figures = render_template(
+            data=frame, template="site_map", settings={"basemap": None}
+        )
         assert len(figures[0].axes[0].texts) == 0
 
     def test_default_identity_projection(self):
@@ -332,6 +352,7 @@ class TestSiteMapRender:
                 data=SAMPLE_DF,
                 template="site_map",
                 coord=CoordGeo(crs="EPSG:32612"),
+                settings={"basemap": None},
             )
         assert len(figures) == 1
         assert len(figures[0].axes[0].collections) == 1

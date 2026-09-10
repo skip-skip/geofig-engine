@@ -9,8 +9,13 @@ column and well names — and renders it through the canonical entry point:
 
 No mapping is required: coordinates, the group column and the label column
 auto-resolve from the frame. A second call shows the ``color`` mapping override
-(coloring points by facility). Output goes to examples/outputs/site_map_output as
-``001.png`` / ``002.png`` plus the grouped ``legend.png``.
+(coloring points by facility). Both calls also paint an XYZ tile basemap
+(Esri WorldImagery, wp14) beneath the boundary/points/labels — override with
+``settings={"basemap": {"provider": ..., "zoom": ..., "alpha": ...}}`` or
+disable with ``{"basemap": None}``; a tile-server failure degrades to a
+tile-free render with a warning. Output goes to
+examples/outputs/site_map_output as ``001.png`` / ``002.png`` plus the
+grouped ``legend.png``.
 """
 
 from pathlib import Path
@@ -55,6 +60,9 @@ figures = render_template(
     template="site_map",
     settings={
         "title": "Haley & Aldrich Site — MW Network",
+        # Basemap is on by default; this explicit dict shows the override
+        # shape (image tiles at 55% opacity) and keeps the Esri default.
+        "basemap": {"alpha": 0.55},
     },
     savedir=output_dir,
 )

@@ -18,7 +18,14 @@ import matplotlib.text
 from matplotlib.transforms import Affine2D, IdentityTransform
 
 from geofig_engine.core.axis import AxisFormat, parse_axis_settings
-from geofig_engine.core.coord import CoordCartesian, CoordFlipped, CoordFixed, CoordPolar, TernaryCoord
+from geofig_engine.core.coord import (
+    CoordCartesian,
+    CoordFixed,
+    CoordFlipped,
+    CoordGeo,
+    CoordPolar,
+    TernaryCoord,
+)
 from geofig_engine.core.facet import FacetGrid, FacetNull, FacetWrap
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.core.link import LinkTransform, label_rotation
@@ -929,6 +936,11 @@ class MatplotlibRenderer(BaseRenderer):
 
         xlim_data = ax.get_xlim()
         ylim_data = ax.get_ylim()
+
+        basemap_setting = spec.settings.get("basemap")
+        if basemap_setting and isinstance(spec.coord, CoordGeo):
+            self._render_basemap(ax, spec.coord, basemap_setting, (xlim_data, ylim_data))
+
         ax.autoscale(False)
 
         for f_idx, (_, layer) in enumerate(func_layers):
@@ -1466,6 +1478,93 @@ class MatplotlibRenderer(BaseRenderer):
 
     def render_legend(self, legend_data: LegendAccumulator, fontsize: float = 9) -> plt.Figure:
         return render_legend_figure(legend_data, fontsize=fontsize)
+
+    def _render_basemap(self, ax, coord: CoordGeo, setting, limits) -> None:
+        """Paint XYZ tile imagery beneath the layer stack (wp14).
+
+        Fetched when ``spec.settings["basemap"]`` is truthy on a ``CoordGeo``
+        spec — the hook the wp9 docstring reserved below the layer stack. The
+        mosaic is positioned in *data* coordinates: identity for WGS84 output,
+        corner-projected for a non-WGS84 ``crs`` (pyproj; "None" without the
+        ``[geo]`` extra). Any failure is non-fatal: a ``UserWarning`` fires
+        and the figure renders tile-free.
+        """
+        import warnings
+
+        from geofig_engine.renderers.matplotlib.basemap import (
+            TileFetchError,
+            fetch_basemap,
+            lonlat_bbox_for_crs,
+            mosaic_in_output_crs,
+            resolve_provider,
+        )
+
+        opts: dict[str, Any] = {}
+        if isinstance(setting, dict):
+            opts = setting
+            provider_spec: Any = setting.get("provider", setting.get("url", True))
+        else:
+            provider_spec = setting
+        provider = resolve_provider(provider_spec)
+        if provider is None:
+            return
+        zoom = opts.get("zoom")
+        alpha = opts.get("alpha", 1.0)
+
+        (xmin, xmax), (ymin, ymax) = limits
+        bbox_lonlat = lonlat_bbox_for_crs(coord.crs, xmin, xmax, ymin, ymax)
+        if bbox_lonlat is None:
+            warnings.warn(
+                f"pyproj is not installed; cannot place a {coord.crs!r} "
+                "basemap. Install the '[geo]' extra for projected basemaps; "
+                "rendering tile-free.",
+                UserWarning,
+                stacklevel=3,
+            )
+            return
+
+        width_px = max(int(round(ax.figure.get_size_inches()[0] * ax.figure.dpi)), 1)
+        height_px = max(int(round(ax.figure.get_size_inches()[1] * ax.figure.dpi)), 1)
+        try:
+            tiles = fetch_basemap(
+                bbox_lonlat[0],
+                bbox_lonlat[1],
+                bbox_lonlat[2],
+                bbox_lonlat[3],
+                zoom=zoom,
+                provider=provider,
+                width_px=width_px,
+                height_px=height_px,
+            )
+        except TileFetchError as exc:
+            warnings.warn(
+                f"site_map basemap tiles unavailable: {exc}",
+                UserWarning,
+                stacklevel=3,
+            )
+            return
+
+        placed = mosaic_in_output_crs(tiles.image, tiles.extent, coord.crs)
+        if placed is None:
+            warnings.warn(
+                f"pyproj is not installed; cannot place the {coord.crs!r} "
+                "basemap. Install the '[geo]' extra for projected basemaps; "
+                "rendering tile-free.",
+                UserWarning,
+                stacklevel=3,
+            )
+            return
+        image, extent = placed
+        west, south, east, north = extent
+        # imshow(extent=...) is (left, right, bottom, top); the mosaic extent
+        # is (west, south, east, north).
+        ax.imshow(
+            image,
+            extent=(west, east, south, north),
+            zorder=0,
+            alpha=alpha,
+            aspect="auto",
+        )
 
     def _apply_coord_transform(self, spec: FigureSpec) -> FigureSpec:
         """Apply coordinate transform to all layers' visual mappings."""

@@ -13,10 +13,15 @@ is pre-bound to a canonical ``color`` column the stat produces, so a
 ``mapping={"color": <column>}`` override through ``render_template`` remaps it
 onto any provider column and yields a legend section per unique value.
 
-**Basemap tiles are deferred to M2** (per the roadmaps) — the "basemap" here
-is the boundary/context geometry rendered from the provider. The future tile
-hook (M2) will sit below this layer stack and fetch/attach tile imagery; no
-tile-service request is made or prepared by this template.
+**Basemap tiles** (wp14): a Web-Mercator XYZ mosaic (default Esri WorldImagery,
+matching ``geochemmapper.py``'s ``add_basemap`` default) is fetched by the
+renderer for the axis extent and painted beneath this layer stack — the hook
+this template reserved in wp9. No mapping or extra dependency is required
+(``requests`` + ``Pillow`` only; ``xyzservices`` optional for provider
+lookup). Disable tiles with ``settings={"basemap": None}``; override style
+with ``settings={"basemap": {"provider": ..., "zoom": ..., "alpha": ...}}``.
+An offline/HTTP failure (or a non-WGS84 ``coord.crs`` without the ``[geo]``
+extra) warns and renders the boundary/points/labels tile-free.
 
 Optional boundary: when the provider frame carries a boundary-flag column
 (name auto-detected from ``boundary``/``is_boundary``/``feature``/``ring``, or
@@ -42,6 +47,7 @@ SITE_MAP_DEFAULTS: dict[str, Any] = {
     "title": "Site Map",
     "xlabel": "Longitude",
     "ylabel": "Latitude",
+    "basemap": {"provider": "esri_world_imagery", "alpha": 0.6},
 }
 
 #: Coordinate-column candidate lists, in preference order (first present wins).
@@ -263,9 +269,12 @@ def site_map_builder(
     layer.
 
     ``coord`` overrides the recipe's geographic coord (e.g. a non-WGS84
-    ``crs`` activates the ``[geo]`` projection path). Basemap tile basemaps
-    are deferred to M2 — the future tile hook sits below this layer stack and
-    makes no requests today.
+    ``crs`` activates the ``[geo]`` projection path). Basemap tiles are
+    enabled by default (``SITE_MAP_DEFAULTS["basemap"]`` — Esri WorldImagery
+    at alpha 0.6, fetched by the renderer below the layer stack; wp14).
+    Disable with ``settings={"basemap": None}``, or override provider/zoom/
+    alpha with a ``settings={"basemap": {...}}`` dict; an offline or
+    ``[geo]``-less projected render degrades to tiles-off with a warning.
 
     The ``TemplateRecipe`` import is deferred to call time so this template
     module never depends on ``engine.api`` at import time.
