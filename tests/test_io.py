@@ -4,7 +4,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from geofig_engine.io import haversine, path_distance, gen_markers, gen_markers_series, Pipeline, PipelineStep
+from geofig_engine.io import (
+    haversine, path_distance, gen_markers, gen_markers_series, Pipeline, PipelineStep,
+    equisflat_to_sample_df, sample_df_to_equisflat, equis_crosstab_to_flat,
+)
 from geofig_engine.io.markers import gen_markers_cross_grouping, DEFAULT_MARKERS, DEFAULT_PALETTE
 
 
@@ -161,3 +164,222 @@ class TestConstants:
         assert "gen_markers_series" in __all__
         assert "Pipeline" in __all__
         assert "PipelineStep" in __all__
+        assert "equisflat_to_sample_df" in __all__
+        assert "sample_df_to_equisflat" in __all__
+        assert "equis_crosstab_to_flat" in __all__
+
+
+class TestEquisFlatToSample:
+    def test_pivot_shape_and_values(self):
+        flat = pd.DataFrame({
+            "Location": ["A", "A", "B", "B"],
+            "Parameter": ["NO3", "Cl", "NO3", "Cl"],
+            "Result": [1.0, 2.0, 3.0, 4.0],
+        })
+        wide = equisflat_to_sample_df(flat)
+        assert list(wide.columns) == ["Location", "NO3", "Cl"]
+        assert len(wide) == 2
+        by_loc = wide.set_index("Location")
+        assert by_loc.loc["A", "NO3"] == 1.0
+        assert by_loc.loc["B", "Cl"] == 4.0
+
+    def test_parameter_columns_first_appearance_order(self):
+        flat = pd.DataFrame({
+            "Location": ["A", "A"],
+            "Parameter": ["Cl", "NO3"],
+            "Result": [1.0, 2.0],
+        })
+        wide = equisflat_to_sample_df(flat)
+        assert list(wide.columns) == ["Location", "Cl", "NO3"]
+
+    def test_custom_sample_keys(self):
+        flat = pd.DataFrame({
+            "Location": ["A", "A"],
+            "Sample_Code": ["S1", "S1"],
+            "Parameter": ["NO3", "Cl"],
+            "Result": [1.0, 2.0],
+        })
+        wide = equisflat_to_sample_df(
+            flat, sample_keys=("Location", "Sample_Code"))
+        assert list(wide.columns) == ["Location", "Sample_Code", "NO3", "Cl"]
+
+    def test_duplicate_sample_parameter_raises(self):
+        flat = pd.DataFrame({
+            "Location": ["A", "A"],
+            "Parameter": ["NO3", "NO3"],
+            "Result": [1.0, 2.0],
+        })
+        with pytest.raises(ValueError, match="duplicate result for parameter 'NO3'"):
+            equisflat_to_sample_df(flat)
+
+    def test_extra_cols_constant_carried(self):
+        flat = pd.DataFrame({
+            "Location": ["A", "A", "B", "B"],
+            "Parameter": ["NO3", "Cl", "NO3", "Cl"],
+            "Result": [1.0, 2.0, 3.0, 4.0],
+            "Well_Type": ["W", "W", "X", "X"],
+        })
+        wide = equisflat_to_sample_df(flat, extra_cols=("Well_Type",))
+        assert list(wide.columns) == ["Location", "NO3", "Cl", "Well_Type"]
+        assert wide.set_index("Location").loc["A", "Well_Type"] == "W"
+
+    def test_varying_extra_cols_raise(self):
+        flat = pd.DataFrame({
+            "Location": ["A", "A"],
+            "Parameter": ["NO3", "Cl"],
+            "Result": [1.0, 2.0],
+            "Date": ["2026-01-01", "2026-02-01"],
+        })
+        with pytest.raises(ValueError, match="not constant per sample"):
+            equisflat_to_sample_df(flat, extra_cols=("Date",))
+
+    def test_drop_na(self):
+        flat = pd.DataFrame({
+            "Location": ["A", "A", "B", "B"],
+            "Parameter": ["NO3", "Cl", "NO3", "Cl"],
+            "Result": [1.0, np.nan, 3.0, 4.0],
+        })
+        wide = equisflat_to_sample_df(flat)
+        by_loc = wide.set_index("Location")
+        assert by_loc.loc["A", "NO3"] == 1.0
+        assert by_loc.loc["B", "Cl"] == 4.0
+        # drop_na removed the A/Cl row entirely → A/Cl cell is NaN
+        assert np.isnan(by_loc.loc["A", "Cl"])
+        wide_keep = equisflat_to_sample_df(flat, drop_na=False)
+        assert np.isnan(wide_keep.set_index("Location").loc["A", "Cl"])
+
+    def test_input_frame_unchanged(self):
+        flat = pd.DataFrame({
+            "Location": ["A", "A"],
+            "Parameter": ["NO3", "Cl"],
+            "Result": [1.0, 2.0],
+        })
+        snapshot = flat.copy()
+        equisflat_to_sample_df(flat)
+        pd.testing.assert_frame_equal(flat, snapshot)
+
+    def test_missing_required_column_raises(self):
+        flat = pd.DataFrame({"Location": ["A"], "Parameter": ["NO3"]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            equisflat_to_sample_df(flat)
+
+
+class TestSampleDfToEquisFlat:
+    def test_melt_basic(self):
+        wide = pd.DataFrame({
+            "Location": ["A", "B"],
+            "NO3": [1.0, 3.0],
+            "Cl": [2.0, 4.0],
+        })
+        flat = sample_df_to_equisflat(wide)
+        assert list(flat.columns) == ["Location", "Parameter", "Result"]
+        assert len(flat) == 4
+
+    def test_round_trip(self):
+        flat = pd.DataFrame({
+            "Location": ["A", "A", "B", "B"],
+            "Parameter": ["Cl", "NO3", "Cl", "NO3"],
+            "Result": [1.0, 2.0, 3.0, 4.0],
+        })
+        wide = equisflat_to_sample_df(flat)
+        back = sample_df_to_equisflat(wide)
+        expected = flat.sort_values(["Location", "Parameter"]).reset_index(drop=True)
+        got = back.sort_values(["Location", "Parameter"]).reset_index(drop=True)
+        pd.testing.assert_frame_equal(got, expected)
+
+    def test_extra_cols_propagated(self):
+        wide = pd.DataFrame({
+            "Location": ["A"],
+            "NO3": [1.0],
+            "Well_Type": ["W"],
+        })
+        flat = sample_df_to_equisflat(wide, extra_cols=("Well_Type",))
+        assert flat.iloc[0]["Well_Type"] == "W"
+
+    def test_drop_na(self):
+        wide = pd.DataFrame({"Location": ["A"], "NO3": [np.nan]})
+        assert sample_df_to_equisflat(wide).empty
+        assert len(sample_df_to_equisflat(wide, drop_na=False)) == 1
+
+
+class TestEquisCrosstabToFlat:
+    def test_underscore_units(self):
+        ct = pd.DataFrame({
+            "Location": ["A", "B"],
+            "NO3_mg/L": [1.0, 2.0],
+            "Ca_ug/L": [5.0, 6.0],
+            "pH": [7.0, 8.0],
+        })
+        out = equis_crosstab_to_flat(ct)
+        assert list(out.columns) == ["Location", "Parameter", "Result", "Result_Unit", "pH"]
+        assert len(out) == 4
+        rows = out.set_index(["Location", "Parameter"])
+        assert rows.loc[("A", "NO3"), "Result"] == 1.0
+        assert rows.loc[("A", "NO3"), "Result_Unit"] == "mg/L"
+        assert rows.loc[("B", "Ca"), "Result_Unit"] == "ug/L"
+        # unit-less metadata broadcast onto every row (one row per part, in
+        # original row order: NO3-rows then Ca-rows, each with A then B)
+        assert out["pH"].tolist() == [7.0, 8.0, 7.0, 8.0]
+
+    def test_parenthesized_units(self):
+        ct = pd.DataFrame({
+            "Location": ["A"],
+            "Ca (mg/L)": [5.0],
+        })
+        out = equis_crosstab_to_flat(ct)
+        assert out.iloc[0]["Parameter"] == "Ca"
+        assert out.iloc[0]["Result_Unit"] == "mg/L"
+        assert out.iloc[0]["Result"] == 5.0
+
+    def test_custom_keys_and_columns(self):
+        ct = pd.DataFrame({
+            "Sample_Code": ["S1"],
+            "NO3_ppb": [10.0],
+        })
+        out = equis_crosstab_to_flat(
+            ct, sample_keys=("Sample_Code",), parameter_col="Analyte",
+            value_col="Value", unit_col="Unit")
+        assert list(out.columns) == ["Sample_Code", "Analyte", "Value", "Unit"]
+        assert out.iloc[0]["Unit"] == "ppb"
+
+    def test_non_numeric_cell_becomes_nan(self):
+        ct = pd.DataFrame({
+            "Location": ["A", "B"],
+            "NO3_mg/L": [1.0, "n.d."],
+        })
+        out = equis_crosstab_to_flat(ct)
+        assert np.isnan(out.loc[out["Location"] == "B", "Result"].iloc[0])
+
+    def test_no_unit_columns_raises(self):
+        ct = pd.DataFrame({"Location": ["A"], "pH": [7.0]})
+        with pytest.raises(ValueError, match="no analyte columns with unit suffixes"):
+            equis_crosstab_to_flat(ct)
+
+    def test_missing_sample_key_raises(self):
+        ct = pd.DataFrame({"NO3_mg/L": [1.0]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            equis_crosstab_to_flat(ct)
+
+    def test_input_frame_unchanged(self):
+        ct = pd.DataFrame({
+            "Location": ["A"],
+            "NO3_mg/L": [1.0],
+        })
+        snapshot = ct.copy()
+        equis_crosstab_to_flat(ct)
+        pd.testing.assert_frame_equal(ct, snapshot)
+
+    def test_excel_input(self, tmp_path):
+        pytest.importorskip("openpyxl")
+        ct = pd.DataFrame({
+            "Location": ["A", "B"],
+            "NO3_mg/L": [1.0, 2.0],
+            "Ca (mg/L)": [5.0, 6.0],
+        })
+        xlsx = tmp_path / "cross_tab.xlsx"
+        ct.to_excel(xlsx, index=False)
+        out = equis_crosstab_to_flat(xlsx)
+        assert len(out) == 4
+        rows = out.set_index(["Location", "Parameter"])
+        assert rows.loc[("A", "NO3"), "Result"] == 1.0
+        assert rows.loc[("B", "Ca"), "Result_Unit"] == "mg/L"
