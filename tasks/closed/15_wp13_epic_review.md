@@ -1,6 +1,6 @@
 # Phase 15: Epic review + release v0.2.0 + close tickets
 
-**Status**: open
+**Status**: complete
 **Phase**: 15
 **Version target**: v0.2.0
 **Dependencies**: `15_wp12_docs_roadmap`
