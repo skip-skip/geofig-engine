@@ -39,6 +39,7 @@ from geofig_engine.renderers.matplotlib.legend import LegendAccumulator
 from geofig_engine.templates.base import FigureTemplate
 from geofig_engine.templates.bivariate import bivariate_builder
 from geofig_engine.templates.boxplot_with_points import boxplot_with_points_builder
+from geofig_engine.templates.dendrogram import dendrogram_builder
 from geofig_engine.templates.legacy import LEGACY_FACTORIES, legacy_adapter
 
 
@@ -136,6 +137,7 @@ def get_template(name: str) -> Callable[..., TemplateRecipe]:
 
 TEMPLATES["bivariate"] = bivariate_builder
 TEMPLATES["boxplot_with_points"] = boxplot_with_points_builder
+TEMPLATES["dendrogram"] = dendrogram_builder
 for _template_key, _factory in LEGACY_FACTORIES.items():
     TEMPLATES[_template_key] = legacy_adapter(_factory)
 

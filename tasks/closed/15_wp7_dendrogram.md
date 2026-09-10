@@ -1,6 +1,6 @@
 # Phase 15: dendrogram template
 
-**Status**: open
+**Status**: complete
 **Phase**: 15
 **Version target**: v0.2.0
 **Dependencies**: `15_wp6_base_templates`

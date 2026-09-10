@@ -78,10 +78,15 @@ def _nice_tick_max(max_val: float) -> float:
     return nice_maxes[-1]
 
 
-def _filter_series(val, rows):
+def _filter_series(val, rows, all_rows):
     if isinstance(val, pd.Series):
-        idx = val.index.intersection(rows)
-        return val.loc[idx]
+        if val.index.difference(all_rows).empty:
+            # Series keyed by the base frame's rows: crop to the current
+            # panel's rows (faceting).
+            return val.loc[val.index.intersection(rows)]
+        # Stat-expanded series — more rows than the base frame (e.g. the
+        # dendrogram linkage layout): keep alignment; not index-filterable.
+        return val
     return val
 
 
@@ -886,6 +891,7 @@ class MatplotlibRenderer(BaseRenderer):
         ``affine + ax.transData``. Handlers themselves stay transform-blind.
         """
         rows = data.index
+        all_rows = spec.data.index
 
         data_idx = 0
         func_layers = []
@@ -897,7 +903,7 @@ class MatplotlibRenderer(BaseRenderer):
             filtered = LayerSpec(
                 geom=layer.geom,
                 stat=layer.stat,
-                visual_mapping={k: _filter_series(v, rows) for k, v in layer.visual_mapping.items()},
+                visual_mapping={k: _filter_series(v, rows, all_rows) for k, v in layer.visual_mapping.items()},
                 data_override=layer.data_override,
                 zorder=layer.zorder,
                 xlim=layer.xlim,
@@ -922,7 +928,7 @@ class MatplotlibRenderer(BaseRenderer):
             filtered = LayerSpec(
                 geom=layer.geom,
                 stat=layer.stat,
-                visual_mapping={k: _filter_series(v, rows) for k, v in layer.visual_mapping.items() if k != "x"},
+                visual_mapping={k: _filter_series(v, rows, all_rows) for k, v in layer.visual_mapping.items() if k != "x"},
                 zorder=layer.zorder,
                 xlim=layer.xlim,
                 ylim=layer.ylim,
@@ -1111,16 +1117,16 @@ class MatplotlibRenderer(BaseRenderer):
                 if layer.geom.name == "function_line":
                     continue
                 vm = layer.visual_mapping
-                x = _filter_series(vm.get("x"), rows)
-                y = _filter_series(vm.get("y"), rows)
+                x = _filter_series(vm.get("x"), rows, child.data.index)
+                y = _filter_series(vm.get("y"), rows, child.data.index)
                 if not isinstance(x, pd.Series):
-                    x = _filter_series(vm.get("x2"), rows)
+                    x = _filter_series(vm.get("x2"), rows, child.data.index)
                     if isinstance(x, pd.Series):
                         sec = parse_secondary_settings(child.settings).get("x")
                         if sec is not None:
                             x = x.map(sec.inv)
                 if not isinstance(y, pd.Series):
-                    y = _filter_series(vm.get("y2"), rows)
+                    y = _filter_series(vm.get("y2"), rows, child.data.index)
                     if isinstance(y, pd.Series):
                         sec = parse_secondary_settings(child.settings).get("y")
                         if sec is not None:
