@@ -175,3 +175,42 @@ class TestRadarTemplate:
     def test_default_settings(self):
         t = radar(mapping={"x": "axis", "y": "val"})
         assert t.default_settings["figsize"] == (8, 8)
+
+
+class TestLegacyAdapter:
+    def test_wraps_factory_into_existing_template(self):
+        from geofig_engine.engine.api import recipe_from
+        from geofig_engine.templates import histogram
+        from geofig_engine.templates.legacy import legacy_adapter
+
+        recipe = recipe_from(legacy_adapter(histogram)(mapping={"x": "x"}))
+        assert recipe.name == "histogram"
+        assert len(recipe.layers) >= 1
+
+    def test_forwards_factory_kwargs(self):
+        from geofig_engine.engine.api import recipe_from
+        from geofig_engine.templates import histogram
+        from geofig_engine.templates.legacy import legacy_adapter
+
+        recipe = recipe_from(
+            legacy_adapter(histogram)(mapping={"x": "x"}, bins=5)
+        )
+        stat = recipe.layers[0].stat
+        assert getattr(stat, "bins", None) == 5
+
+    def test_merges_settings_into_recipe_defaults(self):
+        from geofig_engine.engine.api import recipe_from
+        from geofig_engine.templates import bivariate
+        from geofig_engine.templates.legacy import legacy_adapter
+
+        recipe = recipe_from(
+            legacy_adapter(bivariate)(mapping={"x": "x", "y": "y"}, settings={"title": "T"})
+        )
+        assert recipe.default_settings["title"] == "T"
+
+    def test_spec_builder_result_rejected_with_guidance(self):
+        from geofig_engine.templates.legacy import legacy_adapter
+        from geofig_engine.templates.stiff import plot_stiff
+
+        with pytest.raises(TypeError, match="not registry-adaptable"):
+            legacy_adapter(plot_stiff)()

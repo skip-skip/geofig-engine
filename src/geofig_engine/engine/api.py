@@ -37,6 +37,9 @@ from geofig_engine.engine.generator import FigureGenerator
 from geofig_engine.provider import DataProvider, DataFrameProvider
 from geofig_engine.renderers.matplotlib.legend import LegendAccumulator
 from geofig_engine.templates.base import FigureTemplate
+from geofig_engine.templates.bivariate import bivariate_builder
+from geofig_engine.templates.boxplot_with_points import boxplot_with_points_builder
+from geofig_engine.templates.legacy import LEGACY_FACTORIES, legacy_adapter
 
 
 @dataclass(frozen=True)
@@ -128,6 +131,16 @@ def get_template(name: str) -> Callable[..., TemplateRecipe]:
 
 
 # ---------------------------------------------------------------------------
+# Seed the registry (15_wp6): the two pipeline builders + legacy adapters
+# ---------------------------------------------------------------------------
+
+TEMPLATES["bivariate"] = bivariate_builder
+TEMPLATES["boxplot_with_points"] = boxplot_with_points_builder
+for _template_key, _factory in LEGACY_FACTORIES.items():
+    TEMPLATES[_template_key] = legacy_adapter(_factory)
+
+
+# ---------------------------------------------------------------------------
 # render_template — canonical entry point
 # ---------------------------------------------------------------------------
 
@@ -164,13 +177,21 @@ def _apply_mapping_override(
 ) -> list[Layer]:
     """Merge a user ``mapping`` over each recipe layer's mapping (per-layer).
 
-    User channels override recipe channels; unmapped recipe channels are kept.
+    Only channels the layer already binds to a **data source** (a string
+    reference) are remapped, so scalar-literal channels on annotation layers
+    (e.g. the fixed zone text of the ARD ternary templates) are left intact —
+    matching the legacy behaviour where the mapping is bound to the data
+    layers only. Unmapped recipe channels are kept.
     """
     if not mapping:
         return layers
     overridden: list[Layer] = []
     for layer in layers:
-        overridden.append(replace(layer, mapping={**layer.mapping, **mapping}))
+        layer_mapping = dict(layer.mapping)
+        for channel, source in mapping.items():
+            if isinstance(layer_mapping.get(channel), str):
+                layer_mapping[channel] = source
+        overridden.append(replace(layer, mapping=layer_mapping))
     return overridden
 
 
