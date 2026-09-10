@@ -1,6 +1,6 @@
 # Phase 15: New render_template (canonical; list[Figure])
 
-**Status**: open
+**Status**: complete
 **Phase**: 15
 **Version target**: v0.2.0
 **Dependencies**: `15_wp2_template_registry`, `15_wp3_figure_generator`
