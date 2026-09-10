@@ -7,13 +7,20 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import pytest
 
-from geofig_engine.core.coord import CoordCartesian, CoordFlipped, CoordFixed, CoordPolar
+from geofig_engine.core.coord import CoordCartesian, CoordFlipped, CoordFixed, CoordGeo, CoordPolar
 from geofig_engine.core.facet import FacetGrid, FacetNull, FacetWrap
-from geofig_engine.core.geom import Geom, GeomArea, GeomBar, GeomBox, GeomErrorbar, GeomFunctionLine, GeomLine, GeomPoint, GeomRibbon, GeomStepLine, GeomText, GeomViolin
+from geofig_engine.core.geom import Geom, GeomArea, GeomBar, GeomBoundary, GeomBox, GeomErrorbar, GeomFunctionLine, GeomImageInset, GeomLabel, GeomLine, GeomPoint, GeomRibbon, GeomSitePoint, GeomStepLine, GeomText, GeomViolin
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.core.spec import FigureSpec
 from geofig_engine.core.stat import StatIdentity
 from geofig_engine.renderers import BaseRenderer, MatplotlibRenderer
+from geofig_engine.renderers.matplotlib.handlers import (
+    render_boundary,
+    render_geo_label,
+    render_image_inset,
+    render_site_point,
+)
+from geofig_engine.renderers.matplotlib.renderer import _GEOM_HANDLERS
 
 
 class DummyRenderer(BaseRenderer):
@@ -1259,3 +1266,157 @@ class TestPolarTextAlignment:
         assert txt.get_ha() == "left"
         assert txt.get_va() == "baseline"
         plt.close(fig)
+
+
+class TestGeoGeomHandlers:
+    def _spec(self, geom, vm, coord=None):
+        return FigureSpec(
+            data=pd.DataFrame(),
+            mappings={},
+            settings={},
+            context={},
+            template_name="custom",
+            coord=coord if coord is not None else CoordCartesian(),
+            layers=[LayerSpec(geom=geom, stat=StatIdentity(), visual_mapping=vm)],
+        )
+
+    def test_geo_geoms_registered(self):
+        for name in ("site_point", "boundary", "geo_label", "image_inset"):
+            assert name in _GEOM_HANDLERS
+
+    def test_supports_geo_geoms(self):
+        renderer = MatplotlibRenderer()
+        assert renderer.supports(
+            self._spec(GeomSitePoint(), {"x": pd.Series([1.0]), "y": pd.Series([2.0])})
+        ) is True
+        assert renderer.supports(
+            self._spec(GeomBoundary(), {"x": pd.Series([1.0]), "y": pd.Series([2.0])})
+        ) is True
+        assert renderer.supports(
+            self._spec(
+                GeomLabel(),
+                {"x": pd.Series([1.0]), "y": pd.Series([2.0]), "label": pd.Series(["a"])},
+            )
+        ) is True
+        assert renderer.supports(
+            self._spec(
+                GeomImageInset(),
+                {
+                    "x": pd.Series([1.0]),
+                    "y": pd.Series([2.0]),
+                    "image": pd.Series([np.zeros((4, 4))]),
+                },
+            )
+        ) is True
+
+    def test_render_site_point_with_coord_geo(self):
+        renderer = MatplotlibRenderer()
+        spec = self._spec(
+            GeomSitePoint(group="Facilities"),
+            {
+                "x": pd.Series([-122.4, -121.9]),
+                "y": pd.Series([37.8, 37.3]),
+                "color": pd.Series(["active", "inactive"]),
+            },
+            coord=CoordGeo(),
+        )
+        fig = renderer.render(spec)
+        coll = fig.axes[0].collections[0]
+        assert len(coll.get_offsets()) == 2
+        assert coll.get_label() == "Facilities"
+        plt.close(fig)
+
+    def test_render_boundary_closes_ring(self):
+        renderer = MatplotlibRenderer()
+        spec = self._spec(
+            GeomBoundary(edgecolor="navy", edgewidth=2.0),
+            {"x": pd.Series([0.0, 1.0, 1.0, 0.0]), "y": pd.Series([0.0, 0.0, 1.0, 1.0])},
+            coord=CoordGeo(),
+        )
+        fig = renderer.render(spec)
+        line = fig.axes[0].lines[0]
+        assert len(line.get_xdata()) == 5  # 4 vertices + closing vertex
+        assert line.get_color() == "navy"
+        plt.close(fig)
+
+    def test_render_boundary_multipart_keeps_nan_gaps(self):
+        renderer = MatplotlibRenderer()
+        spec = self._spec(
+            GeomBoundary(),
+            {
+                "x": pd.Series([0.0, 1.0, np.nan, 3.0, 4.0]),
+                "y": pd.Series([0.0, 1.0, np.nan, 1.0, 2.0]),
+            },
+        )
+        fig = renderer.render(spec)
+        line = fig.axes[0].lines[0]
+        assert len(line.get_xdata()) == 5  # NaN gap, no closing vertex appended
+        plt.close(fig)
+
+    def test_render_geo_label(self):
+        renderer = MatplotlibRenderer()
+        spec = self._spec(
+            GeomLabel(size=14, rotation=-30),
+            {
+                "x": pd.Series([1.0, 2.0]),
+                "y": pd.Series([3.0, 4.0]),
+                "label": pd.Series(["Site A", "Site B"]),
+            },
+            coord=CoordGeo(),
+        )
+        fig = renderer.render(spec)
+        assert [t.get_text() for t in fig.axes[0].texts] == ["Site A", "Site B"]
+        assert fig.axes[0].texts[0].get_fontsize() == 14
+        plt.close(fig)
+
+    def test_render_image_inset(self):
+        renderer = MatplotlibRenderer()
+        img = np.zeros((8, 8, 4))
+        img[..., 2] = 1.0
+        spec = self._spec(
+            GeomImageInset(zoom=0.5),
+            {
+                "x": pd.Series([1.0, 2.0]),
+                "y": pd.Series([3.0, 4.0]),
+                "image": pd.Series([img, img]),
+            },
+            coord=CoordGeo(),
+        )
+        fig = renderer.render(spec)
+        assert len(fig.axes[0].artists) == 2  # one AnnotationBbox per anchor
+        plt.close(fig)
+
+    def test_render_image_inset_rejects_1d_image(self):
+        renderer = MatplotlibRenderer()
+        spec = self._spec(
+            GeomImageInset(),
+            {
+                "x": pd.Series([1.0]),
+                "y": pd.Series([3.0]),
+                "image": pd.Series([np.zeros(4)]),
+            },
+        )
+        with pytest.raises(ValueError, match="2-D/3-D"):
+            renderer.render(spec)
+
+    @pytest.mark.parametrize(
+        "handler,geom",
+        [
+            (render_site_point, GeomSitePoint()),
+            (render_boundary, GeomBoundary()),
+            (render_geo_label, GeomLabel()),
+            (render_image_inset, GeomImageInset()),
+        ],
+    )
+    def test_unsupported_polar_returns_not_implemented(self, handler, geom):
+        vm = {"x": pd.Series([1.0, 2.0]), "y": pd.Series([3.0, 4.0])}
+        if geom.name == "geo_label":
+            vm["label"] = pd.Series(["a", "b"])
+        if geom.name == "image_inset":
+            vm["image"] = pd.Series([np.zeros((4, 4)), np.zeros((4, 4))])
+        layer = LayerSpec(geom=geom, stat=StatIdentity(), visual_mapping=vm)
+        fig, ax = plt.subplots()
+        try:
+            assert handler(ax, layer, 1, coord=CoordPolar()) is NotImplemented
+        finally:
+            plt.close(fig)

@@ -13,6 +13,10 @@ from geofig_engine.core.geom import (
     GeomBox,
     GeomViolin,
     GeomStepLine,
+    GeomSitePoint,
+    GeomBoundary,
+    GeomLabel,
+    GeomImageInset,
     Channel,
 )
 
@@ -196,3 +200,124 @@ class TestGeomBarPosition:
     def test_rejects_invalid_position(self):
         with pytest.raises(ValueError, match="position must be"):
             GeomBar(position="dodge")
+
+
+class TestGeomSitePoint:
+    def test_defaults(self):
+        g = GeomSitePoint()
+        assert g.name == "site_point"
+        assert "x" in g.required_channels and "y" in g.required_channels
+        assert {"color", "shape", "size", "label", "alpha"} <= set(g.optional_channels)
+        assert g.group == "Sites"
+
+    def test_custom_group(self):
+        assert GeomSitePoint(group="Sample Points").group == "Sample Points"
+
+    def test_invalid_group_raises(self):
+        with pytest.raises(ValueError, match="group"):
+            GeomSitePoint(group="")
+
+    def test_channels_are_valid(self):
+        g = GeomSitePoint()
+        valid = {c.value for c in Channel}
+        assert (set(g.required_channels) | set(g.optional_channels)) <= valid
+
+
+class TestGeomBoundary:
+    def test_defaults(self):
+        g = GeomBoundary()
+        assert g.name == "boundary"
+        assert g.edgecolor == "black"
+        assert g.edgealpha is None
+        assert g.edgewidth == 0.5
+        assert g.edgestyle == "-"
+        assert "x" in g.required_channels and "y" in g.required_channels
+
+    def test_custom_edges(self):
+        g = GeomBoundary(
+            edgecolor="navy", edgealpha=0.4, edgewidth=2.0, edgestyle="dashed"
+        )
+        assert (g.edgecolor, g.edgealpha, g.edgewidth, g.edgestyle) == (
+            "navy",
+            0.4,
+            2.0,
+            "dashed",
+        )
+
+    def test_invalid_edge_params_raise(self):
+        with pytest.raises(ValueError, match="edgewidth"):
+            GeomBoundary(edgewidth=0)
+        with pytest.raises(ValueError, match="edgestyle"):
+            GeomBoundary(edgestyle="wiggly")
+
+    def test_channels_are_valid(self):
+        g = GeomBoundary()
+        valid = {c.value for c in Channel}
+        assert (set(g.required_channels) | set(g.optional_channels)) <= valid
+
+
+class TestGeomLabel:
+    def test_defaults(self):
+        g = GeomLabel()
+        assert g.name == "geo_label"
+        assert g.size == 10
+        assert g.rotation == 0.0
+        assert "label" in g.required_channels
+
+    def test_custom_params(self):
+        g = GeomLabel(size=14, rotation=-30)
+        assert g.size == 14
+        assert g.rotation == -30
+
+    def test_invalid_params_raise(self):
+        with pytest.raises(ValueError, match="size"):
+            GeomLabel(size=-1)
+        with pytest.raises(ValueError, match="rotation"):
+            GeomLabel(rotation="tilted")  # type: ignore[arg-type]
+
+
+class TestGeomImageInset:
+    def test_defaults(self):
+        g = GeomImageInset()
+        assert g.name == "image_inset"
+        assert "image" in g.required_channels
+        assert g.zoom == 0.1
+
+    def test_custom_zoom(self):
+        assert GeomImageInset(zoom=0.5).zoom == 0.5
+
+    def test_invalid_zoom_raises(self):
+        with pytest.raises(ValueError, match="zoom"):
+            GeomImageInset(zoom=0.0)
+
+
+class TestGeoGeomSerialization:
+    def test_site_point_group_roundtrip(self):
+        from geofig_engine.serialize.converters import geom_from_dict, geom_to_dict
+
+        g = GeomSitePoint(group="Sample Points")
+        assert geom_from_dict(geom_to_dict(g)) == g
+        assert geom_from_dict(geom_to_dict(GeomSitePoint())) == GeomSitePoint()
+
+    def test_boundary_edges_roundtrip(self):
+        from geofig_engine.serialize.converters import geom_from_dict, geom_to_dict
+
+        g = GeomBoundary(
+            edgecolor="navy", edgealpha=0.4, edgewidth=2.0, edgestyle="dashed"
+        )
+        assert geom_from_dict(geom_to_dict(g)) == g
+        assert geom_from_dict(geom_to_dict(GeomBoundary())) == GeomBoundary()
+
+    def test_label_params_roundtrip(self):
+        from geofig_engine.serialize.converters import geom_from_dict, geom_to_dict
+
+        g = GeomLabel(size=14, rotation=-30)
+        assert geom_from_dict(geom_to_dict(g)) == g
+        assert geom_from_dict(geom_to_dict(GeomLabel())) == GeomLabel()
+
+    def test_image_inset_zoom_roundtrip(self):
+        from geofig_engine.serialize.converters import geom_from_dict, geom_to_dict
+
+        g = GeomImageInset(zoom=0.5)
+        assert geom_from_dict(geom_to_dict(g)) == g
+        assert geom_from_dict(geom_to_dict(GeomImageInset())) == GeomImageInset()

@@ -17,6 +17,10 @@ dev = [
     "pytest",
     "pytest-cov",
 ]
+geo = [
+    "pyproj>=3.4",
+    "pyshp>=2.0",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

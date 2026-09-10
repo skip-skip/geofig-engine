@@ -1,6 +1,6 @@
 # Phase 15: CoordGeo + geo geoms + handlers + [geo] extra
 
-**Status**: open
+**Status**: complete
 **Phase**: 15
 **Version target**: v0.2.0
 **Dependencies**: `15_wp1_provider_contract`, `15_wp3_figure_generator`

@@ -9,6 +9,7 @@ the spec-building pipeline.
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -230,4 +231,132 @@ class TernaryCoord(Coord):
         vm["y"] = pd.Series(y, index=frame.index)
         for ch in self.channels:
             del vm[ch]
+        return vm
+
+
+# ---------------------------------------------------------------------------
+# Geographic coordinate (Phase 15, wp8)
+# ---------------------------------------------------------------------------
+
+WGS84 = "EPSG:4326"
+"""Default geographic CRS — lon/lat, for which no projection is applied."""
+
+
+def _import_geo_transformer():
+    """Return the ``pyproj.Transformer`` callable, or None without [geo]."""
+    try:
+        from pyproj import Transformer  # type: ignore[import-not-found]
+
+        return Transformer
+    except ImportError:
+        return None
+
+
+def _validate_bounds(bounds) -> tuple[float, float, float, float]:
+    if not isinstance(bounds, (tuple, list)) or len(bounds) != 4:
+        raise ValueError(
+            f"bounds must be a 4-tuple (min_lon, min_lat, max_lon, max_lat), "
+            f"got {bounds!r}"
+        )
+    vals: list[float] = []
+    for v in bounds:
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError(f"bounds entries must be real numbers, got {bounds!r}")
+        vals.append(float(v))
+    if vals[0] >= vals[2] or vals[1] >= vals[3]:
+        raise ValueError(
+            "bounds must satisfy min_lon < max_lon and min_lat < max_lat, "
+            f"got {bounds!r}"
+        )
+    return tuple(vals)
+
+
+@dataclass(frozen=True)
+class CoordGeo(Coord):
+    """Geographic coordinate system: lon/lat -> projected CRS.
+
+    The data is assumed to be WGS84 lon/lat. ``crs`` declares the figure's
+    output CRS (default ``WGS84`` — identity, no projection). When a non-WGS84
+    ``crs`` is requested, :meth:`transform_visual_mapping` projects lon/lat
+    into that CRS via the ``[geo]`` extra (pyproj); without it the mapping
+    falls back to an identity (lon/lat -> x/y) projection with a clear note.
+    ``bounds`` (in ``bounds_crs``, defaulting to ``crs``) and ``aspect`` are
+    declared and validated here; their axis-level application is M2 polish.
+    """
+
+    crs: str = WGS84
+    bounds: tuple[float, float, float, float] | None = None
+    bounds_crs: str | None = None
+    aspect: float | None = None
+
+    def __init__(
+        self,
+        crs: str = WGS84,
+        bounds: tuple[float, float, float, float] | None = None,
+        bounds_crs: str | None = None,
+        aspect: float | None = None,
+    ) -> None:
+        if not isinstance(crs, str) or not crs.strip():
+            raise ValueError(f"crs must be a non-empty CRS string, got {crs!r}")
+        if bounds is not None:
+            bounds = _validate_bounds(bounds)
+            if bounds_crs is None:
+                bounds_crs = crs
+            if not isinstance(bounds_crs, str) or not bounds_crs.strip():
+                raise ValueError(
+                    f"bounds_crs must be a non-empty CRS string, got {bounds_crs!r}"
+                )
+        if aspect is not None and (
+            isinstance(aspect, bool)
+            or not isinstance(aspect, (int, float))
+            or aspect <= 0
+        ):
+            raise ValueError(
+                f"aspect must be a positive real number or None, got {aspect!r}"
+            )
+        object.__setattr__(self, "crs", crs)
+        object.__setattr__(self, "bounds", bounds)
+        object.__setattr__(self, "bounds_crs", bounds_crs)
+        object.__setattr__(self, "aspect", float(aspect) if aspect is not None else None)
+        params: dict[str, Any] = {"crs": crs}
+        if bounds is not None:
+            params["bounds"] = list(bounds)
+            params["bounds_crs"] = bounds_crs
+        if aspect is not None:
+            params["aspect"] = float(aspect)
+        super().__init__(name="geo", params=params)
+
+    def aspect_ratio(self) -> float | None:
+        return self.aspect
+
+    def transform_visual_mapping(self, visual_mapping: dict, geom: Any) -> dict:
+        """Project lon/lat ``x``/``y`` into ``crs``; identity fallback without pyproj."""
+        x = visual_mapping.get("x")
+        y = visual_mapping.get("y")
+        if self.crs == WGS84 or x is None or y is None:
+            return dict(visual_mapping)
+        Transformer = _import_geo_transformer()
+        if Transformer is None:
+            warnings.warn(
+                "pyproj is not installed; CoordGeo falls back to an identity "
+                f"(lon/lat -> x/y) projection for crs={self.crs!r}. Install the "
+                "'[geo]' extra for projected output.",
+                UserWarning,
+                stacklevel=3,
+            )
+            return dict(visual_mapping)
+
+        vm = dict(visual_mapping)
+        x_vals = x.values if isinstance(x, pd.Series) else np.asarray(x)
+        y_vals = y.values if isinstance(y, pd.Series) else np.asarray(y)
+        transformer = Transformer.from_crs(WGS84, self.crs, always_xy=True)
+        px, py = transformer.transform(
+            np.asarray(x_vals, dtype=float), np.asarray(y_vals, dtype=float)
+        )
+        if isinstance(x, pd.Series):
+            vm["x"] = pd.Series(np.asarray(px), index=x.index)
+            vm["y"] = pd.Series(np.asarray(py), index=y.index)
+        else:
+            vm["x"] = np.asarray(px)
+            vm["y"] = np.asarray(py)
         return vm

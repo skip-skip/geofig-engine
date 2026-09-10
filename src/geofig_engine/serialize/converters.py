@@ -18,15 +18,19 @@ from geofig_engine.core.geom import (
     GeomAbline,
     GeomArea,
     GeomBar,
+    GeomBoundary,
     GeomBox,
     GeomErrorbar,
     GeomFunctionLine,
     GeomHSpan,
+    GeomImageInset,
+    GeomLabel,
     GeomLine,
     GeomPoint,
     GeomPolygon,
     GeomRect,
     GeomRibbon,
+    GeomSitePoint,
     GeomStepLine,
     GeomText,
     GeomViolin,
@@ -37,8 +41,10 @@ from geofig_engine.core.coord import (
     CoordCartesian,
     CoordFlipped,
     CoordFixed,
+    CoordGeo,
     CoordPolar,
     TernaryCoord,
+    WGS84,
 )
 from geofig_engine.core.facet import (
     Facet,
@@ -166,6 +172,26 @@ def geom_to_dict(geom: Geom) -> dict:
             base["edgewidth"] = geom.edgewidth
         if geom.edgestyle != "-":
             base["edgestyle"] = geom.edgestyle
+    elif isinstance(geom, GeomSitePoint):
+        if geom.group != "Sites":
+            base["group"] = geom.group
+    elif isinstance(geom, GeomBoundary):
+        if geom.edgecolor != "black":
+            base["edgecolor"] = geom.edgecolor
+        if geom.edgealpha is not None:
+            base["edgealpha"] = geom.edgealpha
+        if geom.edgewidth != 0.5:
+            base["edgewidth"] = geom.edgewidth
+        if geom.edgestyle != "-":
+            base["edgestyle"] = geom.edgestyle
+    elif isinstance(geom, GeomLabel):
+        if geom.size != 10.0:
+            base["size"] = geom.size
+        if geom.rotation != 0.0:
+            base["rotation"] = geom.rotation
+    elif isinstance(geom, GeomImageInset):
+        if geom.zoom != 0.1:
+            base["zoom"] = geom.zoom
     return base
 
 
@@ -221,6 +247,22 @@ def geom_from_dict(data: dict) -> Geom:
         return GeomStepLine(
             where=data.get("where", "pre"),
         )
+    elif geom_type == "site_point":
+        return GeomSitePoint(group=data.get("group", "Sites"))
+    elif geom_type == "boundary":
+        return GeomBoundary(
+            edgecolor=data.get("edgecolor", "black"),
+            edgealpha=data.get("edgealpha"),
+            edgewidth=data.get("edgewidth", 0.5),
+            edgestyle=data.get("edgestyle", "-"),
+        )
+    elif geom_type == "geo_label":
+        return GeomLabel(
+            size=data.get("size", 10.0),
+            rotation=data.get("rotation", 0.0),
+        )
+    elif geom_type == "image_inset":
+        return GeomImageInset(zoom=data.get("zoom", 0.1))
     elif geom_type == "abline":
         if "slope" in data:
             return GeomAbline(
@@ -267,6 +309,15 @@ def coord_from_dict(data: dict) -> Coord:
             channels=tuple(params.get("channels", ("a", "b", "c"))),
             handedness=params.get("handedness", "left"),
             labels=None if labels is None else tuple(labels),
+        )
+    elif name == "geo":
+        return CoordGeo(
+            crs=params.get("crs", WGS84),
+            bounds=(
+                tuple(params["bounds"]) if params.get("bounds") is not None else None
+            ),
+            bounds_crs=params.get("bounds_crs"),
+            aspect=params.get("aspect"),
         )
     else:
         raise ValueError(f"Unknown coord type: {name}")

@@ -898,4 +898,205 @@ def render_step_line(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) ->
     ax.plot(x_vals, y_vals, **kwargs)
 
 
+# ---------------------------------------------------------------------------
+# Geo handlers (Phase 15, wp8): geometry/image geoms for CoordGeo figures.
+# ---------------------------------------------------------------------------
+
+
+def render_site_point(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
+    if isinstance(coord, CoordPolar):
+        return NotImplemented
+    x = layer_spec.visual_mapping.get("x")
+    y = layer_spec.visual_mapping.get("y")
+    if x is None or y is None:
+        raise ValueError("GeomSitePoint requires both x and y channels")
+
+    geom = layer_spec.geom  # GeomSitePoint
+    color = layer_spec.visual_mapping.get("color")
+    shape = layer_spec.visual_mapping.get("shape")
+    size = layer_spec.visual_mapping.get("size")
+    alpha = layer_spec.visual_mapping.get("alpha")
+    label = layer_spec.visual_mapping.get("label")
+
+    x_vals = x.values if isinstance(x, pd.Series) else np.asarray(x)
+    y_vals = y.values if isinstance(y, pd.Series) else np.asarray(y)
+    if len(x_vals) == 0:
+        return
+
+    base_kwargs: dict[str, Any] = {
+        "zorder": order,
+        "s": 50,
+        "edgecolors": "black",
+        "linewidths": 0.5,
+    }
+    # Legend group label: an explicit constant label channel wins, else the
+    # geom's group name (grouped site-map legends build on it later).
+    if label is not None:
+        lab = _resolve_constant(label) if isinstance(label, pd.Series) else label
+        if isinstance(lab, str):
+            base_kwargs["label"] = lab
+    else:
+        base_kwargs["label"] = geom.group
+
+    resolved_color = resolve_color_series(color) if color is not None else None
+    resolved_marker = resolve_marker_series(shape) if shape is not None else None
+    resolved_size = size.values if isinstance(size, pd.Series) else size
+    resolved_alpha = None
+    if alpha is not None:
+        resolved_alpha = _resolve_constant(alpha) if isinstance(alpha, pd.Series) else alpha
+        if resolved_alpha is not None:
+            resolved_alpha = float(resolved_alpha)
+
+    if resolved_marker is not None and isinstance(resolved_marker, pd.Series) and resolved_marker.nunique() > 1:
+        for mkr in resolved_marker.unique():
+            mask = resolved_marker == mkr
+            kwargs = dict(base_kwargs)
+            kwargs["marker"] = mkr
+            if resolved_color is not None:
+                c_vals = resolved_color[mask] if isinstance(resolved_color, pd.Series) else resolved_color
+                kwargs["c"] = c_vals.values if isinstance(c_vals, pd.Series) else c_vals
+            if resolved_size is not None:
+                s_vals = resolved_size[mask] if isinstance(resolved_size, (pd.Series, np.ndarray)) else resolved_size
+                kwargs["s"] = s_vals.values if isinstance(s_vals, pd.Series) else s_vals
+            if resolved_alpha is not None:
+                kwargs["alpha"] = resolved_alpha
+            ax.scatter(x_vals[mask.values], y_vals[mask.values], **kwargs)
+    else:
+        kwargs = dict(base_kwargs)
+        if resolved_color is not None:
+            kwargs["c"] = resolved_color.values if isinstance(resolved_color, pd.Series) else resolved_color
+        if resolved_size is not None:
+            kwargs["s"] = resolved_size
+        if resolved_marker is not None:
+            m = resolved_marker.iloc[0] if isinstance(resolved_marker, pd.Series) else resolved_marker
+            kwargs["marker"] = m
+        if resolved_alpha is not None:
+            kwargs["alpha"] = resolved_alpha
+        ax.scatter(x_vals, y_vals, **kwargs)
+
+
+def render_boundary(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
+    if isinstance(coord, CoordPolar):
+        return NotImplemented
+    x = layer_spec.visual_mapping.get("x")
+    y = layer_spec.visual_mapping.get("y")
+    if x is None or y is None:
+        raise ValueError("GeomBoundary requires both x and y channels")
+
+    geom = layer_spec.geom  # GeomBoundary
+    x_vals = np.asarray(x.values if isinstance(x, pd.Series) else x, dtype=float)
+    y_vals = np.asarray(y.values if isinstance(y, pd.Series) else y, dtype=float)
+    if len(x_vals) < 3 or len(y_vals) < 3:
+        return
+
+    kwargs: dict[str, Any] = {"zorder": order}
+    color = layer_spec.visual_mapping.get("color")
+    if color is not None:
+        resolved = resolve_color_series(color)
+        kwargs["color"] = _resolve_constant(resolved) if isinstance(resolved, pd.Series) else resolved
+    else:
+        kwargs["color"] = (
+            to_rgba(geom.edgecolor, geom.edgealpha)
+            if geom.edgealpha is not None
+            else geom.edgecolor
+        )
+    kwargs["linestyle"] = geom.edgestyle
+    kwargs["linewidth"] = geom.edgewidth
+    alpha = layer_spec.visual_mapping.get("alpha")
+    if alpha is not None:
+        alpha_val = _resolve_constant(alpha) if isinstance(alpha, pd.Series) else alpha
+        if alpha_val is not None:
+            kwargs["alpha"] = float(alpha_val)
+
+    # NaN-separated multipart paths stay open (matplotlib breaks at NaN);
+    # otherwise close the ring for a continuous outline.
+    has_nan = bool(np.isnan(x_vals).any() or np.isnan(y_vals).any())
+    if not has_nan:
+        x_vals = np.append(x_vals, x_vals[0])
+        y_vals = np.append(y_vals, y_vals[0])
+    ax.plot(x_vals, y_vals, **kwargs)
+
+
+def render_geo_label(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
+    if isinstance(coord, CoordPolar):
+        return NotImplemented
+    x = layer_spec.visual_mapping.get("x")
+    y = layer_spec.visual_mapping.get("y")
+    label = layer_spec.visual_mapping.get("label")
+    if x is None or y is None or label is None:
+        raise ValueError("GeomLabel requires x, y, and label channels")
+
+    geom = layer_spec.geom  # GeomLabel
+    color = layer_spec.visual_mapping.get("color")
+    alpha = layer_spec.visual_mapping.get("alpha")
+
+    x_vals = x.values if isinstance(x, pd.Series) else [x]
+    y_vals = y.values if isinstance(y, pd.Series) else [y]
+    labels = label.values if isinstance(label, pd.Series) else [label]
+
+    for i in range(len(x_vals)):
+        kw: dict[str, Any] = {
+            "zorder": order,
+            "fontsize": geom.size,
+            "rotation": geom.rotation,
+            "ha": "center",
+            "va": "center",
+        }
+        if color is not None:
+            c = color.values[i] if isinstance(color, pd.Series) else color
+            kw["color"] = c
+        if alpha is not None:
+            a = alpha.values[i] if isinstance(alpha, pd.Series) else alpha
+            kw["alpha"] = float(a)
+        ax.text(x_vals[i], y_vals[i], str(labels[i]), **kw)
+
+
+def render_image_inset(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -> None:
+    if isinstance(coord, CoordPolar):
+        return NotImplemented
+    x = layer_spec.visual_mapping.get("x")
+    y = layer_spec.visual_mapping.get("y")
+    image = layer_spec.visual_mapping.get("image")
+    if x is None or y is None or image is None:
+        raise ValueError("GeomImageInset requires x, y, and image channels")
+
+    geom = layer_spec.geom  # GeomImageInset
+    from matplotlib.offsetbox import AnnotationBbox, OffsetImage
+
+    x_vals = x.values if isinstance(x, pd.Series) else [x]
+    y_vals = y.values if isinstance(y, pd.Series) else [y]
+    if isinstance(image, pd.Series):
+        images = list(image.values)
+    elif isinstance(image, np.ndarray) and image.ndim in (2, 3):
+        images = [image] * len(x_vals)
+    elif isinstance(image, (list, tuple)):
+        images = list(image)
+        if len(images) == 1 and len(x_vals) > 1:
+            images = images * len(x_vals)
+    else:
+        images = [image] * len(x_vals)
+    if len(images) < len(x_vals):
+        raise ValueError(
+            "image channel must provide one 2-D/3-D array per anchor point "
+            f"(got {len(images)} for {len(x_vals)} anchors)"
+        )
+
+    for i in range(len(x_vals)):
+        img = np.asarray(images[i])
+        if img.ndim not in (2, 3):
+            raise ValueError(
+                f"image channel entries must be 2-D/3-D arrays, got {img.ndim}-D"
+            )
+        offset_kwargs: dict[str, Any] = {"zoom": geom.zoom}
+        if img.ndim == 2:
+            offset_kwargs["cmap"] = "gray"
+        box = AnnotationBbox(
+            OffsetImage(img, **offset_kwargs),
+            (x_vals[i], y_vals[i]),
+            frameon=False,
+            zorder=order,
+        )
+        ax.add_artist(box)
+
+
 

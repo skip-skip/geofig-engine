@@ -19,6 +19,7 @@ class Channel(Enum):
     Y2 = "y2"
     COLOR = "color"
     MARKER = "marker"
+    SHAPE = "shape"
     SIZE = "size"
     STYLE = "style"
     ALPHA = "alpha"
@@ -31,6 +32,7 @@ class Channel(Enum):
     XMAX = "xmax"
     ANGLE = "angle"
     BBOX = "bbox"
+    IMAGE = "image"
 
 
 @dataclass(frozen=True)
@@ -121,6 +123,37 @@ class GeomArea(Geom):
 _VALID_EDGE_STYLES = {"solid", "dashed", "dashdot", "dotted", "-", "--", "-.", ":"}
 
 
+def _normalize_edge_params(
+    edgecolor: str,
+    edgealpha: float | None,
+    edgewidth: float,
+    edgestyle: str,
+) -> tuple[str, float | None, float, str]:
+    """Validate and coerce polygon/boundary edge parameters (shared machinery)."""
+    if not isinstance(edgecolor, str) or not edgecolor:
+        raise ValueError(f"edgecolor must be a non-empty string, got {edgecolor!r}")
+    if edgealpha is not None and (
+        isinstance(edgealpha, bool) or not isinstance(edgealpha, (int, float))
+    ):
+        raise ValueError(f"edgealpha must be a real number or None, got {edgealpha!r}")
+    if (
+        isinstance(edgewidth, bool)
+        or not isinstance(edgewidth, (int, float))
+        or edgewidth <= 0
+    ):
+        raise ValueError(f"edgewidth must be a positive real number, got {edgewidth!r}")
+    if edgestyle not in _VALID_EDGE_STYLES:
+        raise ValueError(
+            f"edgestyle must be one of {sorted(_VALID_EDGE_STYLES)}, got {edgestyle!r}"
+        )
+    return (
+        edgecolor,
+        float(edgealpha) if edgealpha is not None else None,
+        float(edgewidth),
+        edgestyle,
+    )
+
+
 @dataclass(frozen=True)
 class GeomPolygon(Geom):
     edgecolor: str = "black"
@@ -135,27 +168,12 @@ class GeomPolygon(Geom):
         edgewidth: float = 0.5,
         edgestyle: str = "-",
     ) -> None:
-        if not isinstance(edgecolor, str) or not edgecolor:
-            raise ValueError(f"edgecolor must be a non-empty string, got {edgecolor!r}")
-        if edgealpha is not None and (
-            isinstance(edgealpha, bool) or not isinstance(edgealpha, (int, float))
-        ):
-            raise ValueError(f"edgealpha must be a real number or None, got {edgealpha!r}")
-        if (
-            isinstance(edgewidth, bool)
-            or not isinstance(edgewidth, (int, float))
-            or edgewidth <= 0
-        ):
-            raise ValueError(f"edgewidth must be a positive real number, got {edgewidth!r}")
-        if edgestyle not in _VALID_EDGE_STYLES:
-            raise ValueError(
-                f"edgestyle must be one of {sorted(_VALID_EDGE_STYLES)}, got {edgestyle!r}"
-            )
-        object.__setattr__(self, "edgecolor", edgecolor)
-        object.__setattr__(
-            self, "edgealpha", float(edgealpha) if edgealpha is not None else None
+        edgecolor, edgealpha, edgewidth, edgestyle = _normalize_edge_params(
+            edgecolor, edgealpha, edgewidth, edgestyle
         )
-        object.__setattr__(self, "edgewidth", float(edgewidth))
+        object.__setattr__(self, "edgecolor", edgecolor)
+        object.__setattr__(self, "edgealpha", edgealpha)
+        object.__setattr__(self, "edgewidth", edgewidth)
         object.__setattr__(self, "edgestyle", edgestyle)
         super().__init__(
             name="polygon",
@@ -330,4 +348,103 @@ class GeomRect(Geom):
             name="rect",
             required_channels=("xmin", "xmax", "ymin", "ymax"),
             optional_channels=("color", "alpha"),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Geo geoms (Phase 15, wp8)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class GeomSitePoint(Geom):
+    """Site point on a geo figure: lon/lat ``x``/``y`` plus color/shape/size.
+
+    ``group`` is the legend label used when no explicit ``label`` channel is
+    mapped (grouped site-map legends build on it in later work packages).
+    """
+
+    group: str = "Sites"
+
+    def __init__(self, group: str = "Sites") -> None:
+        if not isinstance(group, str) or not group.strip():
+            raise ValueError(f"group must be a non-empty string, got {group!r}")
+        object.__setattr__(self, "group", group)
+        super().__init__(
+            name="site_point",
+            required_channels=("x", "y"),
+            optional_channels=("color", "shape", "size", "label", "alpha"),
+        )
+
+
+@dataclass(frozen=True)
+class GeomBoundary(Geom):
+    """Closed polygon outline from a ``x``/``y`` path (edge machinery shared
+    with :class:`GeomPolygon`)."""
+
+    edgecolor: str = "black"
+    edgealpha: float | None = None
+    edgewidth: float = 0.5
+    edgestyle: str = "-"
+
+    def __init__(
+        self,
+        edgecolor: str = "black",
+        edgealpha: float | None = None,
+        edgewidth: float = 0.5,
+        edgestyle: str = "-",
+    ) -> None:
+        edgecolor, edgealpha, edgewidth, edgestyle = _normalize_edge_params(
+            edgecolor, edgealpha, edgewidth, edgestyle
+        )
+        object.__setattr__(self, "edgecolor", edgecolor)
+        object.__setattr__(self, "edgealpha", edgealpha)
+        object.__setattr__(self, "edgewidth", edgewidth)
+        object.__setattr__(self, "edgestyle", edgestyle)
+        super().__init__(
+            name="boundary",
+            required_channels=("x", "y"),
+            optional_channels=("color", "alpha"),
+        )
+
+
+@dataclass(frozen=True)
+class GeomLabel(Geom):
+    """Geo label text at ``x``/``y`` with a ``label`` channel; the geometry
+    carries default ``size``/``rotation`` params (unlike the per-point
+    channels of :class:`GeomText`)."""
+
+    size: float = 10.0
+    rotation: float = 0.0
+
+    def __init__(self, size: float = 10.0, rotation: float = 0.0) -> None:
+        if isinstance(size, bool) or not isinstance(size, (int, float)) or size <= 0:
+            raise ValueError(f"size must be a positive real number, got {size!r}")
+        if isinstance(rotation, bool) or not isinstance(rotation, (int, float)):
+            raise ValueError(f"rotation must be a real number, got {rotation!r}")
+        object.__setattr__(self, "size", float(size))
+        object.__setattr__(self, "rotation", float(rotation))
+        super().__init__(
+            name="geo_label",
+            required_channels=("x", "y", "label"),
+            optional_channels=("color", "alpha"),
+        )
+
+
+@dataclass(frozen=True)
+class GeomImageInset(Geom):
+    """``OffsetImage``-style inset anchored at ``x``/``y``; the ``image``
+    channel resolves to a 2-D/3-D array (per row or constant) and ``zoom``
+    controls the display scale."""
+
+    zoom: float = 0.1
+
+    def __init__(self, zoom: float = 0.1) -> None:
+        if isinstance(zoom, bool) or not isinstance(zoom, (int, float)) or zoom <= 0:
+            raise ValueError(f"zoom must be a positive real number, got {zoom!r}")
+        object.__setattr__(self, "zoom", float(zoom))
+        super().__init__(
+            name="image_inset",
+            required_channels=("x", "y", "image"),
+            optional_channels=(),
         )
