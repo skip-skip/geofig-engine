@@ -41,6 +41,7 @@ from geofig_engine.templates.bivariate import bivariate_builder
 from geofig_engine.templates.boxplot_with_points import boxplot_with_points_builder
 from geofig_engine.templates.dendrogram import dendrogram_builder
 from geofig_engine.templates.legacy import LEGACY_FACTORIES, legacy_adapter
+from geofig_engine.templates.particle_overlay import particle_overlay_builder
 from geofig_engine.templates.site_map import site_map_builder
 
 
@@ -139,6 +140,7 @@ def get_template(name: str) -> Callable[..., TemplateRecipe]:
 TEMPLATES["bivariate"] = bivariate_builder
 TEMPLATES["boxplot_with_points"] = boxplot_with_points_builder
 TEMPLATES["dendrogram"] = dendrogram_builder
+TEMPLATES["particle_overlay"] = particle_overlay_builder
 TEMPLATES["site_map"] = site_map_builder
 for _template_key, _factory in LEGACY_FACTORIES.items():
     TEMPLATES[_template_key] = legacy_adapter(_factory)
