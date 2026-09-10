@@ -61,22 +61,23 @@ Entry points:
 
 ### Implementation status (documented plan ahead of code)
 
-The API changes below are the **agreed target design**. They are captured
-here before implementation so downstream packages (`geochemmodel`,
-workflows) can be written against the contract:
+The API changes below were the **agreed target design**, captured ahead of
+implementation so downstream packages (`geochemmodel`, workflows) could be
+written against the contract. Every M1 row is now **shipped in v0.2.0**:
 
 | Piece | Status |
 | --- | --- |
-| `DataProvider` / `DataFrameProvider` / `DatasetProvider` | planned (provider.py) |
-| New `render_template` (figures return, optional args) | planned (engine/api.py) |
-| `render_template_legacy` (old entry, warns) | planned (engine/api.py) |
-| `TEMPLATES` registry + `register_template` | planned |
-| `FigureGenerator` (provider-driven) | planned (engine/generator.py) |
-| Geoms: site point, label, boundary, annotation-inset, image | planned |
-| `CoordGeo` + `[geo]` extra | planned |
-| Templates `dendrogram`, `site_map`, `particle_overlay` | planned |
-| Deprecated shims with import-time warnings | planned (deprecated.py) |
-| DEM contour / stream geoms, basemap tiles | deferred |
+| `DataProvider` / `DataFrameProvider` / `DatasetProvider` | implemented (provider.py) |
+| New `render_template` (figures return, optional args) | implemented (engine/api.py) |
+| `render_template_legacy` (old entry, warns) | implemented (engine/api.py) |
+| `TEMPLATES` registry + `register_template` | implemented |
+| `FigureGenerator` (provider-driven) | implemented (engine/generator.py) |
+| Geoms: site point, label, boundary, annotation-inset, image | implemented |
+| `CoordGeo` + `[geo]` extra | implemented |
+| Templates `dendrogram`, `site_map`, `particle_overlay` | implemented |
+| Deprecated shims with import-time warnings | implemented (deprecated.py) |
+| Basemap tiles (site_map default imagery, opt-out) | implemented (wp14 pull-forward) |
+| DEM contour / stream geoms | deferred |
 
 ### Core GoG Concepts
 
@@ -182,7 +183,7 @@ Rules:
 `dimensions` return `{}`, `expand` starts from a single context. This preserves
 standalone figEngine usage.
 
-### 1a. Declarative API surface (planned implementation)
+### 1a. Declarative API surface (implemented in v0.2.0)
 
 Post-implementation, the engine exposes a single declarative call plus an
 extensible registry over one input abstraction:
@@ -211,6 +212,10 @@ register_template("isotope_matrix", builder)
 
 Rules:
 
+- **Input coercion**: `data` accepts a `DataProvider` (passed through), a raw
+  `pd.DataFrame` (wrapped in `DataFrameProvider`), or an ndarray (wrapped in a
+  frame with positional string columns `"0"`, `"1"`, ... — e.g. dendrogram
+  linkage matrices).
 - **Template recipe**: a builder returns a duck-typed recipe
   (`layers`, `coord`, `default_settings`, `name`); `FigureTemplate` objects
   are adapted to the same shape so the legacy template set keeps working.
@@ -605,7 +610,8 @@ geofig-engine is the downstream consumer (workflows W1/W2 in
 - **Implemented + tested:** legacy `Dataset`-based engine (`render_template` tuple
   return), `FigureEngine`/`IteratorEngine`, full template set (piper, stiff,
   timeseries, DWQI, …), `LegendGroup`/`LegendAccumulator`, `geofig_cli`.
-- **Planned, not implemented (docs only):** the declarative provider-based API below.
+- **Shipped in this phase (v0.2.0):** the declarative provider-based API
+  documented below.
 
 ### M1 — Declarative API + interoperability (next major focus)
 
@@ -623,14 +629,15 @@ geofig-engine is the downstream consumer (workflows W1/W2 in
       `ColumnSelector`, `IteratorEngine`, `FigureEngine`) with import-time warnings;
       legacy test suite stays green.
 - [ ] Required geo support: `CoordGeo`, geometry/image channels, geoms
-      (site point, boundary, label, annotation/inset, image) + `[geo]` extra
-      (basemap tiles, DEM contour, streams deferred).
+      (site point, boundary, label, annotation/inset, image) + `[geo]` extra.
+      Basemap tiles delivered with the `site_map` template (wp14); DEM contour
+      and streams remain deferred.
 - [ ] Interop tests: `geochemmodel.ModelResult.render()` smoke through the new path;
       standalone DataFrame render (basic analysis) works without geodata/geochemmodel.
 
 ### M2 — Figure/geo depth (v0.2.x)
 
-- [ ] Deferred geoms (contours, streams, basemap tiles, `GeomTable`/`GeomColorbar`);
+- [ ] Deferred geoms (contours, streams, `GeomTable`/`GeomColorbar`);
       `CoordGeo` polish (bounds/aspect/axis format).
 - [ ] Template breadth and consistency across renderers; Plotly backend candidate.
 
@@ -687,8 +694,8 @@ removal lands no earlier than that).
 
 ## Templates & Registry
 
-`render_template(data: DataFrame | DataProvider, template=<key> | FigureTemplate,
-mapping=..., settings=..., iterators=..., facet=..., coord=...)` resolves
+`render_template(data: DataFrame | DataProvider | ndarray, template=<key> | FigureTemplate,
+mapping=..., settings=..., iterators=..., facet=..., coord=..., savedir=...)` resolves
 `template` through a registry mapping **template name → builder**.
 `geofig_engine` **exports the default registry map** (`TEMPLATES`, a plain
 `dict[name → builder]`) plus `register_template(name, builder)` so downstream
@@ -696,6 +703,10 @@ adapters (`geochemmodel.results`) and workflows can register/resolve keys
 without importing rendering internals. Support-branch templates
 (`bivariate`, `boxplot_with_points`) are usable with **no mapping beside
 `data`/`template`** (their defaults resolve from the recipe).
+
+Phase 15 (v0.2.0) seeds the registry at import with the concrete keys
+`bivariate`, `boxplot_with_points`, `dendrogram`, `site_map`,
+`particle_overlay` plus the legacy-factory adapters listed below.
 
 Pipeline template keys (referenced by `VisualizationEncoding.template`):
 
@@ -715,7 +726,8 @@ usable through the same registry and `render_template`.
 Optional extras (pyproject):
 
 - `[geo]` extra: geographic deps for `CoordGeo` / `site_map` / geo geoms
-  (projection, shapefile/geojson, kmz, altimetry/basemap tiles).
+  (projection, shapefile/geojson, kmz, altimetry; optional `xyzservices`-based
+  basemap-provider lookup — the tile fetcher itself works without `[geo]`).
 
 ---
 

@@ -1,6 +1,6 @@
 # Phase 15: Docs, ROADMAP renumber, CHANGELOG
 
-**Status**: open
+**Status**: complete
 **Phase**: 15
 **Version target**: v0.2.0
 **Dependencies**: `15_wp11_interop_validation`
