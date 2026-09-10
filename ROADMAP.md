@@ -408,14 +408,60 @@ coordinate types were removed entirely.
 
 ---
 
-- **Multi-level grouped legends** — `subseries_col` pattern with section headers and aligned columns (from geochemplot's grouped-legend pattern)
-- **Dimension legend builder** — `build_dimension_legend()` standalone function from color_col + shape_col + linetype_col
-- **Marker/color combinatorial generator** — `gen_markers()`, `gen_markers_series()` using `itertools.product` over marker list + color palette
-- **Legend ordering / filtering** — allow reordering legend entries, filtering by series
+## 📋 Phase 15 — Declarative API + provider refactor (interoperability M1)
+
+Pipeline interop milestone — item 1 of the M1 vertical slice in
+`../PIPELINE_MODULES.md` (`## Implementation Order`). Converts the engine's
+entry to a single declarative, provider-driven surface while keeping the
+legacy path intact and deprecated (shims removed no earlier than 1.0.0).
+**Target: v0.2.0** — tracked by `tasks/open/15_*.md` (wp1–wp13 + epic review).
+
+- **Data** — `DataProvider` Protocol (`columns` / `resolve` / `expand` /
+  `subset` / `unique_values` / `dimensions`), accepted duck-typed;
+  `DataFrameProvider` wraps raw frames (standalone use); `DatasetProvider`
+  adapts the legacy `Dataset`. No geodata/geochemmodel import anywhere in
+  `geofig_engine`.
+- **Spec** — exported `TEMPLATES` registry (`register_template` /
+  `get_template`) resolving template keys and the keys emitted by
+  `geochemmodel.VisualizationEncoding`; a duck-typed template recipe
+  (`layers`, `coord`, `default_settings`, `name`) with `FigureTemplate`
+  adapted to the same shape.
+- **Render** — canonical `render_template(data, template=<key>|FigureTemplate,
+  mapping=, settings=, iterators=, facet=, coord=, savedir=) -> list[Figure]`,
+  all args after `data`/`template` optional; raw `DataFrame` accepted and
+  wrapped. Provider-driven `FigureGenerator`; legacy `FigureEngine` untouched.
+- **Registry templates** — `bivariate`, `boxplot_with_points`, `dendrogram`,
+  `site_map`, `particle_overlay`, plus thin adapters re-registering the legacy
+  factory set (`histogram`, `pie`, `radar`, `timeseries`, `isotope`,
+  `npr_nnp`, `anp_agp`, `nagph_nag`, `piper`, `stiff`).
+- **Geo support** — `CoordGeo`, geo geoms (site point, boundary, label,
+  annotation-inset, image), geometry/image renderer handlers, and the `[geo]`
+  extra. **Deferred to M2:** tile basemaps, DEM contour, stream geoms.
+- **Audit / compat** — legacy entry preserved as `render_template_legacy`
+  (call-time `DeprecationWarning`); `Dataset` & co. re-exported through a
+  `deprecated.py` module with **import-time** warnings; public vs deprecated
+  `__all__` split.
+- **Validation** — standalone `DataFrame` + upstream interop smoke, provider
+  conformance; full suite (1039 + new, no skips from warning policy).
 
 ---
 
-## 📋 Phase 16 — IO / Data subpackage (`geofig_engine.io`)
+## ✅ Phase 16 — Categorized geom preset database
+Replaced the function-registry JSON catalog (`data/functions.json`) with a data-only, categorized preset database in `src/geofig_engine/data/geom_presets/`. Adding a preset now requires only a JSON entry — no code changes.
+
+- **`GeomPreset` / `GeomPresetItem` models** — frozen dataclasses: id, category, tags, items, reference/description/valid_domain/geospatial metadata; items carry validated geom params + constant visual mapping + optional zorder
+- **Six annotation geom kinds** — `function_line`, `abline` (slope-intercept or two-point), `hspan`, `vspan`, `rect`, `text`; per-kind validation table (required/allowed mapping keys, bound ordering, scalar-only values)
+- **Expression safety preserved** — function_line expressions route through the existing `FunctionValidator` (AST-based) at load time
+- **Per-category JSON storage** — bundled `water_isotope.json` (15 migrated entries); loader globs the package directory so adding a file adds a category; errors annotated with file/index/id
+- **`GeomPresetRegistry`** — queries by id/category/tags/state, metadata stats, `layers_for(ids)` + `auto_layers(category, geom_kinds)` hydration to standard Layers, lazy global singleton with reset hook
+- **User extensibility** — `merge_path(path, overwrite=False)` merges external preset files into a registry at runtime (duplicate-id conflict raises unless overwrite)
+- **Legacy shim** — `FunctionLoader.load()` / `get_function_registry()` rebuilt as MathFunction views over function_line presets (func_type retained per-item for lossless round-trip); existing tests pass unmodified
+- **Isotope template switched** — `_load_functions()` now sources from `get_geom_preset_registry()`; public API unchanged
+- **691 tests pass**
+
+---
+
+## 📋 Phase 17 — IO / Data subpackage (`geofig_engine.io`)
 Port and generalize geochemplot's data-handling utilities.
 
 - **EQuIS format conversion**:
@@ -436,7 +482,7 @@ Port and generalize geochemplot's data-handling utilities.
 
 ---
 
-## 📋 Phase 17 — Infrastructure
+## 📋 Phase 18 — Infrastructure
 
 - **Multithread / parallel iteration processing** — parse iterators in parallel thread pool
 - **Data preprocessing pipeline** — assign new columns / groups / aggregates before spec building
@@ -445,15 +491,11 @@ Port and generalize geochemplot's data-handling utilities.
 
 ---
 
-## ✅ Phase 18 — Categorized geom preset database
-Replaced the function-registry JSON catalog (`data/functions.json`) with a data-only, categorized preset database in `src/geofig_engine/data/geom_presets/`. Adding a preset now requires only a JSON entry — no code changes.
+## Backlog
 
-- **`GeomPreset` / `GeomPresetItem` models** — frozen dataclasses: id, category, tags, items, reference/description/valid_domain/geospatial metadata; items carry validated geom params + constant visual mapping + optional zorder
-- **Six annotation geom kinds** — `function_line`, `abline` (slope-intercept or two-point), `hspan`, `vspan`, `rect`, `text`; per-kind validation table (required/allowed mapping keys, bound ordering, scalar-only values)
-- **Expression safety preserved** — function_line expressions route through the existing `FunctionValidator` (AST-based) at load time
-- **Per-category JSON storage** — bundled `water_isotope.json` (15 migrated entries); loader globs the package directory so adding a file adds a category; errors annotated with file/index/id
-- **`GeomPresetRegistry`** — queries by id/category/tags/state, metadata stats, `layers_for(ids)` + `auto_layers(category, geom_kinds)` hydration to standard Layers, lazy global singleton with reset hook
-- **User extensibility** — `merge_path(path, overwrite=False)` merges external preset files into a registry at runtime (duplicate-id conflict raises unless overwrite)
-- **Legacy shim** — `FunctionLoader.load()` / `get_function_registry()` rebuilt as MathFunction views over function_line presets (func_type retained per-item for lossless round-trip); existing tests pass unmodified
-- **Isotope template switched** — `_load_functions()` now sources from `get_geom_preset_registry()`; public API unchanged
-- **691 tests pass**
+Unnumbered items not yet assigned to a phase; triaged into a numbered phase when the roadmap advances.
+
+- **Multi-level grouped legends** — `subseries_col` pattern with section headers and aligned columns (from geochemplot's grouped-legend pattern)
+- **Dimension legend builder** — `build_dimension_legend()` standalone function from color_col + shape_col + linetype_col
+- **Marker/color combinatorial generator** — `gen_markers()`, `gen_markers_series()` using `itertools.product` over marker list + color palette
+- **Legend ordering / filtering** — allow reordering legend entries, filtering by series
