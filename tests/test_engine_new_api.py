@@ -2,18 +2,23 @@
 Tests for the new Grammer of Graphics API path in FigureEngine.
 """
 
+import sys
+
 import pandas as pd
 import pytest
 
 from geofig_engine.core.coord import CoordCartesian, CoordPolar, CoordFixed
 from geofig_engine.core.dataset import Dataset
 from geofig_engine.core.dimension import Dimension
+from geofig_engine.core.dimension_selector import DimensionSelector
 from geofig_engine.core.facet import FacetNull, FacetWrap
 from geofig_engine.core.geom import GeomPoint, GeomLine, GeomFunctionLine
 from geofig_engine.core.layer import Layer, LayerSpec
 from geofig_engine.core.scale import ScaleContinuous, ScaleOrdinal, ScaleConstant
 from geofig_engine.core.stat import StatIdentity, StatFn
 from geofig_engine.engine import FigureEngine
+from geofig_engine.engine.generator import FigureGenerator
+from geofig_engine.provider import DataFrameProvider
 from geofig_engine.templates import bivariate, timeseries, isotope
 
 
@@ -260,3 +265,179 @@ def test_build_specs_from_layers_with_reverse_scale():
     specs = engine.build_specs_from_layers(dataset, layers)
     x_vals = list(specs[0].layers[0].visual_mapping["x"])
     assert x_vals == [-1.0, -2.0, -3.0, -4.0]
+
+
+# ---------------------------------------------------------------------------
+# Phase 15: FigureGenerator (provider-driven orchestrator)
+# ---------------------------------------------------------------------------
+
+class TestFigureGenerator:
+    def test_generator_equiv_to_legacy_path(self):
+        """DataFrameProvider-backed generator matches legacy FigureEngine specs."""
+        dataset = make_dataset()
+        layers = [
+            Layer(geom=GeomPoint(), mapping={"x": "x", "y": "y", "color": "group"})
+        ]
+        settings = {"title": "generator vs legacy"}
+
+        legacy_specs = FigureEngine().build_specs_from_layers(
+            dataset, layers, settings=settings
+        )
+        generator = FigureGenerator(
+            provider=DataFrameProvider(dataset.dataframe),
+            layers=layers,
+            coord=CoordCartesian(),
+            settings=settings,
+        )
+        specs = generator.build_specs()
+
+        assert len(specs) == len(legacy_specs)
+        for spec, legacy in zip(specs, legacy_specs):
+            assert len(spec.layers) == len(legacy.layers)
+            assert list(spec.data.columns) == list(legacy.data.columns)
+            assert spec.coord.name == legacy.coord.name
+            assert spec.settings["title"] == legacy.settings["title"]
+            for channel in ("x", "y", "color"):
+                assert list(spec.layers[0].visual_mapping[channel]) == list(
+                    legacy.layers[0].visual_mapping[channel]
+                )
+
+    def test_generator_calls_provider_contract(self):
+        """Spy: resolve/expand/subset are called; nothing Dataset-based."""
+        calls = {"resolve": 0, "expand": 0, "subset": 0}
+        inner = DataFrameProvider(make_dataset().dataframe)
+
+        class SpyProvider:
+            def __init__(self, wrapped):
+                self._wrapped = wrapped
+
+            @property
+            def columns(self):
+                return self._wrapped.columns
+
+            def resolve(self, selector):
+                calls["resolve"] += 1
+                return self._wrapped.resolve(selector)
+
+            def expand(self, iterators=None):
+                calls["expand"] += 1
+                return self._wrapped.expand(iterators)
+
+            def subset(self, *, columns=None, **filters):
+                calls["subset"] += 1
+                return SpyProvider(self._wrapped.subset(columns=columns, **filters))
+
+            def unique_values(self, column):
+                return self._wrapped.unique_values(column)
+
+            def dimensions(self, column):
+                return self._wrapped.dimensions(column)
+
+        generator = FigureGenerator(
+            provider=SpyProvider(inner),
+            # DimensionSelector(..) forces resolution through provider.resolve —
+            # plain string columns short-circuit on the stat-column fast path.
+            layers=[
+                Layer(
+                    geom=GeomPoint(),
+                    mapping={
+                        "x": DimensionSelector("x"),
+                        "y": DimensionSelector("y"),
+                    },
+                )
+            ],
+            coord=CoordCartesian(),
+            facet=FacetWrap(by="group"),
+        )
+        specs = generator.build_specs()
+
+        assert len(specs) == 2  # facet groups A, B
+        assert calls["resolve"] >= 1
+        assert calls["expand"] >= 1
+        assert calls["subset"] >= 1
+
+    def test_facet_splitting_one_spec_per_group(self):
+        dataset = make_dataset()
+        generator = FigureGenerator(
+            provider=DataFrameProvider(dataset.dataframe),
+            layers=[Layer(geom=GeomPoint(), mapping={"x": "x", "y": "y"})],
+            coord=CoordCartesian(),
+            facet=FacetWrap(by="group"),
+        )
+        specs = generator.build_specs()
+        assert len(specs) == 2
+        assert {spec.context.get("group") for spec in specs} == {"A", "B"}
+        # Each spec only carries its own group's rows
+        for spec in specs:
+            assert set(spec.data["group"]) == {spec.context["group"]}
+
+    def test_missing_required_channel_raises_informative(self):
+        dataset = make_dataset()
+        generator = FigureGenerator(
+            provider=DataFrameProvider(dataset.dataframe),
+            layers=[Layer(geom=GeomPoint(), mapping={"x": "x"})],  # missing "y"
+            coord=CoordCartesian(),
+        )
+        with pytest.raises(ValueError) as excinfo:
+            generator.build_specs()
+        message = str(excinfo.value)
+        assert "point" in message
+        assert "y" in message
+        assert "requires" in message
+
+    def test_constants_resolve_like_legacy(self):
+        dataset = make_dataset()
+        layers = [
+            Layer(geom=GeomPoint(), mapping={"x": "x", "y": "y", "color": "blue"})
+        ]
+        legacy = FigureEngine().build_specs_from_layers(dataset, layers)
+        generator = FigureGenerator(
+            provider=DataFrameProvider(dataset.dataframe),
+            layers=layers,
+            coord=CoordCartesian(),
+        )
+        spec = generator.build_specs()[0]
+        assert spec.layers[0].visual_mapping["color"] == "blue"
+        assert legacy[0].layers[0].visual_mapping["color"] == "blue"
+
+    def test_global_scales_apply(self):
+        dataset = make_dataset()
+        generator = FigureGenerator(
+            provider=DataFrameProvider(dataset.dataframe),
+            layers=[
+                Layer(geom=GeomPoint(), mapping={"x": "x", "y": "y", "color": "group"})
+            ],
+            coord=CoordCartesian(),
+            scales={"color": ScaleOrdinal(palette=["red", "blue"])},
+        )
+        spec = generator.build_specs()[0]
+        colors = list(spec.layers[0].visual_mapping["color"])
+        assert "red" in colors
+        assert "blue" in colors
+
+    def test_render_returns_figures(self):
+        dataset = make_dataset()
+        generator = FigureGenerator(
+            provider=DataFrameProvider(dataset.dataframe),
+            layers=[Layer(geom=GeomPoint(), mapping={"x": "x", "y": "y"})],
+            coord=CoordCartesian(),
+            settings={"title": "generator render"},
+        )
+        figures = generator.render()
+        assert len(figures) == 1
+        assert figures[0].canvas is not None
+
+
+class TestGeneratorNoUpstreamImports:
+    def test_engine_generator_has_no_geodata_import(self):
+        mod = sys.modules.get("geofig_engine.engine.generator")
+        if mod is None:
+            pytest.skip("engine.generator module not loaded")
+        source_file = mod.__file__
+        assert source_file is not None
+        with open(source_file) as f:
+            source = f.read()
+        assert "import geodata" not in source
+        assert "from geodata" not in source
+        assert "import geochemmodel" not in source
+        assert "from geochemmodel" not in source

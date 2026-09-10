@@ -7,8 +7,9 @@ template, and mapping inputs, and optionally dispatches them to a renderer.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Sequence
+from dataclasses import dataclass, field, replace
+from itertools import product
+from typing import Any, Callable, Sequence
 
 import pandas as pd
 
@@ -21,11 +22,145 @@ from geofig_engine.core.layer import Layer, LayerSpec
 from geofig_engine.core.link import LinkTransform
 from geofig_engine.core.scale import Scale
 from geofig_engine.core.spec import FigureSpec, build_spec
+from geofig_engine.provider import DataProvider
 from geofig_engine.renderers.base import BaseRenderer
 from geofig_engine.renderers.matplotlib.legend import LegendAccumulator
 from geofig_engine.templates.base import FigureTemplate
 from geofig_engine.utils.validation import validate_dict
 from geofig_engine.utils.typing import Mapping
+
+
+def resolve_layer_sources(
+    layers: list[Layer],
+    frame: pd.DataFrame,
+    resolve: Callable[[Any], Any],
+) -> list[LayerSpec]:
+    """Resolve a list of Layer objects into fully concrete LayerSpecs.
+
+    Shared by ``FigureEngine`` (legacy) and ``FigureGenerator`` (Phase 15) so
+    both engines reuse the same resolution code path.
+
+    For each layer:
+    1. Apply the Stat transformation to the data
+    2. Resolve each channel's source (DimensionSelector → column names)
+    3. Extract data series for column references
+    4. Apply Scales to transform data → visual domain
+    5. Package into LayerSpec
+
+    ``resolve(source)`` maps a channel source to either a list of concrete
+    column names (present in ``frame``) or a constant value, mirroring
+    ``resolve_source`` semantics against a frame instead of a Dataset.
+    """
+    layer_specs: list[LayerSpec] = []
+
+    for layer in layers:
+        # 1. Apply stat transformation
+        stat_data = layer.stat.compute(frame)
+
+        # 2. Resolve each mapping channel
+        visual_mapping: dict[str, Any] = {}
+        for channel, source in layer.mapping.items():
+
+            # Check if source is a stat-produced column first
+            if isinstance(source, str) and source in stat_data.columns:
+                series = stat_data[source]
+                if layer.scales and channel in layer.scales:
+                    series = layer.scales[channel].transform(series)
+                visual_mapping[channel] = series
+                continue
+
+            resolved = resolve(source)
+
+            # 3. Extract data and apply scales
+            if isinstance(resolved, list):
+                # Column reference(s) — extract from stat-transformed data
+                if all(col in stat_data.columns for col in resolved):
+                    if len(resolved) == 1:
+                        series = stat_data[resolved[0]]
+                    else:
+                        series = stat_data[resolved]
+                else:
+                    # Fall back to original dataframe
+                    if len(resolved) == 1:
+                        series = frame[resolved[0]]
+                    else:
+                        series = frame[resolved]
+
+                # 4. Apply scale if present
+                if layer.scales and channel in layer.scales:
+                    series = layer.scales[channel].transform(series)
+                visual_mapping[channel] = series
+            else:
+                # Constant value — apply scale if available
+                if layer.scales and channel in layer.scales:
+                    values = pd.Series([resolved] * len(stat_data))
+                    visual_mapping[channel] = layer.scales[channel].transform(values)
+                else:
+                    visual_mapping[channel] = resolved
+
+        layer_specs.append(LayerSpec(
+            geom=layer.geom,
+            stat=layer.stat,
+            visual_mapping=visual_mapping,
+            data_override=layer.data_override,
+            zorder=layer.zorder,
+            xlim=layer.xlim,
+            ylim=layer.ylim,
+        ))
+
+    return layer_specs
+
+
+def summarize_mappings(
+    layers: list[Layer],
+    layer_specs: list[LayerSpec],
+) -> dict[str, Any]:
+    """Build a summary mappings dict from resolved layers for backward compat."""
+    summary: dict[str, Any] = {}
+    for spec in layer_specs:
+        for channel, value in spec.visual_mapping.items():
+            if channel not in summary and not isinstance(value, dict):
+                summary[channel] = value
+    return summary
+
+
+def resolve_settings(
+    settings: dict[str, Any],
+    context: dict[str, Any],
+) -> dict[str, Any]:
+    """Format string settings values against the iteration context."""
+    resolved: dict[str, Any] = {}
+
+    for key, value in settings.items():
+        if isinstance(value, str):
+            try:
+                resolved[key] = value.format(**context)
+            except KeyError:
+                resolved[key] = value
+        else:
+            resolved[key] = value
+
+    return resolved
+
+
+def _check_required_channels(layer_specs: list[LayerSpec]) -> None:
+    """Raise an informative error when a layer is missing a required channel.
+
+    Checked lazily at spec-build time — no eager validation at recipe/registry
+    time (Phase 15 lazy default resolution).
+    """
+    for spec in layer_specs:
+        missing = [
+            channel
+            for channel in spec.geom.required_channels
+            if channel not in spec.visual_mapping
+        ]
+        if missing:
+            raise ValueError(
+                f"Geom '{spec.geom.name}' requires channel(s) "
+                f"{', '.join(missing)}; mapping supplies only "
+                f"{', '.join(spec.visual_mapping) or '(none)'}"
+            )
 
 
 @dataclass(frozen=True)
@@ -150,91 +285,25 @@ class FigureEngine:
         dataset: Dataset,
         context: dict[str, Any],
     ) -> list[LayerSpec]:
-        """Resolve a list of Layer objects into fully concrete LayerSpecs.
-
-        For each layer:
-        1. Apply the Stat transformation to the data
-        2. Resolve each channel's source (DimensionSelector → column names)
-        3. Extract data series for column references
-        4. Apply Scales to transform data → visual domain
-        5. Package into LayerSpec
-        """
-        layer_specs: list[LayerSpec] = []
-
-        for layer in layers:
-            # 1. Apply stat transformation
-            stat_data = layer.stat.compute(dataset.dataframe)
-
-            # 2. Resolve each mapping channel
-            visual_mapping: dict[str, Any] = {}
-            for channel, source in layer.mapping.items():
-
-                # Check if source is a stat-produced column first
-                if isinstance(source, str) and source in stat_data.columns:
-                    series = stat_data[source]
-                    if layer.scales and channel in layer.scales:
-                        series = layer.scales[channel].transform(series)
-                    visual_mapping[channel] = series
-                    continue
-
-                resolved = resolve_source(
-                    source,
-                    dataset,
-                    strict=self.config.strict,
-                    context=context,
-                )
-
-                # 3. Extract data and apply scales
-                if isinstance(resolved, list):
-                    # Column reference(s) — extract from stat-transformed data
-                    if all(col in stat_data.columns for col in resolved):
-                        if len(resolved) == 1:
-                            series = stat_data[resolved[0]]
-                        else:
-                            series = stat_data[resolved]
-                    else:
-                        # Fall back to original dataframe
-                        if len(resolved) == 1:
-                            series = dataset.dataframe[resolved[0]]
-                        else:
-                            series = dataset.dataframe[resolved]
-
-                    # 4. Apply scale if present
-                    if layer.scales and channel in layer.scales:
-                        series = layer.scales[channel].transform(series)
-                    visual_mapping[channel] = series
-                else:
-                    # Constant value — apply scale if available
-                    if layer.scales and channel in layer.scales:
-                        values = pd.Series([resolved] * len(stat_data))
-                        visual_mapping[channel] = layer.scales[channel].transform(values)
-                    else:
-                        visual_mapping[channel] = resolved
-
-            layer_specs.append(LayerSpec(
-                geom=layer.geom,
-                stat=layer.stat,
-                visual_mapping=visual_mapping,
-                data_override=layer.data_override,
-                zorder=layer.zorder,
-                xlim=layer.xlim,
-                ylim=layer.ylim,
-            ))
-
-        return layer_specs
+        """Resolve Layer objects into LayerSpecs (delegates to the shared helper)."""
+        return resolve_layer_sources(
+            layers,
+            frame=dataset.dataframe,
+            resolve=lambda source: resolve_source(
+                source,
+                dataset,
+                strict=self.config.strict,
+                context=context,
+            ),
+        )
 
     def _summarize_mappings(
         self,
         layers: list[Layer],
         layer_specs: list[LayerSpec],
     ) -> dict[str, Any]:
-        """Build a summary mappings dict from resolved layers for backward compat."""
-        summary: dict[str, Any] = {}
-        for spec in layer_specs:
-            for channel, value in spec.visual_mapping.items():
-                if channel not in summary and not isinstance(value, dict):
-                    summary[channel] = value
-        return summary
+        """Build a summary mappings dict (delegates to the shared helper)."""
+        return summarize_mappings(layers, layer_specs)
 
     # ------------------------------------------------------------------
     # Old resolve helpers
@@ -311,15 +380,162 @@ class FigureEngine:
         settings: dict[str, Any],
         context: dict[str, Any]
     )-> dict[str, Any]:
-        resolved = {}
+        """Resolve context-formatted settings (delegates to the shared helper)."""
+        return resolve_settings(settings, context)
 
-        for key, value in settings.items():
-            if isinstance(value, str):
+
+class FigureGenerator:
+    """Provider-driven orchestrator (ARCHITECTURE.md §12, Phase 15).
+
+    The ONLY component allowed to orchestrate multiple subsystems. It consumes
+    **only** ``DataProvider`` (``provider.resolve`` / ``provider.expand`` /
+    ``provider.subset``) — it never touches a ``Dataset`` object directly.
+    Legacy ``Dataset`` input reaches this generator through ``DatasetProvider``.
+    """
+
+    def __init__(
+        self,
+        provider: DataProvider,
+        layers: list[Layer],
+        coord: Coord,
+        facet: Facet = FacetNull(),
+        scales: dict[str, Scale] | None = None,
+        settings: dict | None = None,
+        iterators: list[DimensionIterator] | None = None,
+    ) -> None:
+        self.provider = provider
+        self.layers = list(layers)
+        self.coord = coord or CoordCartesian()
+        self.facet = facet or FacetNull()
+        self.scales = dict(scales or {})
+        self.settings = dict(settings or {})
+        self.iterators = iterators
+
+    # ------------------------------------------------------------------
+    # Layer / source resolution (provider-based)
+    # ------------------------------------------------------------------
+
+    def _effective_layers(self) -> list[Layer]:
+        """Layers with generator-level scale defaults merged in (per-layer wins)."""
+        if not self.scales:
+            return self.layers
+        effective: list[Layer] = []
+        for layer in self.layers:
+            effective.append(
+                replace(layer, scales={**self.scales, **(layer.scales or {})})
+            )
+        return effective
+
+    def _resolve_source(
+        self,
+        source: Any,
+        frame: pd.DataFrame,
+        context: dict[str, Any] | None = None,
+    ) -> Any:
+        """Resolve a channel source against ``frame`` via the provider.
+
+        Mirrors legacy ``resolve_source`` semantics without a Dataset:
+        column names resolve through ``provider.resolve``; non-column strings
+        and other values are treated as constants (non-strict).
+        """
+        if isinstance(source, str):
+            if context:
                 try:
-                    resolved[key] = value.format(**context)
+                    source = source.format(**context)
                 except KeyError:
-                    resolved[key] = value
-            else:
-                resolved[key] = value
+                    pass
+            if source in frame.columns:
+                return self.provider.resolve(source)
+            return source  # constant value (non-strict)
 
-        return resolved
+        if isinstance(source, list):
+            return self.provider.resolve(source)
+
+        # DimensionSelector-like objects (incl. duck-typed selectors) → provider
+        if hasattr(source, "selector") and not isinstance(source, tuple):
+            return self.provider.resolve(source)
+
+        # Constant value (incl. tuples like literal colors)
+        return source
+
+    def _facet_groups(self) -> list[tuple[DataProvider, dict[str, Any]]]:
+        """Split the provider into one ``(sub-provider, context)`` per facet group.
+
+        Facet groups are enumerated from the provider's unique column values
+        and each group is obtained via ``provider.subset`` (a new provider per
+        group — never a mutation).
+        """
+        by = tuple(getattr(self.facet, "by", ()) or ())
+        if not by:
+            return [(self.provider, {})]
+
+        value_lists = [self.provider.unique_values(col) for col in by]
+        groups: list[tuple[DataProvider, dict[str, Any]]] = []
+        for values in product(*value_lists):
+            filters = dict(zip(by, values))
+            groups.append((self.provider.subset(**filters), filters))
+        return groups
+
+    # ------------------------------------------------------------------
+    # Spec building + rendering
+    # ------------------------------------------------------------------
+
+    def build_specs(self) -> list[FigureSpec]:
+        """Resolve/expand/facet and build one validated FigureSpec per group.
+
+        Resolution order:
+        1. facet-split the provider (``provider.subset``)
+        2. expand each group (``provider.expand``)
+        3. resolve channel selectors (``provider.resolve``) + scales
+        4. package into validated ``FigureSpec``(s)
+        """
+        specs: list[FigureSpec] = []
+        for sub_provider, facet_ctx in self._facet_groups():
+            for frame, iter_ctx in sub_provider.expand(self.iterators or []):
+                context = {**iter_ctx, **facet_ctx}
+                resolved_settings = resolve_settings(self.settings, context)
+                layers = self._effective_layers()
+                layer_specs = resolve_layer_sources(
+                    layers,
+                    frame=frame,
+                    resolve=lambda source, _f=frame, _c=context: (
+                        self._resolve_source(source, _f, _c)
+                    ),
+                )
+                _check_required_channels(layer_specs)
+                specs.append(
+                    FigureSpec(
+                        data=frame,
+                        mappings=summarize_mappings(layers, layer_specs),
+                        settings=resolved_settings,
+                        context=context,
+                        template_name="custom",
+                        iterator_key=tuple(sorted(context)),
+                        layers=layer_specs,
+                        coord=self.coord,
+                        facet=self.facet,
+                    )
+                )
+        return specs
+
+    def render(
+        self,
+        renderer: BaseRenderer | None = None,
+        renderer_name: str = "matplotlib",
+    ) -> list[Any]:
+        """Build the specs and hand them to a renderer; returns backend figures.
+
+        Missing required channels surface here as an informative error at
+        spec-build time (no eager validation earlier).
+        """
+        from geofig_engine.renderers import MatplotlibRenderer
+
+        if renderer is None:
+            if renderer_name != "matplotlib":
+                raise ValueError(
+                    f"Unsupported renderer: '{renderer_name}'. "
+                    "Only 'matplotlib' is available."
+                )
+            renderer = MatplotlibRenderer()
+        specs = self.build_specs()
+        return list(renderer.render_all(specs))
