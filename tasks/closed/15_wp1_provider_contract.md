@@ -1,6 +1,6 @@
 # Phase 15: DataProvider contract (provider.py)
 
-**Status**: open
+**Status**: complete
 **Phase**: 15
 **Version target**: v0.2.0
 **Dependencies**: `15_00_epic`
