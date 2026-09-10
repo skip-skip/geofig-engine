@@ -17,6 +17,7 @@ from geofig_engine.core.attribute_mapping import SourceType, resolve_source
 from geofig_engine.core.coord import Coord, CoordCartesian
 from geofig_engine.core.dataset import Dataset
 from geofig_engine.core.facet import Facet, FacetNull
+from geofig_engine.core.geom import GeomFunctionLine
 from geofig_engine.core.iterator import DimensionIterator, IteratorResult, expand
 from geofig_engine.core.layer import Layer, LayerSpec
 from geofig_engine.core.link import LinkTransform
@@ -147,17 +148,23 @@ def _check_required_channels(layer_specs: list[LayerSpec]) -> None:
     """Raise an informative error when a layer is missing a required channel.
 
     Checked lazily at spec-build time — no eager validation at recipe/registry
-    time (Phase 15 lazy default resolution).
+    time (Phase 15 lazy default resolution). ``GeomFunctionLine`` layers with
+    a ``func`` expression are exempt: their x domain is derived from the
+    function (the legacy render handler falls back to the current axes limits
+    when no x is mapped), so x is not required from the data mapping.
     """
     for spec in layer_specs:
+        geom = spec.geom
+        if isinstance(geom, GeomFunctionLine) and geom.func:
+            continue
         missing = [
             channel
-            for channel in spec.geom.required_channels
+            for channel in geom.required_channels
             if channel not in spec.visual_mapping
         ]
         if missing:
             raise ValueError(
-                f"Geom '{spec.geom.name}' requires channel(s) "
+                f"Geom '{geom.name}' requires channel(s) "
                 f"{', '.join(missing)}; mapping supplies only "
                 f"{', '.join(spec.visual_mapping) or '(none)'}"
             )

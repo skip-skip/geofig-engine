@@ -1,0 +1,246 @@
+"""
+Focused tests for the Phase 15 declarative ``render_template`` (engine/api.py).
+
+Covers the canonical entry surface:
+- data coercion: DataProvider pass-through, DataFrame wrap, ndarray wrap
+- template resolution: registry key (recipe defaults, no mapping) vs
+  FigureTemplate / recipe adaptation
+- mapping / coord / settings overrides merged over recipe defaults
+- unknown template key → KeyError listing available keys
+- missing required channels → informative error at spec-build time
+- savedir persistence (legacy naming + legend.png); list[Figure] return
+- no geodata / geochemmodel import in engine/api.py
+"""
+
+from __future__ import annotations
+
+import sys
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from geofig_engine.engine.api import (
+    TEMPLATES,
+    TemplateRecipe,
+    get_template,
+    recipe_from,
+    register_template,
+    render_template,
+)
+from geofig_engine.core.coord import CoordCartesian, CoordPolar
+from geofig_engine.core.facet import FacetWrap
+from geofig_engine.core.geom import GeomPoint
+from geofig_engine.core.layer import Layer
+from geofig_engine.core.stat import StatIdentity
+from geofig_engine.provider import DataFrameProvider
+from geofig_engine.templates import bivariate
+
+
+def make_df():
+    return pd.DataFrame({
+        "id": [1, 2, 3, 4],
+        "x": [1.0, 2.0, 3.0, 4.0],
+        "y": [2.0, 3.0, 5.0, 7.0],
+        "group": ["A", "A", "B", "B"],
+    })
+
+
+@pytest.fixture(autouse=True)
+def _isolate_registry():
+    """Preserve/restore the global registry around each test."""
+    saved = dict(TEMPLATES)
+    TEMPLATES.clear()
+    yield
+    TEMPLATES.clear()
+    TEMPLATES.update(saved)
+
+
+def register_bivariate_with_defaults():
+    """Thin adapter over the legacy factory — complete recipe defaults.
+
+    Mirrors the support-branch adapters that ``15_wp6`` ships; keeps this
+    ticket's tests focused on the entry-point plumbing.
+    """
+
+    def builder(mapping=None, settings=None, **_):
+        return bivariate(mapping=mapping or {"x": "x", "y": "y"})
+
+    register_template("bivariate", builder)
+    return builder
+
+
+def point_layer(mapping=None):
+    return Layer(
+        geom=GeomPoint(),
+        stat=StatIdentity(),
+        mapping=mapping if mapping is not None else {"x": "x", "y": "y"},
+    )
+
+
+def scatter_offsets(fig):
+    """The x/y scatter offsets of a rendered bivariate figure."""
+    return fig.axes[0].collections[0].get_offsets()
+
+
+class TestDataInputs:
+    def test_dataframe_is_wrapped_and_renders(self):
+        figures = render_template(
+            data=make_df(),
+            template=bivariate(mapping={"x": "x", "y": "y"}),
+        )
+        assert len(figures) == 1
+
+    def test_provider_data_with_figure_template(self):
+        figures = render_template(
+            data=DataFrameProvider(make_df()),
+            template=bivariate(mapping={"x": "x", "y": "y"}),
+        )
+        assert len(figures) == 1
+
+    def test_ndarray_wrapped_with_positional_columns(self):
+        arr = np.array(
+            [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]],
+            dtype=float,
+        )
+        figures = render_template(
+            data=arr,
+            template=bivariate(mapping={"x": "0", "y": "1"}),
+        )
+        assert len(figures) == 1
+        offsets = scatter_offsets(figures[0])
+        assert np.allclose(sorted(offsets[:, 0]), [1.0, 3.0, 5.0, 7.0])
+        assert np.allclose(sorted(offsets[:, 1]), [2.0, 4.0, 6.0, 8.0])
+
+    def test_rejects_unsupported_data_type(self):
+        with pytest.raises(TypeError, match="data must be"):
+            render_template(data="not data", template=bivariate())
+
+
+class TestTemplateResolution:
+    def test_registry_key_renders_with_recipe_defaults(self):
+        register_bivariate_with_defaults()
+        # no mapping → recipe defaults apply
+        figures = render_template(data=make_df(), template="bivariate")
+        assert len(figures) == 1
+        offsets = scatter_offsets(figures[0])
+        assert np.allclose(sorted(offsets[:, 0]), [1.0, 2.0, 3.0, 4.0])
+        assert np.allclose(sorted(offsets[:, 1]), [2.0, 3.0, 5.0, 7.0])
+
+    def test_unknown_key_raises_keyerror_listing_keys(self):
+        register_template("known", lambda **_: TemplateRecipe(name="known", layers=[point_layer()]))
+        with pytest.raises(KeyError) as excinfo:
+            render_template(data=make_df(), template="nope")
+        message = str(excinfo.value)
+        assert "nope" in message
+        assert "known" in message
+
+    def test_recipe_object_passes_through(self):
+        recipe = TemplateRecipe(name="direct", layers=[point_layer()])
+        figures = render_template(data=make_df(), template=recipe)
+        assert len(figures) == 1
+
+
+class TestOverrides:
+    def test_mapping_overrides_recipe_layers(self):
+        register_template(
+            "mapped",
+            lambda **_: TemplateRecipe(name="mapped", layers=[point_layer()]),
+        )
+        # swap x/y via the user mapping — proves per-layer override
+        figures = render_template(
+            data=make_df(),
+            template="mapped",
+            mapping={"x": "y", "y": "x"},
+        )
+        offsets = scatter_offsets(figures[0])
+        assert np.allclose(sorted(offsets[:, 0]), [2.0, 3.0, 5.0, 7.0])
+        assert np.allclose(sorted(offsets[:, 1]), [1.0, 2.0, 3.0, 4.0])
+
+    def test_mapping_merges_onto_recipe(self):
+        # partial override: color added, recipe x/y retained
+        figures = render_template(
+            data=make_df(),
+            template=bivariate(mapping={"x": "x", "y": "y"}),
+            mapping={"color": "group"},
+        )
+        offsets = scatter_offsets(figures[0])
+        assert np.allclose(sorted(offsets[:, 0]), [1.0, 2.0, 3.0, 4.0])
+        assert np.allclose(sorted(offsets[:, 1]), [2.0, 3.0, 5.0, 7.0])
+
+    def test_coord_overrides_recipe(self):
+        figures = render_template(
+            data=make_df(),
+            template=bivariate(mapping={"x": "x", "y": "y"}),
+            coord=CoordPolar(),
+        )
+        assert figures[0].axes[0].name == "polar"
+
+    def test_settings_merge_recipe_defaults_then_user(self):
+        register_template(
+            "settings_demo",
+            lambda **_: TemplateRecipe(
+                name="settings_demo",
+                layers=[point_layer()],
+                default_settings={"title": "from recipe"},
+            ),
+        )
+        # recipe default applies with no user settings
+        figures = render_template(data=make_df(), template="settings_demo")
+        assert figures[0].axes[0].get_title() == "from recipe"
+        # user settings win over recipe defaults
+        figures = render_template(
+            data=make_df(),
+            template="settings_demo",
+            settings={"title": "from user"},
+        )
+        assert figures[0].axes[0].get_title() == "from user"
+
+
+class TestErrors:
+    def test_missing_required_channel_raises_informative(self):
+        template = bivariate(mapping={"x": "x"})  # missing y
+        with pytest.raises(ValueError) as excinfo:
+            render_template(data=make_df(), template=template)
+        message = str(excinfo.value)
+        assert "point" in message
+        assert "y" in message
+        assert "requires" in message
+
+
+class TestSavedir:
+    def test_savedir_writes_figures_and_legend(self, tmp_path):
+        figures = render_template(
+            data=make_df(),
+            template=bivariate(mapping={"x": "x", "y": "y", "color": "group"}),
+            savedir=tmp_path,
+        )
+        assert len(figures) == 1
+        pngs = sorted(p.name for p in tmp_path.glob("*.png"))
+        assert pngs == ["001.png", "legend.png"]
+
+    def test_savedir_naming_with_facet_and_legend(self, tmp_path):
+        figures = render_template(
+            data=make_df(),
+            template=bivariate(mapping={"x": "x", "y": "y", "color": "group"}),
+            facet=FacetWrap(by="group"),
+            savedir=tmp_path,
+        )
+        assert len(figures) == 2
+        pngs = sorted(p.name for p in tmp_path.glob("*.png"))
+        assert pngs == ["001_A.png", "002_B.png", "legend.png"]
+
+
+class TestNoUpstreamImports:
+    def test_engine_api_has_no_geodata_import(self):
+        mod = sys.modules.get("geofig_engine.engine.api")
+        if mod is None:
+            pytest.skip("engine.api module not loaded")
+        source_file = mod.__file__
+        assert source_file is not None
+        with open(source_file) as f:
+            source = f.read()
+        assert "import geodata" not in source
+        assert "from geodata" not in source
+        assert "import geochemmodel" not in source
+        assert "from geochemmodel" not in source
