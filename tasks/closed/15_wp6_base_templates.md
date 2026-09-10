@@ -1,6 +1,6 @@
 # Phase 15: Registry templates (bivariate, boxplot_with_points, legacy adapters)
 
-**Status**: open
+**Status**: complete
 **Phase**: 15
 **Version target**: v0.2.0
 **Dependencies**: `15_wp2_template_registry`, `15_wp4_render_template`
