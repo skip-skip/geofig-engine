@@ -2,37 +2,79 @@
 geofig_engine
 
 A modular plotting engine for structured, multi-dimensional data visualization.
+
+Phase 15 interop M1 exposes the provider-driven declarative surface from the
+package root: ``render_template`` (returns ``list[Figure]``), the ``TEMPLATES``
+registry (``register_template`` / ``get_template``), the provider protocol
+(``DataProvider`` / ``DataFrameProvider`` / ``DatasetProvider``), and
+``FigureGenerator`` / ``FigureSpec``.
+
+Legacy names (``Dataset``, ``Dimension``, ``DimensionSelector``,
+``ColumnSelector``, ``IteratorEngine``, ``FigureEngine``) resolve lazily
+through ``deprecated.py`` with an import-time ``DeprecationWarning`` (once per
+symbol per process) and are removed no earlier than geofig-engine >= 1.0.0.
+``render_template_legacy`` (the old tuple-form entry) is importable without a
+warning; it warns at call time.
 """
 
-# Core data structures
-from .core.dataset import Dataset
-from .core.dimension import Dimension
-from .core.dimension_selector import DimensionSelector
-from .core.iterator import ColumnSelector
-
-# Engine
-from .engine import FigureEngine
-
-# Declarative API (Phase 15): template registry + recipe shape
-from .engine.api import TEMPLATES, get_template, register_template
-
-# Provider contract (Phase 15)
+# Public API (Phase 15): provider-driven, no upstream imports
+from .engine.api import (
+    TEMPLATES,
+    get_template,
+    register_template,
+    render_template,
+    render_template_legacy,
+)
+from .engine.generator import FigureGenerator
 from .provider import DataProvider, DataFrameProvider, DatasetProvider
-
-# Renderers
+from .core.spec import FigureSpec
 from .renderers import MatplotlibRenderer
 
+# Deprecated legacy re-exports (import-time DeprecationWarning via __getattr__)
+from . import deprecated as _deprecated
+
 __all__ = [
+    # Public
+    "render_template",
+    "register_template",
+    "get_template",
+    "TEMPLATES",
+    "DataProvider",
+    "DataFrameProvider",
+    "DatasetProvider",
+    "FigureGenerator",
+    "FigureSpec",
+    "MatplotlibRenderer",
+    # Deprecated (resolve with an import-time DeprecationWarning)
     "Dataset",
     "Dimension",
     "DimensionSelector",
     "ColumnSelector",
+    "IteratorEngine",
     "FigureEngine",
-    "TEMPLATES",
-    "register_template",
-    "get_template",
-    "DataProvider",
-    "DataFrameProvider",
-    "DatasetProvider",
-    "MatplotlibRenderer",
+    "render_template_legacy",
 ]
+
+#: Deprecated legacy names. Kept separate from the public ``__all__`` section
+#: above so consumers can programmatically distinguish the deprecated surface.
+__deprecated__ = [
+    "Dataset",
+    "Dimension",
+    "DimensionSelector",
+    "ColumnSelector",
+    "IteratorEngine",
+    "FigureEngine",
+    "render_template_legacy",
+]
+
+
+def __getattr__(name: str):
+    """Resolve deprecated legacy names lazily (import-time DeprecationWarning).
+
+    ``render_template_legacy`` is bound eagerly above, so this fires only for
+    the six ``deprecated.py`` shims — and only on actual access, keeping
+    ``from geofig_engine import render_template`` warning-free.
+    """
+    if name in __deprecated__:
+        return getattr(_deprecated, name)
+    raise AttributeError(f"module 'geofig_engine' has no attribute {name!r}")

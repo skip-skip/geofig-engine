@@ -32,6 +32,7 @@ from geofig_engine.core.coord import Coord, CoordCartesian
 from geofig_engine.core.facet import Facet, FacetNull
 from geofig_engine.core.iterator import DimensionIterator
 from geofig_engine.core.layer import Layer
+from geofig_engine.engine.entry import render_template_legacy
 from geofig_engine.engine.generator import FigureGenerator
 from geofig_engine.provider import DataProvider, DataFrameProvider
 from geofig_engine.renderers.matplotlib.legend import LegendAccumulator

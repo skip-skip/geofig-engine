@@ -1,11 +1,16 @@
 """
-Simplified entry point for FigEngine.
+Legacy tuple-form entry point for FigEngine (deprecated — Phase 15).
 
-Provides a single ``render_template()`` function that wraps the common
-pattern of: engine → build_specs_from_template → render → save.
+The former ``render_template()`` is preserved verbatim as
+``render_template_legacy`` and emits a call-time ``DeprecationWarning``. New
+work goes through the canonical ``geofig_engine.render_template``
+(``engine/api.py``), which returns ``list[Figure]``. Removed no earlier than
+the next major version (>= 1.0.0).
 """
 
 from __future__ import annotations
+
+import warnings
 
 from pathlib import Path
 from typing import Any, Sequence
@@ -16,8 +21,10 @@ from geofig_engine.core.iterator import DimensionIterator
 from geofig_engine.templates.base import FigureTemplate
 from geofig_engine.engine.generator import FigureEngine
 
+__all__ = ["render_template_legacy"]
 
-def render_template(
+
+def render_template_legacy(
     dataset: Dataset,
     template: FigureTemplate,
     iterators: Sequence[DimensionIterator] | DimensionIterator | None = None,
@@ -26,7 +33,11 @@ def render_template(
     renderer_name: str = "matplotlib",
     savedir: str | Path | None = None,
 ) -> tuple[list, list, Any]:
-    """Build, render, and optionally save figures from a template.
+    """Build, render, and optionally save figures from a template (legacy).
+
+    Deprecated: use ``render_template(data, template=...)`` (returns
+    ``list[Figure]``) instead. This tuple-form entry is kept verbatim and
+    removed no earlier than geofig-engine >= 1.0.0.
 
     Args:
         dataset: The data to visualize.
@@ -47,6 +58,13 @@ def render_template(
     Raises:
         ValueError: If ``renderer_name`` is not ``"matplotlib"``.
     """
+    warnings.warn(
+        "geofig_engine.render_template_legacy is deprecated; use "
+        "render_template(data, template=...) which returns list[Figure]. "
+        "It will be removed in geofig-engine >= 1.0.0.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     from geofig_engine.renderers import MatplotlibRenderer
 
     if renderer_name != "matplotlib":
