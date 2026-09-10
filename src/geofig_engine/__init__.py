@@ -13,6 +13,9 @@ from .core.iterator import ColumnSelector
 # Engine
 from .engine import FigureEngine
 
+# Declarative API (Phase 15): template registry + recipe shape
+from .engine.api import TEMPLATES, get_template, register_template
+
 # Provider contract (Phase 15)
 from .provider import DataProvider, DataFrameProvider, DatasetProvider
 
@@ -25,6 +28,9 @@ __all__ = [
     "DimensionSelector",
     "ColumnSelector",
     "FigureEngine",
+    "TEMPLATES",
+    "register_template",
+    "get_template",
     "DataProvider",
     "DataFrameProvider",
     "DatasetProvider",
