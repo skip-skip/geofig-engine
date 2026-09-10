@@ -187,28 +187,32 @@ class TestPiperRenderer:
         assert "$SO_4^{--}$ + $Cl^{-}$" in texts
         assert "$Ca^{++}$ + $Mg^{++}$" in texts
 
-    def test_diamond_has_no_majortick_stub_segments(self):
-        """Regression: the 45-degree stamp must not introduce tick stubs.
+    def test_diamond_has_majortick_stub_segments(self):
+        """The piper diamond opts into majorticks (Phase 14.59).
 
-        f21ca8c's hard-coded inward nubs leaked onto piper's numeric diamond
-        edge before the majortick gate landed. The gate (``majortick_length
-        is None`` => nothing drawn) keeps the diamond clean: no short 2-point
-        stub segments anywhere. Diagonal scan because the diamond transform
-        rotates axis-aligned nubs to 45 degrees.
+        The diamond stamps its tick nubs through a 45-degree rotate + scale
+        transform, so the nubs are diagonal 2-point segments whose display
+        length is the local ``majortick_length`` (2.0) times the matrix scale.
+        All four numeric edges tick at the four interior grid positions
+        (20/40/60/80) => 16 nubs; everything else in the diagram is far
+        longer.  The length threshold discriminates the stamped nubs from the
+        ternary triangles' short axis segments.
         """
         from geofig_engine.renderers import MatplotlibRenderer
         renderer = MatplotlibRenderer()
         specs = build_piper_specs(_DATA)
         ax = renderer.render(specs[0]).axes[0]
-        stub_count = 0
+        stub_lengths = []
         for line in ax.lines:
             xs = np.asarray(line.get_xdata())
             ys = np.asarray(line.get_ydata())
             if len(xs) != 2:
                 continue
-            if np.hypot(xs[1] - xs[0], ys[1] - ys[0]) < 0.1:
-                stub_count += 1
-        assert stub_count == 0
+            length = np.hypot(xs[1] - xs[0], ys[1] - ys[0])
+            if length < 0.1:
+                stub_lengths.append(length)
+        assert len(stub_lengths) == 16
+        assert all(stub == pytest.approx(0.01, abs=1e-9) for stub in stub_lengths)
 
     def test_secondary_titles_use_axis_label_fontsize(self):
         from geofig_engine.renderers import MatplotlibRenderer

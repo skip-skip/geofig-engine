@@ -184,6 +184,8 @@ def build_piper_specs(
             "y_reversed": True,
             "grid_step": 20,
             "tick_step": 20,
+            "majortick_length": 2.0,
+            "majortick_offset": 0,
             "secondary_x": {
                 "range": [0, 100],
                 "label": f"{_resolve_ion_label(right_tri[1], labels)} + {_resolve_ion_label(right_tri[2], labels)}",
