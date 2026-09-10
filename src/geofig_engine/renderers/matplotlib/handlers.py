@@ -13,6 +13,9 @@ from geofig_engine.core.coord import CoordPolar
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.renderers.matplotlib.util import resolve_color_series, resolve_marker_series
 
+#: Fill color for ungrouped (NaN) categorical color values in site-point layers.
+_NEUTRAL_COLOR = "#808080"
+
 
 def _resolve_constant(series: pd.Series) -> Any:
     """Return the first non-NA value if constant, else return the full Series."""
@@ -939,6 +942,12 @@ def render_site_point(ax: Axes, layer_spec: LayerSpec, order: int, coord=None) -
         base_kwargs["label"] = geom.group
 
     resolved_color = resolve_color_series(color) if color is not None else None
+    if isinstance(resolved_color, pd.Series) and resolved_color.isna().any():
+        # NaN categorical values (e.g. boundary rows sharing the points frame
+        # when a color override hits a group-less column) are ungrouped; give
+        # them the neutral plot color so the scatter color array stays
+        # resolvable instead of raising "Invalid RGBA argument: nan".
+        resolved_color = resolved_color.fillna(_NEUTRAL_COLOR)
     resolved_marker = resolve_marker_series(shape) if shape is not None else None
     resolved_size = size.values if isinstance(size, pd.Series) else size
     resolved_alpha = None

@@ -31,3 +31,7 @@ figures/
 # Logs
 *.log
 references
+AGENTS.md
+opencode.json
+.opencode/agent/engineer.md
+.opencode/command/implement-next.md

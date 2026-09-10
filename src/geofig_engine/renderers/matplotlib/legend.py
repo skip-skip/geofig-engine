@@ -132,7 +132,7 @@ class LegendAccumulator:
 
                 for i in range(len(raw_col)):
                     raw_val = raw_col.iloc[i]
-                    if raw_val in seen:
+                    if pd.isna(raw_val) or raw_val in seen:
                         continue
                     seen.add(raw_val)
 
