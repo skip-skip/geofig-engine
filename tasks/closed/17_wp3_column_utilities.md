@@ -1,6 +1,6 @@
 # Phase 17: Column utilities (`io/columns.py`)
 
-**Status**: open
+**Status**: complete
 **Phase**: 17
 **Version target**: v0.3.0
 **Dependencies**: `17_00_epic`

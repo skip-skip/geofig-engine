@@ -1,4 +1,5 @@
 import math
+import re
 
 import numpy as np
 import pandas as pd
@@ -8,6 +9,7 @@ from geofig_engine.io import (
     haversine, path_distance, gen_markers, gen_markers_series, Pipeline, PipelineStep,
     equisflat_to_sample_df, sample_df_to_equisflat, equis_crosstab_to_flat,
     equisflat_normalize_units, SI_PREFIXES,
+    ecesis_to_sample_df, create_bins,
 )
 from geofig_engine.io.markers import gen_markers_cross_grouping, DEFAULT_MARKERS, DEFAULT_PALETTE
 
@@ -170,6 +172,8 @@ class TestConstants:
         assert "equis_crosstab_to_flat" in __all__
         assert "equisflat_normalize_units" in __all__
         assert "SI_PREFIXES" in __all__
+        assert "ecesis_to_sample_df" in __all__
+        assert "create_bins" in __all__
 
 
 class TestEquisFlatToSample:
@@ -506,3 +510,166 @@ class TestEquisflatNormalizeUnits:
         flat = pd.DataFrame({"Parameter": ["NO3"], "Result": [1.0]})
         with pytest.raises(ValueError, match="missing required columns"):
             equisflat_normalize_units(flat)
+
+
+class TestEcesisToSampleDf:
+    def test_underscore_and_paren_units(self):
+        frame = pd.DataFrame({
+            "NO3_mg/L": [1.0, 2.0],
+            "Ca (mg/L)": [5.0, 6.0],
+            "Sample_ID": ["S1", "S2"],
+            "pH": [7.0, 8.0],
+        })
+        out = ecesis_to_sample_df(frame)
+        assert list(out.columns) == [
+            ("NO3", "mg/L"), ("Ca", "mg/L"), ("Sample_ID", ""), ("pH", ""),
+        ]
+        assert out[("NO3", "mg/L")].tolist() == [1.0, 2.0]
+        assert out[("Ca", "mg/L")].tolist() == [5.0, 6.0]
+        assert out[("Sample_ID", "")].tolist() == ["S1", "S2"]
+
+    def test_row_and_column_order_preserved(self):
+        frame = pd.DataFrame({
+            "B_mg/L": [3.0, 4.0],
+            "A_ug/L": [1.0, 2.0],
+        }, index=[10, 20])
+        out = ecesis_to_sample_df(frame)
+        assert list(out.columns) == [("B", "mg/L"), ("A", "ug/L")]
+        assert out.index.tolist() == [10, 20]
+
+    def test_numeric_coercion(self):
+        frame = pd.DataFrame({"NO3_mg/L": ["1.5", "n.d.", 2]})
+        out = ecesis_to_sample_df(frame, drop_na=False)
+        got = out[("NO3", "mg/L")].tolist()
+        assert got[0] == 1.5
+        assert np.isnan(got[1])
+        assert got[2] == 2.0
+
+    def test_plain_column_values_not_coerced(self):
+        frame = pd.DataFrame({"Sample_ID": ["S-001", "S-002"]})
+        out = ecesis_to_sample_df(frame)
+        assert out[("Sample_ID", "")].tolist() == ["S-001", "S-002"]
+
+    def test_drop_na_all_parsed_nan(self):
+        frame = pd.DataFrame({
+            "NO3_mg/L": [1.0, np.nan, 3.0],
+            "Ca_ug/L": [5.0, np.nan, "n.d."],
+            "Sample_ID": ["S1", "S2", "S3"],
+        })
+        out = ecesis_to_sample_df(frame)
+        assert len(out) == 2  # S2 row has NaN in every parsed cell → dropped
+        assert out[("Sample_ID", "")].tolist() == ["S1", "S3"]
+
+    def test_drop_na_false_keeps_all(self):
+        frame = pd.DataFrame({
+            "NO3_mg/L": [np.nan],
+            "Sample_ID": ["S1"],
+        })
+        out = ecesis_to_sample_df(frame, drop_na=False)
+        assert len(out) == 1
+
+    def test_no_parsed_columns_nothing_dropped(self):
+        frame = pd.DataFrame({"Sample_ID": ["S1", "S2"]})
+        out = ecesis_to_sample_df(frame)
+        assert len(out) == 2
+
+    def test_duplicate_parsed_key_raises(self):
+        frame2 = pd.DataFrame({
+            "NO3_mg/L": [1.0],
+            "NO3 (mg/L)": [2.0],
+        })
+        with pytest.raises(ValueError, match="duplicate.*column keys"):
+            ecesis_to_sample_df(frame2)
+
+    def test_custom_unit_pattern(self):
+        frame = pd.DataFrame({"Temp_degC": [20.0], "NO3_mg/L": [1.0]})
+        pattern = re.compile(r"^(?P<param>.+?)_(?P<unit>degC)$")
+        out = ecesis_to_sample_df(frame, unit_pattern=pattern)
+        assert list(out.columns) == [("Temp", "degC"), ("NO3_mg/L", "")]
+
+    def test_custom_pattern_missing_group_raises(self):
+        bad = re.compile(r"^(?P<param>.+)$")  # matches but lacks 'unit'
+        with pytest.raises(ValueError, match="'param' and 'unit'"):
+            ecesis_to_sample_df(
+                pd.DataFrame({"NO3_mg/L": [1.0]}), unit_pattern=bad)
+
+    def test_input_frame_unchanged(self):
+        frame = pd.DataFrame({
+            "NO3_mg/L": [1.0, 2.0],
+            "Sample_ID": ["S1", "S2"],
+        })
+        snapshot = frame.copy()
+        ecesis_to_sample_df(frame)
+        pd.testing.assert_frame_equal(frame, snapshot)
+
+
+class TestCreateBins:
+    def test_range_int_equal_width(self):
+        s = pd.Series([1.0, 2.0, 3.0, 4.0], name="NO3")
+        out = create_bins(s, bins=2)
+        assert out.name == "NO3"
+        assert out.isna().sum() == 0
+        # include_lowest=True → min falls in first bin
+        assert out.iloc[0] == out.iloc[1]
+        assert out.iloc[2] == out.iloc[3]
+
+    def test_range_explicit_edges_with_labels(self):
+        s = pd.Series([1.0, 5.0, 9.0])
+        out = create_bins(s, bins=[0, 5, 10], labels=["low", "high"])
+        assert out.tolist() == ["low", "low", "high"]
+
+    def test_range_datetime(self):
+        s = pd.to_datetime(pd.Series(
+            ["2026-01-01", "2026-04-01", "2026-07-01", "2026-10-01"]))
+        out = create_bins(s, bins=2)
+        assert out.isna().sum() == 0
+        assert out.dtype.name.startswith("category")
+
+    def test_quantile_equal_frequency(self):
+        s = pd.Series(range(1, 11), name="v")
+        out = create_bins(s, bins=5, strategy="quantile")
+        counts = out.value_counts().tolist()
+        assert counts == [2, 2, 2, 2, 2]
+
+    def test_quantile_duplicate_edges_collapsed(self):
+        s = pd.Series([1, 1, 1, 1, 2, 3, 4, 5])
+        out = create_bins(s, bins=4, strategy="quantile")
+        assert out.isna().sum() == 0
+        # duplicated edges collapsed → fewer than requested bins, none empty
+        assert len(out.cat.categories) < 4
+
+    def test_quantile_datetime(self):
+        s = pd.to_datetime(pd.Series(
+            ["2026-01-01", "2026-02-01", "2026-03-01", "2026-04-01",
+             "2026-05-01", "2026-06-01"]))
+        out = create_bins(s, bins=3, strategy="quantile")
+        assert out.isna().sum() == 0
+        assert out.dtype.name.startswith("category")
+
+    def test_nan_to_nan_category(self):
+        s = pd.Series([1.0, np.nan, 3.0, np.nan])
+        out = create_bins(s, bins=2)
+        assert out.isna().tolist() == [False, True, False, True]
+
+    def test_deterministic(self):
+        s = pd.Series([0.1, 0.5, 0.9, 1.3, 1.7, 2.1, 2.5])
+        a = create_bins(s, bins=3)
+        b = create_bins(s, bins=3)
+        pd.testing.assert_series_equal(a, b)
+        assert a.cat.categories.dtype == b.cat.categories.dtype
+
+    def test_input_not_mutated(self):
+        s = pd.Series([1.0, 2.0, 3.0, np.nan])
+        snapshot = s.copy()
+        create_bins(s, bins=2)
+        pd.testing.assert_series_equal(s, snapshot)
+
+    def test_quantile_labels_applied(self):
+        s = pd.Series(range(1, 11))
+        out = create_bins(s, bins=5, strategy="quantile",
+                          labels=["q1", "q2", "q3", "q4", "q5"])
+        assert set(out.cat.categories.tolist()) == {"q1", "q2", "q3", "q4", "q5"}
+
+    def test_unknown_strategy_raises(self):
+        with pytest.raises(ValueError, match="unknown strategy"):
+            create_bins(pd.Series([1, 2, 3]), bins=2, strategy="bogus")

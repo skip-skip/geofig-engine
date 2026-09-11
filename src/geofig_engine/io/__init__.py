@@ -1,3 +1,4 @@
+from geofig_engine.io.columns import create_bins, ecesis_to_sample_df
 from geofig_engine.io.equis import (
     equis_crosstab_to_flat,
     equisflat_to_sample_df,
@@ -20,4 +21,6 @@ __all__ = [
     "equis_crosstab_to_flat",
     "equisflat_normalize_units",
     "SI_PREFIXES",
+    "ecesis_to_sample_df",
+    "create_bins",
 ]
