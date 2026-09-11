@@ -120,18 +120,24 @@ class TestRenderTemplate:
         figures = render_template(data=sample_df, template=template)
         assert len(figures) == 1
 
-    def test_with_facet_splits_figures(self, sample_df, sample_template, tmp_path):
+    def test_with_facet_renders_multi_panel_figure(self, sample_df, sample_template, tmp_path):
         figures = render_template(
+            data=sample_df,
+            template=sample_template,
+            facet=FacetWrap(by="group"),
+        )
+        # one figure whose panels split the facet groups
+        assert len(figures) == 1
+        assert len(figures[0].axes) == 2
+        # savedir naming uses iterator keys only (facet keys stay out)
+        render_template(
             data=sample_df,
             template=sample_template,
             facet=FacetWrap(by="group"),
             savedir=tmp_path,
         )
-        # one spec/figure per facet group
-        assert len(figures) == 2
         filenames = [p.name for p in tmp_path.glob("*.png")]
-        assert any(f.startswith("001_") for f in filenames)
-        assert any(f.startswith("002_") for f in filenames)
+        assert "001.png" in filenames
         assert "legend.png" in filenames
 
     def test_legend_with_color_mapping(self, sample_df, tmp_path):

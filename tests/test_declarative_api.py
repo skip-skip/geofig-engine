@@ -226,9 +226,10 @@ class TestSavedir:
             facet=FacetWrap(by="group"),
             savedir=tmp_path,
         )
-        assert len(figures) == 2
+        # facet keys stay out of iterator_key → plain zero-padded names
+        assert len(figures) == 1
         pngs = sorted(p.name for p in tmp_path.glob("*.png"))
-        assert pngs == ["001_A.png", "002_B.png", "legend.png"]
+        assert pngs == ["001.png", "legend.png"]
 
 
 class TestNoUpstreamImports:

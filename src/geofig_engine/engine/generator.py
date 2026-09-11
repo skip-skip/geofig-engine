@@ -8,7 +8,6 @@ template, and mapping inputs, and optionally dispatches them to a renderer.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from itertools import product
 from typing import Any, Callable, Sequence
 
 import pandas as pd
@@ -465,64 +464,55 @@ class FigureGenerator:
         # Constant value (incl. tuples like literal colors)
         return source
 
-    def _facet_groups(self) -> list[tuple[DataProvider, dict[str, Any]]]:
-        """Split the provider into one ``(sub-provider, context)`` per facet group.
-
-        Facet groups are enumerated from the provider's unique column values
-        and each group is obtained via ``provider.subset`` (a new provider per
-        group — never a mutation).
-        """
-        by = tuple(getattr(self.facet, "by", ()) or ())
-        if not by:
-            return [(self.provider, {})]
-
-        value_lists = [self.provider.unique_values(col) for col in by]
-        groups: list[tuple[DataProvider, dict[str, Any]]] = []
-        for values in product(*value_lists):
-            filters = dict(zip(by, values))
-            groups.append((self.provider.subset(**filters), filters))
-        return groups
-
     # ------------------------------------------------------------------
     # Spec building + rendering
     # ------------------------------------------------------------------
 
     def build_specs(self) -> list[FigureSpec]:
-        """Resolve/expand/facet and build one validated FigureSpec per group.
+        """Expand the provider and build one validated FigureSpec per
+        iterator combination.
 
         Resolution order:
-        1. facet-split the provider (``provider.subset``)
-        2. expand each group (``provider.expand``)
-        3. resolve channel selectors (``provider.resolve``) + scales
-        4. package into validated ``FigureSpec``(s)
+        1. expand the provider (``provider.expand``) — one ``(frame,
+           context)`` per iterator combination; no iterators yields the full
+           frame
+        2. resolve channel selectors (``provider.resolve``) + scales
+        3. package into validated ``FigureSpec``(s)
+
+        Facets are **not** pre-split here (Phase 18.1): the full
+        iterator-context frame and the facet spec are stamped on each
+        FigureSpec, and the renderer applies the facet panel-wise (one
+        multi-panel figure per spec) — matching the legacy
+        ``FigureEngine.build_specs_from_layers`` behavior and the documented
+        facet/iterator distinction (panels within one figure vs. independent
+        figures).
         """
         specs: list[FigureSpec] = []
-        for sub_provider, facet_ctx in self._facet_groups():
-            for frame, iter_ctx in sub_provider.expand(self.iterators or []):
-                context = {**iter_ctx, **facet_ctx}
-                resolved_settings = resolve_settings(self.settings, context)
-                layers = self._effective_layers()
-                layer_specs = resolve_layer_sources(
-                    layers,
-                    frame=frame,
-                    resolve=lambda source, _f=frame, _c=context: (
-                        self._resolve_source(source, _f, _c)
-                    ),
+        for frame, iter_ctx in self.provider.expand(self.iterators or []):
+            context = {**iter_ctx}
+            resolved_settings = resolve_settings(self.settings, context)
+            layers = self._effective_layers()
+            layer_specs = resolve_layer_sources(
+                layers,
+                frame=frame,
+                resolve=lambda source, _f=frame, _c=context: (
+                    self._resolve_source(source, _f, _c)
+                ),
+            )
+            _check_required_channels(layer_specs)
+            specs.append(
+                FigureSpec(
+                    data=frame,
+                    mappings=summarize_mappings(layers, layer_specs),
+                    settings=resolved_settings,
+                    context=context,
+                    template_name="custom",
+                    iterator_key=tuple(sorted(context)),
+                    layers=layer_specs,
+                    coord=self.coord,
+                    facet=self.facet,
                 )
-                _check_required_channels(layer_specs)
-                specs.append(
-                    FigureSpec(
-                        data=frame,
-                        mappings=summarize_mappings(layers, layer_specs),
-                        settings=resolved_settings,
-                        context=context,
-                        template_name="custom",
-                        iterator_key=tuple(sorted(context)),
-                        layers=layer_specs,
-                        coord=self.coord,
-                        facet=self.facet,
-                    )
-                )
+            )
         return specs
 
     def render(

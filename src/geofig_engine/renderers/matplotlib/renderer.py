@@ -108,6 +108,11 @@ def _filter_series(val, rows, all_rows):
 def _facet_panels(facet, data):
     if isinstance(facet, FacetNull) or not data.columns.intersection(facet.by).any():
         return [(data, {})]
+    # Empty frames yield no groupby groups — fall back to a single empty
+    # panel (parity with the no-facet empty-dataset path) instead of
+    # "Facet produced zero panels".
+    if data.empty:
+        return [(data, {})]
     panels = []
     grouped = data.groupby(list(facet.by), sort=True)
     for keys, subset in grouped:

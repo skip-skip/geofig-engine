@@ -223,7 +223,9 @@ def render_template(
         mapping: Per-layer mapping override, merged over the recipe layers.
         settings: User settings merged on top of the recipe defaults.
         iterators: Optional dimension iterators for multi-figure expansion.
-        facet: Optional facet spec for one-spec-per-group splitting.
+        facet: Optional facet spec; splits the data into panels within a
+            single figure (renderer-side). One figure per iterator
+            combination, each containing the full facet panel grid.
         coord: Overrides the recipe coord when given.
         savedir: If provided, each figure is persisted as a PNG using the
             legacy naming convention (zero-padded index + iterator key parts),

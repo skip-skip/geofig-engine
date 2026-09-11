@@ -303,7 +303,7 @@ class TestFigureGenerator:
                 )
 
     def test_generator_calls_provider_contract(self):
-        """Spy: resolve/expand/subset are called; nothing Dataset-based."""
+        """Spy: resolve/expand called, subset not called; nothing Dataset-based."""
         calls = {"resolve": 0, "expand": 0, "subset": 0}
         inner = DataFrameProvider(make_dataset().dataframe)
 
@@ -351,12 +351,12 @@ class TestFigureGenerator:
         )
         specs = generator.build_specs()
 
-        assert len(specs) == 2  # facet groups A, B
+        assert len(specs) == 1  # facets are stamped on the spec, not pre-split
         assert calls["resolve"] >= 1
         assert calls["expand"] >= 1
-        assert calls["subset"] >= 1
+        assert calls["subset"] == 0
 
-    def test_facet_splitting_one_spec_per_group(self):
+    def test_facet_does_not_split_specs(self):
         dataset = make_dataset()
         generator = FigureGenerator(
             provider=DataFrameProvider(dataset.dataframe),
@@ -365,11 +365,14 @@ class TestFigureGenerator:
             facet=FacetWrap(by="group"),
         )
         specs = generator.build_specs()
-        assert len(specs) == 2
-        assert {spec.context.get("group") for spec in specs} == {"A", "B"}
-        # Each spec only carries its own group's rows
-        for spec in specs:
-            assert set(spec.data["group"]) == {spec.context["group"]}
+        assert len(specs) == 1
+        spec = specs[0]
+        assert spec.facet.name == "wrap"
+        # the full frame travels with the spec; the renderer splits panels
+        assert set(spec.data["group"]) == {"A", "B"}
+        # facet keys stay out of context/iterator_key (parity with legacy)
+        assert "group" not in spec.context
+        assert spec.iterator_key == ()
 
     def test_missing_required_channel_raises_informative(self):
         dataset = make_dataset()
