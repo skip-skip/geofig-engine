@@ -54,7 +54,7 @@ def render_template(
 | `mapping` | `dict[str, Any] \| None` | Per-layer mapping override, merged over the recipe layers. Only channels the layer already binds to a **string source** are remapped, so scalar-literal channels (fixed annotation text, …) are left intact. |
 | `settings` | `dict[str, Any] \| None` | User settings merged **on top of** the recipe's `default_settings`. |
 | `iterators` | `list[DimensionIterator] \| None` | Optional dimension iterators for multi-figure expansion (a single iterator is also accepted). |
-| `facet` | `Facet \| None` | Optional facet spec for one-spec-per-group splitting; defaults to `FacetNull()`. |
+| `facet` | `Facet \| None` | Optional facet spec; splits the data into panels within a single figure (renderer-side). One figure per iterator combination, each containing the full facet panel grid. Defaults to `FacetNull()`. |
 | `coord` | `Coord \| None` | Overrides the recipe's coord when given (e.g. `CoordGeo(crs=...)`); defaults to the recipe's. |
 | `savedir` | `str \| Path \| None` | If provided, each figure is persisted as `NNN_<iterator keys>.png` (zero-padded index + context values joined by `_`) plus a `legend.png`. |
 | `renderer_name` | `str` | Backend name; only `"matplotlib"` is supported. |
@@ -175,7 +175,7 @@ class FigureGenerator:
 
 | Method | Signature | Description |
 | --- | --- | --- |
-| `build_specs` | `build_specs(self) -> list[FigureSpec]` | Resolves/expands/facets the provider and builds one validated `FigureSpec` per group. Resolution order: facet-split (`provider.subset`) → expand (`provider.expand`) → resolve channel selectors (`provider.resolve`) + scales → package into validated specs. Missing required channels raise the informative spec-build error here. |
+| `build_specs` | `build_specs(self) -> list[FigureSpec]` | Expands the provider iterators (`provider.expand`) and builds one validated `FigureSpec` per iterator combination. Resolution order: expand → resolve channel selectors (`provider.resolve`) + scales → package into validated specs. Facets are stamped on each spec and applied panel-wise by the renderer (one multi-panel figure per spec). Missing required channels raise the informative spec-build error here. |
 | `render` | `render(self, renderer=None, renderer_name="matplotlib") -> list[Any]` | Builds the specs and hands them to a renderer (default `MatplotlibRenderer`); returns backend figures. `renderer_name` must be `"matplotlib"` unless an explicit `renderer` is passed. |
 
 `render_template` composes exactly this: `_wrap_data(data)` → recipe layers +

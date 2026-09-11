@@ -511,11 +511,28 @@ of 1332 (the 6 skips are pyproj-gated; none from the warning policy).
 
 ---
 
+## ✅ Phase 18.1 — Facet / iterator consistency (bug-fix mini-phase)
+
+Bug-fix mini-phase closing the Phase-15 generator/renderer facet divergence:
+`render_template(..., facet=...)` now returns **one multi-panel figure** whose
+panels split the facet groups (renderer-side), instead of one single-panel
+figure per group. `facet=` + `iterators=` compose as N independent figures,
+each carrying the full facet panel grid (parity with the legacy
+`FigureEngine` path); `FacetGrid` missing row×col combos render as hidden
+axes; empty data + facet renders a single empty panel instead of raising
+`ValueError: Facet produced zero panels`; generator `context`/`iterator_key`
+carry iterator keys only, so savedir filenames no longer include facet
+values. WPs: generator (`18_1_wp1_facet_generator`), tests
+(`18_1_wp2_facet_tests`), docs/ROADMAP (`18_1_wp3_facet_docs_roadmap`) —
+`tasks/closed/18_1_*.md`. Full suite: **1392 passed / 6 skipped**.
+
+---
+
 ## 📋 Phase 18 — Infrastructure
 
-- **Multithread / parallel iteration processing** — parse iterators in parallel thread pool
-- **Data preprocessing pipeline** — assign new columns / groups / aggregates before spec building
-- **Multi-page figure output** — render multiple specs onto pages (e.g., PDF with one plot per page)
-- **Axis limit overrides per layer** — expose xlim/ylim per layer, not just globally
+- **Multithread / parallel iteration processing** — parse iterators in parallel thread pool *(open)*
+- **Data preprocessing pipeline** — assign new columns / groups / aggregates before spec building *(shipped — Phase 17, `io/preprocess.py`)*
+- **Multi-page figure output** — render multiple specs onto pages (e.g., PDF with one plot per page) *(open)*
+- **Axis limit overrides per layer** — expose xlim/ylim per layer, not just globally *(shipped — Phase 14, `de36ea1`)*
 
 ---
