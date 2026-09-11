@@ -49,6 +49,15 @@ The geom-level channel enum is `geofig_engine.core.geom.Channel` (see
 
 ## Data model
 
+> **Legacy metadata path.** `Dataset` / `Dimension` / `DimensionSelector` are
+> the metadata-bearing data model carried over from the legacy surface. New
+> code should pass raw `pandas.DataFrame`s (or duck-typed providers) through
+> [`render_template`](engine.md#render_template) / [`DataProvider`](provider.md)
+> — the legacy `Dataset`-based pipeline is deprecated (root-level access
+> warns) and removed no earlier than geofig-engine >= 1.0.0. The classes below
+> remain documented because `DatasetProvider` and selector resolution still
+> consume them in the legacy path.
+
 ### `Dataset` (dataclass)
 
 ```python
@@ -446,6 +455,7 @@ applied to channels while resolving layers (before rendering).
 | `CoordPolar` | `polar` | `(theta="x", start=0.0, end=360.0)` | `aspect_ratio` = 1.0; converts categorical `x` series into angular positions evenly spaced on `[0, 2π)`. |
 | `CoordFixed` | `fixed` | `(ratio=1.0)` — must be positive | `aspect_ratio` = `ratio`. |
 | `TernaryCoord` | `ternary` | `(channels=("a","b","c"), handedness="left", labels=None)` | See below. |
+| `CoordGeo` | `geo` | `(crs="EPSG:4326", bounds=None, bounds_crs=None, aspect=None)` | Geographic lon/lat → projected CRS; see below. |
 
 ### `TernaryCoord`
 
@@ -462,6 +472,46 @@ Helpers:
 - `ternary_project(a, b, c, handedness="left")` — projects fraction arrays
   onto local coordinates `(x, y)` (`x = 0.5a + c`, `y = TERNARY_HEIGHT · a`,
   mirrored when `handedness="right"`, rows normalized by row sum).
+
+### `CoordGeo`
+
+Geographic coordinate system for lon/lat data (assumed WGS84) projected into
+an output CRS.
+
+```python
+@dataclass(frozen=True)
+class CoordGeo(Coord):
+    crs: str = WGS84              # "EPSG:4326"
+    bounds: tuple[float, float, float, float] | None = None
+    bounds_crs: str | None = None # defaults to crs when bounds are given
+    aspect: float | None = None
+```
+
+- `crs` must be a non-empty CRS string (else `ValueError`). The default
+  `WGS84` is the identity — no projection.
+- For a non-WGS84 `crs`, `transform_visual_mapping` projects the `x`/`y`
+  mapping series (lon/lat) into that CRS via the `[geo]` extra (pyproj
+  `Transformer.from_crs(..., always_xy=True)`). Without pyproj it falls back
+  to an identity (lon/lat → x/y) projection and emits a `UserWarning` naming
+  the extra.
+- `bounds` (validated as a 4-tuple of numeric extents, in `bounds_crs`
+  defaulting to `crs`) and `aspect` (positive real, else `ValueError`) are
+  declared and validated at construction; their axis-level application is M2
+  polish. `aspect_ratio()` returns `aspect`.
+
+Example — project a site map to a projected CRS:
+
+```python
+from geofig_engine import render_template
+from geofig_engine.core.coord import CoordGeo
+
+render_template(
+    data=df,                        # lon/lat columns
+    template="site_map",
+    mapping={"x": "lon", "y": "lat"},
+    coord=CoordGeo(crs="EPSG:26910"),  # UTM zone 10N
+)
+```
 
 ---
 
@@ -717,4 +767,4 @@ Requires invertible (non-degenerate) ranges; `fwd` maps primary → secondary,
 
 ---
 
-*Next: [Engine](engine.md) · [Templates](templates.md) · [Renderers](renderers.md) · [Serialization](serialize.md) · [Data](data.md) · [IO](io.md)*
+*Next: [engine.md](engine.md) · [provider.md](provider.md) · [templates.md](templates.md) · [renderers.md](renderers.md) · [serialize.md](serialize.md) · [data.md](data.md) · [io.md](io.md)*

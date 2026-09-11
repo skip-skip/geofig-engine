@@ -79,10 +79,14 @@ for linked-axis parents, children's layers' geoms) all have registered
 handlers. Otherwise `False`.
 
 ```python
-from geofig_engine.templates import bivariate
-from geofig_engine.engine import render_template
+from geofig_engine import render_template
 
-specs, figures, legend = render_template(dataset=df, template=bivariate(...))
+figures = render_template(
+    data=df,
+    template="bivariate",
+    mapping={"x": "x", "y": "y", "color": "well"},
+)
+figures[0].show()   # render_template returns list[Figure] (no specs/legend)
 ```
 
 ---
@@ -159,4 +163,4 @@ there are no groups.
 
 ---
 
-*Next: [core.md](core.md) · [engine.md](engine.md) · [templates.md](templates.md) · [serialize.md](serialize.md) · [data.md](data.md) · [io.md](io.md)*
+*Next: [core.md](core.md) · [engine.md](engine.md) · [provider.md](provider.md) · [templates.md](templates.md) · [serialize.md](serialize.md) · [data.md](data.md) · [io.md](io.md)*

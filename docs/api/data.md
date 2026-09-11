@@ -246,4 +246,4 @@ Returns a `FunctionRegistry` built lazily from `FunctionLoader.load()`.
 
 ---
 
-*Next: [core.md](core.md) · [engine.md](engine.md) · [templates.md](templates.md) · [renderers.md](renderers.md) · [serialize.md](serialize.md) · [io.md](io.md)*
+*Next: [core.md](core.md) · [engine.md](engine.md) · [provider.md](provider.md) · [templates.md](templates.md) · [renderers.md](renderers.md) · [serialize.md](serialize.md) · [io.md](io.md)*

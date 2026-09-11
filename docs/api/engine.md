@@ -1,165 +1,224 @@
 # API Reference — Engine
 
-`geofig_engine.engine` orchestrates everything: it expands a `Dataset` over
-iterators, resolves `Layer` objects into concrete `LayerSpec`s (applying stats
-and scales), builds renderer-ready [`FigureSpec`](core.md#layers--specs)
-objects, and dispatches them to a renderer.
+`geofig_engine.engine` provides the **declarative entry surface** (Phase 15):
+a template-key registry (`TEMPLATES`), the canonical `render_template` entry
+point, and the provider-driven `FigureGenerator` orchestrator. The engine
+consumes **only** [`DataProvider`](provider.md) objects — raw frames are
+wrapped for you — resolves `Layer` objects into concrete `LayerSpec`s
+(applying stats and scales), builds validated
+[`FigureSpec`](core.md#layers--specs) objects, and dispatches them to a
+renderer.
 
-```python
-from geofig_engine.engine import EngineConfig, FigureEngine, render_template
-```
+The legacy `Dataset`-based surface is deprecated (see
+[Legacy entry & deprecations](#legacy-entry--deprecations)).
 
 ## Contents
 
-- [EngineConfig](#engineconfig)
-- [FigureEngine](#figureengine)
 - [render_template](#render_template)
+- [TEMPLATES registry](#templates-registry)
+- [FigureGenerator](#figuregenerator)
+- [Providers](#providers)
+- [Legacy entry & deprecations](#legacy-entry--deprecations)
 
 ---
 
-## EngineConfig
+## render_template
+
+The **canonical single-call entry point**: coerce data → provider, resolve the
+template key (or object) → recipe, merge `mapping`/`coord`/`settings`
+overrides, build specs, render, optionally save. Import it from the package
+root (or from `geofig_engine.engine`):
 
 ```python
-@dataclass(frozen=True)
-class EngineConfig:
-    default_settings: dict[str, Any] = {}
-    default_context: dict[str, Any] = {}
-    strict: bool = False
+from geofig_engine import render_template
 ```
-
-| Field | Type | Default | Description |
-| --- | --- | --- | --- |
-| `default_settings` | `dict[str, Any]` | `{}` | Base settings merged under every produced `FigureSpec`. |
-| `default_context` | `dict[str, Any]` | `{}` | Base iterator context values available to every produced `FigureSpec`. |
-| `strict` | `bool` | `False` | Enables/disables single-value literals: when `True`, a string mapping source that is not a column raises `KeyError` instead of being treated as a constant (passed through to `resolve_source`). |
-
----
-
-## FigureEngine
-
-```python
-class FigureEngine:
-    def __init__(self, config: EngineConfig | None = None) -> None:
-```
-
-Creates an engine with an optional `EngineConfig`. Each engine carries its own
-`LegendAccumulator` for collecting legend entries from resolved specs.
-
-### `build_specs_from_layers(dataset, layers, settings=None, iterators=None, coord=None, facet=None, _template_name="custom")`
-
-Builds `FigureSpec`s from `Layer` objects (the grammar-of-graphics path).
-
-| Param | Type | Description |
-| --- | --- | --- |
-| `dataset` | `Dataset` | Data to visualize. |
-| `layers` | `list[Layer]` | Declarative layers (see [core — Layers](core.md#layers--specs)). |
-| `settings` | `dict[str, Any] \| None` | Settings merged on top of `config.default_settings`. |
-| `iterators` | `Sequence[DimensionIterator] \| DimensionIterator \| None` | Iterators driving multi-figure expansion (a single iterator is accepted). |
-| `coord` | `Coord \| None` | Coordinate system; defaults to `CoordCartesian()`. |
-| `facet` | `Facet \| None` | Panel-splitting facet; defaults to `FacetNull()`. |
-| `_template_name` | `str` | Template name stamped on the specs. |
-
-**Returns:** `list[FigureSpec]`. Resolution per layer: (1) run the layer's
-`Stat.compute` on the dataset, (2) resolve each mapping channel via
-`resolve_source` (honoring `config.strict` and iterator context), (3) extract
-the series (from stat output, else the original dataframe), (4) apply the
-channel's `Scale.transform`, (5) package a `LayerSpec`. Legend data is
-accumulated from the resolved specs.
-
-### `build_specs_from_template(dataset, template, settings=None, iterators=None, facet=None)`
-
-Builds `FigureSpec`s from a [`FigureTemplate`](templates.md#figuretemplate).
-
-| Param | Type | Description |
-| --- | --- | --- |
-| `dataset` | `Dataset` | Data to visualize. |
-| `template` | `FigureTemplate` | Template whose layers, coord, and defaults define the figure. |
-| `settings` | `dict[str, Any] \| None` | Overrides merged on top of `template.default_settings`. |
-| `iterators` | `Sequence[DimensionIterator] \| DimensionIterator \| None` | Optional iterators. |
-| `facet` | `Facet \| None` | Optional facet. |
-
-**Returns:** `list[FigureSpec]`. Delegates to `build_specs_from_layers` with
-the template's `coord`, its name as `_template_name`, and merged settings.
-
-### `render_specs(specs, renderer)`
-
-Renders an existing list of `FigureSpec`s.
-
-| Param | Type | Description |
-| --- | --- | --- |
-| `specs` | `list[FigureSpec]` | Specs to render; validated first (raises on empty unless empty is allowed — empty lists are accepted). |
-| `renderer` | `BaseRenderer` | Must not be `None`. |
-
-**Returns:** `list[Any]` of backend figure objects (via `renderer.render_all`).
-
-### `render_spec(spec, renderer)`
-
-Renders a single `FigureSpec`.
-
-**Returns:** a backend figure object.
-
-### `render_legend(renderer)`
-
-Renders the accumulated legend for everything the engine has built so far.
-
-| Param | Type | Description |
-| --- | --- | --- |
-| `renderer` | `BaseRenderer` | Must support a `render_legend(accumulator)` method. |
-
-**Returns:** a backend figure object. **Raises:** `ValueError` if `renderer`
-is `None`; `NotImplementedError` if the renderer lacks `render_legend`.
-
-### `clear_legend()`
-
-Clears the engine's `LegendAccumulator`.
-
----
-
-## `render_template`
-
-The simplified single-call entry point: engine → build specs → render →
-optionally save.
 
 ```python
 def render_template(
-    dataset: Dataset,
-    template: FigureTemplate,
-    iterators: Sequence[DimensionIterator] | DimensionIterator | None = None,
+    data: pd.DataFrame | DataProvider | np.ndarray,
+    template: str | FigureTemplate | TemplateRecipe | dict,
+    mapping: dict[str, Any] | None = None,
     settings: dict[str, Any] | None = None,
+    iterators: list[DimensionIterator] | None = None,
     facet: Facet | None = None,
-    renderer_name: str = "matplotlib",
+    coord: Coord | None = None,
     savedir: str | Path | None = None,
-) -> tuple[list, list, Any]:
+    renderer_name: str = "matplotlib",
+) -> list[Any]:
 ```
 
 | Param | Type | Description |
 | --- | --- | --- |
-| `dataset` | `Dataset` | The data to visualize. |
-| `template` | `FigureTemplate` | Template defining layers, coord, defaults. |
-| `iterators` | `Sequence[DimensionIterator] \| DimensionIterator \| None` | Optional iterators for multi-figure expansion. |
-| `settings` | `dict[str, Any] \| None` | Override settings merged on top of template defaults. |
-| `facet` | `Facet \| None` | Optional facet spec for subplot splitting. |
+| `data` | `pd.DataFrame \| DataProvider \| np.ndarray` | A `DataProvider` passes through; a `pd.DataFrame` is wrapped in `DataFrameProvider`; an ndarray is wrapped in a frame with **string positional columns** (`"0"`, `"1"`, …) so mappings can address it (e.g. a dendrogram linkage matrix). |
+| `template` | `str \| FigureTemplate \| TemplateRecipe \| dict` | A registry **key** (resolved via `get_template`), or a `FigureTemplate` / duck-typed recipe (anything exposing `name`/`layers`/`coord`/`default_settings`) adapted via `recipe_from`. |
+| `mapping` | `dict[str, Any] \| None` | Per-layer mapping override, merged over the recipe layers. Only channels the layer already binds to a **string source** are remapped, so scalar-literal channels (fixed annotation text, …) are left intact. |
+| `settings` | `dict[str, Any] \| None` | User settings merged **on top of** the recipe's `default_settings`. |
+| `iterators` | `list[DimensionIterator] \| None` | Optional dimension iterators for multi-figure expansion (a single iterator is also accepted). |
+| `facet` | `Facet \| None` | Optional facet spec for one-spec-per-group splitting; defaults to `FacetNull()`. |
+| `coord` | `Coord \| None` | Overrides the recipe's coord when given (e.g. `CoordGeo(crs=...)`); defaults to the recipe's. |
+| `savedir` | `str \| Path \| None` | If provided, each figure is persisted as `NNN_<iterator keys>.png` (zero-padded index + context values joined by `_`) plus a `legend.png`. |
 | `renderer_name` | `str` | Backend name; only `"matplotlib"` is supported. |
-| `savedir` | `str \| Path \| None` | If provided, renders each figure as `NNN_<iterator keys>.png` (zero-padded index + context values joined by `_`) and a `legend.png`. |
 
-**Returns:** `(specs, figures, legend_fig)` — the list of `FigureSpec` objects,
-the list of rendered matplotlib figures, and the accumulated legend figure (an
-empty figure if there are no legend entries).
+**Returns:** `list[Figure]` — the rendered backend figures. Specs and the
+legend figure are **not** returned here; they live in the legacy path
+([`render_template_legacy`](#legacy-entry--deprecations)).
 
-**Raises:** `ValueError` if `renderer_name` is not `"matplotlib"`.
+**Raises:**
+
+- `KeyError` — unknown template key (the message lists the available keys).
+- `TypeError` — unsupported `data` or `template` type.
+- `ValueError` — unsupported `renderer_name`, or missing required channels at
+  spec-build time (informative message, not a generator-internals traceback).
 
 ```python
-from geofig_engine.templates import bivariate
+import pandas as pd
+from geofig_engine import render_template
 
-specs, figures, legend = render_template(
-    dataset=df,
-    template=bivariate(mapping={"x": "x", "y": "y", "color": "well"}),
+df = pd.DataFrame({
+    "x": [1, 2, 3, 4, 5],
+    "y": [2, 3, 5, 7, 11],
+    "well": ["A", "A", "B", "B", "B"],
+})
+
+figures = render_template(
+    data=df,
+    template="bivariate",
+    mapping={"x": "x", "y": "y", "color": "well"},
     settings={"figsize": (8, 6)},
 )
+figures[0].show()
 ```
 
 ---
 
-*See [core.md](core.md) for the spec/layer model, [templates.md](templates.md)
-for available templates, and [renderers.md](renderers.md) for the renderer
-contract.*
+## TEMPLATES registry
+
+`TEMPLATES` is the exported registry mapping a **template key** to a builder
+callable. Recipes returned by the builders are duck-typed — they expose
+`name` / `layers` / `coord` / `default_settings` — so third-party builders
+(`geochemmodel` workflows, downstream adapters) register without engine
+changes.
+
+```python
+from geofig_engine import TEMPLATES, register_template, get_template
+```
+
+### `register_template(name, builder)`
+
+Registers (or **overrides**) a builder under `name`. `name` must be a string
+and `builder` must be callable — anything else raises `ValueError`. Overriding
+an existing key is allowed.
+
+### `get_template(name)`
+
+Returns the builder registered under `name`. Unknown keys raise `KeyError`
+listing the available keys.
+
+### `TemplateRecipe` (frozen dataclass)
+
+```python
+@dataclass(frozen=True)
+class TemplateRecipe:
+    name: str
+    layers: list[Layer]
+    coord: Coord = CoordCartesian()
+    default_settings: dict[str, Any] = {}
+```
+
+The canonical recipe shape returned by template builders. Missing *required
+channels* are not validated here — that check happens lazily at spec-build
+time.
+
+### `recipe_from(template_or_recipe)`
+
+Normalizes a template builder result to a recipe: `TemplateRecipe` and
+duck-typed recipes pass through unchanged; `FigureTemplate` objects are
+adapted (layers / coord / default settings / name are copied over). Anything
+else raises `TypeError`.
+
+### Seeded keys
+
+| Key | Builder | Notes |
+| --- | --- | --- |
+| `bivariate` | `bivariate_builder` | Pipeline builder (scatter). |
+| `boxplot_with_points` | `boxplot_with_points_builder` | Pipeline builder. |
+| `dendrogram` | `dendrogram_builder` | Pipeline builder (takes the linkage-matrix ndarray via `data`). |
+| `particle_overlay` | `particle_overlay_builder` | Pipeline builder. |
+| `site_map` | `site_map_builder` | Pipeline builder (geo; use with `CoordGeo`). |
+| `histogram`, `pie`, `radar`, `timeseries`, `isotope`, `npr_nnp`, `anp_agp`, `nagph_nag` | legacy factories adapted via `legacy_adapter` | The shipped [`geofig_engine.templates`](templates.md) factories re-registered as registry builders. |
+| `piper`, `stiff` | spec builders | Keys resolve via `get_template`, but invoking them through `render_template` raises an informative `TypeError` pointing at the spec-builder route (these build `FigureSpec`s the layer→recipe pipeline cannot express — see [templates — Spec builders](templates.md#spec-builders)). |
+
+---
+
+## FigureGenerator
+
+Provider-driven orchestrator and the **only** component allowed to orchestrate
+multiple subsystems. It consumes only `DataProvider` (`.resolve` / `.expand` /
+`.subset`) — it never touches a `Dataset` object directly; legacy `Dataset`
+input reaches it through `DatasetProvider`.
+
+```python
+from geofig_engine import FigureGenerator
+
+class FigureGenerator:
+    def __init__(
+        self,
+        provider: DataProvider,
+        layers: list[Layer],
+        coord: Coord,
+        facet: Facet = FacetNull(),
+        scales: dict[str, Scale] | None = None,
+        settings: dict | None = None,
+        iterators: list[DimensionIterator] | None = None,
+    ) -> None: ...
+```
+
+| Method | Signature | Description |
+| --- | --- | --- |
+| `build_specs` | `build_specs(self) -> list[FigureSpec]` | Resolves/expands/facets the provider and builds one validated `FigureSpec` per group. Resolution order: facet-split (`provider.subset`) → expand (`provider.expand`) → resolve channel selectors (`provider.resolve`) + scales → package into validated specs. Missing required channels raise the informative spec-build error here. |
+| `render` | `render(self, renderer=None, renderer_name="matplotlib") -> list[Any]` | Builds the specs and hands them to a renderer (default `MatplotlibRenderer`); returns backend figures. `renderer_name` must be `"matplotlib"` unless an explicit `renderer` is passed. |
+
+`render_template` composes exactly this: `_wrap_data(data)` → recipe layers +
+merged overrides → `FigureGenerator(...)` → `build_specs()` +
+`MatplotlibRenderer().render_all(specs)` (plus a legend figure and optional
+PNG persistence).
+
+---
+
+## Providers
+
+Every input the engine consumes must satisfy the `DataProvider` protocol
+(`columns` / `resolve` / `expand` / `subset` / `unique_values` / `dimensions`).
+`render_template` coerces raw frames ndarrays for you; you only construct
+providers (or implement the protocol) when you go through `FigureGenerator`
+directly.
+
+See [Providers](provider.md) for the protocol, the `DataFrameProvider` and
+`DatasetProvider` implementations, and the selector forms.
+
+---
+
+## Legacy entry & deprecations
+
+The former root-level names still resolve, but access to the six legacy
+symbols emits an **import-time** `DeprecationWarning` (once per symbol per
+process); `render_template_legacy` — the old tuple-form entry
+`(specs, figures, legend_fig)` — is importable without a warning and warns at
+**call time**. All are removed no earlier than geofig-engine >= 1.0.0.
+
+| Deprecated name | Recommended replacement | Warning |
+| --- | --- | --- |
+| `Dataset` | raw `DataFrame` + `DataFrameProvider(df)`, or `DatasetProvider` | import-time |
+| `Dimension` | geodata metadata (provider `dimensions(column)`) | import-time |
+| `DimensionSelector` / `ColumnSelector` | plain column names + `provider.resolve(selector)` | import-time |
+| `IteratorEngine` | `provider.expand(iterators)` | import-time |
+| `FigureEngine` | `FigureGenerator` + `render_template` | import-time |
+| `render_template_legacy` | `render_template` (returns `list[Figure]`) | call-time |
+
+`geofig_engine.engine` still exports `EngineConfig` and `FigureEngine` for the
+legacy path; only the root-level names route through the warning shims, so
+`from geofig_engine import render_template` stays warning-free.
+
+---
+
+*Next: [core.md](core.md) · [provider.md](provider.md) · [templates.md](templates.md) · [renderers.md](renderers.md) · [serialize.md](serialize.md) · [data.md](data.md) · [io.md](io.md)*

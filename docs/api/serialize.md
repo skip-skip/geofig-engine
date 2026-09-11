@@ -62,11 +62,18 @@ the object from such a dict.
 
 ```python
 import json
-from geofig_engine.templates import bivariate
-from geofig_engine.engine import render_template
+from geofig_engine import FigureGenerator, DataFrameProvider
 from geofig_engine.serialize import spec_to_json, spec_from_json
+from geofig_engine.templates import bivariate
 
-specs, _, _ = render_template(dataset=df, template=bivariate(mapping={"x": "x", "y": "y"}))
+template = bivariate(mapping={"x": "x", "y": "y"})
+specs = FigureGenerator(
+    provider=DataFrameProvider(df),
+    layers=template.layers,
+    coord=template.coord,
+    settings={"figsize": (8, 6)},
+).build_specs()          # render_template does not return specs; build them here
+
 roundtrip = spec_from_json(spec_to_json(specs[0], indent=2))
 assert roundtrip == specs[0]
 ```
@@ -88,4 +95,4 @@ assert roundtrip == specs[0]
 
 ---
 
-*Next: [core.md](core.md) · [engine.md](engine.md) · [templates.md](templates.md) · [renderers.md](renderers.md) · [data.md](data.md) · [io.md](io.md)*
+*Next: [core.md](core.md) · [engine.md](engine.md) · [provider.md](provider.md) · [templates.md](templates.md) · [renderers.md](renderers.md) · [data.md](data.md) · [io.md](io.md)*

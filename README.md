@@ -50,10 +50,11 @@ The API reference is organized into these pages under `docs/`:
 
 | Page | Scope |
 | --- | --- |
-| [API: Core](docs/api/core.md) | Data model, dimensions, iterators, layers, specs, geoms, stats, scales, coords, facets, links, axis/plot settings |
-| [API: Engine](docs/api/engine.md) | `EngineConfig`, `FigureEngine`, and the `render_template` entry point |
-| [API: Templates](docs/api/templates.md) | `FigureTemplate` and the shipped hydrogeochemical templates |
+| [API: Core](docs/api/core.md) | Data model, dimensions, iterators, layers, specs, geoms, stats, scales, coords (incl. `CoordGeo`), facets, links, axis/plot settings |
+| [API: Engine](docs/api/engine.md) | The `render_template` entry point, `TEMPLATES` registry, `FigureGenerator`, and the deprecated legacy surface |
+| [API: Providers](docs/api/provider.md) | The `DataProvider` protocol and the `DataFrameProvider` / `DatasetProvider` implementations |
+| [API: Templates](docs/api/templates.md) | `FigureTemplate`, the shipped hydrogeochemical templates, and their `TEMPLATES` registry keys |
 | [API: Renderers](docs/api/renderers.md) | `BaseRenderer`, `MatplotlibRenderer`, and the legend API |
 | [API: Serialization](docs/api/serialize.md) | `FigureSpec` <-> dict / JSON converters |
 | [API: Data](docs/api/data.md) | Geom preset registry and the legacy functions API |
-| [API: IO](docs/api/io.md) | Distance helpers, marker generation, and preprocessing pipelines |
+| [API: IO](docs/api/io.md) | Distance helpers, marker generation, EQuIS conversion, unit normalization, column utilities, and preprocessing pipelines |

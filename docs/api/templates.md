@@ -3,7 +3,10 @@
 Templates bundle a configured set of [`Layer`](core.md#layers--specs)s, a
 default settings dict, and (optionally) a coordinate system + name into one
 reusable `FigureTemplate`. All builders return a fresh `FigureTemplate` and are
-safe to use directly with `FigureEngine` / `render_template`.
+safe to use directly with `render_template` — either by key (the factory set
+below is seeded into the [`TEMPLATES` registry](engine.md#templates-registry)
+under keys like `"bivariate"`, `"histogram"`, `"isotope"`, …) or by passing the
+constructed `FigureTemplate` object itself.
 
 ```python
 from geofig_engine.templates import (
@@ -39,15 +42,33 @@ class FigureTemplate:
 layer isn't a `Layer`, if `default_settings` isn't a dict, or if `coord` isn't
 a `Coord`.
 
-Usage via the engine:
+Usage via `render_template` (key form — the factory set is registered in
+[`TEMPLATES`](engine.md#templates-registry)):
 
 ```python
-specs = FigureEngine().build_specs_from_template(
-    dataset=dataset,
-    template=bivariate(mapping={"x": "x", "y": "y"}),
+from geofig_engine import render_template
+
+figures = render_template(
+    data=df,                                    # raw DataFrame is fine
+    template="bivariate",                       # registry key
+    mapping={"x": "x", "y": "y"},
     settings={"figsize": (8, 6)},   # merged OVER template defaults
 )
 ```
+
+or equivalently with a constructed template object:
+
+```python
+figures = render_template(
+    data=df,
+    template=bivariate(mapping={"x": "x", "y": "y"}),
+    settings={"figsize": (8, 6)},
+)
+```
+
+`mapping`/`settings`/`coord` passed to `render_template` are merged **over**
+the template's defaults (per-layer mapping override: only channels already
+bound to a string source are remapped).
 
 ---
 
@@ -237,4 +258,4 @@ declare named y ticks (`Mg²⁺`, `Ca²⁺`, `Na⁺+K⁺`), a `secondary_y` axis
 
 ---
 
-*Next: [core.md](core.md) · [engine.md](engine.md) · [renderers.md](renderers.md) · [serialize.md](serialize.md) · [data.md](data.md) · [io.md](io.md)*
+*Next: [core.md](core.md) · [engine.md](engine.md) · [provider.md](provider.md) · [renderers.md](renderers.md) · [serialize.md](serialize.md) · [data.md](data.md) · [io.md](io.md)*
