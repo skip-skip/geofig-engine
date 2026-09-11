@@ -23,6 +23,19 @@ with ``settings={"basemap": {"provider": ..., "zoom": ..., "alpha": ...}}``.
 An offline/HTTP failure (or a non-WGS84 ``coord.crs`` without the ``[geo]``
 extra) warns and renders the boundary/points/labels tile-free.
 
+**Elevation contours** (18.2): a default-on ``GeomContour`` layer derives
+isolines from a lazy terrarium DEM fetch for the provider frame's lon/lat
+extent (bbox from the detected coordinates, 10% buffer, bbox-keyed tile
+cache — ``geofig_engine.io.dem``) at multiples of 10 m with the old-geomapper
+line style (white, 0.5 pt, alpha 0.6). The whole line set shares that single
+constant style — no legend interplay. An offline/HTTP failure or an all-NaN
+DEM degrades with a ``UserWarning`` and no contour lines (basemap-degrade
+parity). Disable with ``settings={"contours": None}`` or
+``{"enabled": False}`` (the layer is then omitted from the recipe); override
+with a dict such as ``settings={"contours": {"interval": 5, "alpha": 0.5}}``.
+Contour lon/lat polylines project through ``CoordGeo`` like every other geo
+layer.
+
 Optional boundary: when the provider frame carries a boundary-flag column
 (name auto-detected from ``boundary``/``is_boundary``/``feature``/``ring``, or
 set explicitly via ``mapping={"boundary": <column>}`` on a direct builder
@@ -41,7 +54,7 @@ import numpy as np
 import pandas as pd
 
 from geofig_engine.core.coord import Coord, CoordGeo
-from geofig_engine.core.geom import GeomBoundary, GeomLabel, GeomSitePoint
+from geofig_engine.core.geom import GeomBoundary, GeomContour, GeomLabel, GeomSitePoint
 from geofig_engine.core.layer import Layer
 from geofig_engine.core.stat import Stat
 
@@ -51,7 +64,28 @@ SITE_MAP_DEFAULTS: dict[str, Any] = {
     "xlabel": "Longitude",
     "ylabel": "Latitude",
     "basemap": {"provider": "esri_world_imagery", "alpha": 0.6},
+    "contours": {"interval": 10, "color": "white", "linewidth": 0.5, "alpha": 0.6},
 }
+
+
+def settings_contours(recipe_settings: dict[str, Any]) -> bool:
+    """Whether the recipe's ``contours`` setting enables the contour layer.
+
+    Shared by the builder and tests. Operates on the **merged** recipe
+    settings (``SITE_MAP_DEFAULTS`` overlaid with the user settings), where
+    the ``contours`` key is always present: ``None``/``False``/
+    ``{"enabled": False}`` disable; ``True`` or a config dict enable (dict
+    keys merge over the defaults — unknown keys are tolerated, matching the
+    basemap setting).
+    """
+    value = recipe_settings.get("contours")
+    if value is None or value is False:
+        return False
+    if value is True:
+        return True
+    if isinstance(value, dict):
+        return bool(value.get("enabled", True))
+    return False
 
 #: Coordinate-column candidate lists, in preference order (first present wins).
 X_CANDIDATES: tuple[str, ...] = ("longitude", "x_coord", "x", "lon", "easting")
@@ -446,16 +480,16 @@ def site_map_builder(
 ) -> "TemplateRecipe":
     """Pipeline registry builder for the ``site_map`` key (15_wp9).
 
-    Returns the canonical recipe shape: a ``GeomBoundary`` basemap layer, a
-    ``GeomSitePoint`` layer (with a pre-bound ``color`` channel the
-    ``mapping={"color": ...}`` override remaps at ``render_template`` time),
-    and a ``GeomLabel`` layer, all under a ``CoordGeo`` coord (default WGS84 —
-    identity projection without the ``[geo]`` extra). Works with **no
-    mapping**: coordinates, group coloring, and label columns auto-resolve
-    from the provider frame by candidate names. A direct-builder mapping may
-    pin ``x``/``y`` (coordinate columns), ``boundary`` (flag column),
-    ``label`` (name column); ``color`` is a per-call override on the points
-    layer.
+    Returns the canonical recipe shape: a ``GeomContour`` elevation layer, a
+    ``GeomBoundary`` boundary ring layer, a ``GeomSitePoint`` layer (with a
+    pre-bound ``color`` channel the ``mapping={"color": ...}`` override
+    remaps at ``render_template`` time), and a ``GeomLabel`` layer, all under
+    a ``CoordGeo`` coord (default WGS84 — identity projection without the
+    ``[geo]`` extra). Works with **no mapping**: coordinates, group coloring,
+    and label columns auto-resolve from the provider frame by candidate
+    names. A direct-builder mapping may pin ``x``/``y`` (coordinate columns),
+    ``boundary`` (flag column), ``label`` (name column); ``color`` is a
+    per-call override on the points layer.
 
     ``coord`` overrides the recipe's geographic coord (e.g. a non-WGS84
     ``crs`` activates the ``[geo]`` projection path). Basemap tiles are
@@ -465,12 +499,24 @@ def site_map_builder(
     alpha with a ``settings={"basemap": {...}}`` dict; an offline or
     ``[geo]``-less projected render degrades to tiles-off with a warning.
 
+    Elevation contours are **on by default**
+    (``SITE_MAP_DEFAULTS["contours"]`` — old-geomapper 10 m interval, white
+    0.5 pt at alpha 0.6, constant style): a ``GeomContour`` layer above the
+    zorder-0 basemap image and below the boundary ring, fed by a lazy
+    terrarium DEM fetch for the frame's lon/lat extent (10% buffer).
+    ``settings={"contours": None}`` or ``{"enabled": False}`` omits the
+    layer; a dict merges over the defaults (``interval``, ``color``,
+    ``linewidth``, ``alpha``); ``dem_source`` may inject a synthetic DEM
+    (test seam — no network). Offline/HTTP/DEM failures warn and render no
+    contours.
+
     The ``TemplateRecipe`` import is deferred to call time so this template
     module never depends on ``engine.api`` at import time.
     """
     from geofig_engine.engine.api import TemplateRecipe
 
     mapping = dict(mapping or {})
+    recipe_settings = {**SITE_MAP_DEFAULTS, **(settings or {})}
 
     # All channels bind the stat-produced canonical columns ("x"/"y"/"color"/
     # "label") as plain strings, so render_template's per-layer override can
@@ -512,9 +558,31 @@ def site_map_builder(
         ),
     ]
 
+    if settings_contours(recipe_settings):
+        contours_cfg = dict(SITE_MAP_DEFAULTS["contours"])
+        if isinstance(recipe_settings["contours"], dict):
+            contours_cfg.update(recipe_settings["contours"])
+        contours_cfg.pop("enabled", None)
+        layers.insert(
+            0,
+            Layer(
+                geom=GeomContour(
+                    edgecolor=contours_cfg["color"],
+                    edgealpha=contours_cfg.get("alpha"),
+                    edgewidth=contours_cfg["linewidth"],
+                ),
+                stat=StatContour(
+                    interval=contours_cfg["interval"],
+                    dem_source=contours_cfg.get("dem_source"),
+                ),
+                mapping={"x": "x", "y": "y"},
+                zorder=1,
+            ),
+        )
+
     return TemplateRecipe(
         name="site_map",
         layers=layers,
         coord=coord if coord is not None else CoordGeo(),
-        default_settings={**SITE_MAP_DEFAULTS, **(settings or {})},
+        default_settings=recipe_settings,
     )

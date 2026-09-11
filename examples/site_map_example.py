@@ -13,8 +13,16 @@ auto-resolve from the frame. A second call shows the ``color`` mapping override
 (Esri WorldImagery, wp14) beneath the boundary/points/labels — override with
 ``settings={"basemap": {"provider": ..., "zoom": ..., "alpha": ...}}`` or
 disable with ``{"basemap": None}``; a tile-server failure degrades to a
-tile-free render with a warning. Output goes to
-examples/outputs/site_map_output as ``001.png`` / ``002.png`` plus the
+tile-free render with a warning.
+
+Elevation contours (18.2) render **on by default**: a lazy terrarium DEM
+fetch for the frame's lon/lat extent (10% buffer, bbox-keyed cache) feeds
+the contour layer above the basemap and below the boundary ring, at the
+old-geomapper defaults (10 m interval, white, alpha 0.6). Offline/HTTP/DEM
+failures degrade to a warning + no contours. Contours are configured at the
+**builder** level — the second call demonstrates an override dict; disable
+entirely with ``site_map_builder(settings={"contours": None})``. Output goes
+to examples/outputs/site_map_output as ``001.png`` / ``002.png`` plus the
 grouped ``legend.png``.
 """
 
@@ -23,6 +31,7 @@ from pathlib import Path
 import pandas as pd
 
 from geofig_engine.engine import render_template
+from geofig_engine.templates.site_map import site_map_builder
 
 output_dir = Path(__file__).resolve().parent / "outputs" / "site_map_output"
 facility_dir = output_dir.parent / "site_map_output_facility"
@@ -63,6 +72,11 @@ figures = render_template(
         # Basemap is on by default; this explicit dict shows the override
         # shape (image tiles at 55% opacity) and keeps the Esri default.
         "basemap": {"alpha": 0.55},
+        # Elevation contours (18.2) are on by default too — a lazy terrarium
+        # DEM fetch for this frame's lon/lat extent (10% buffer, bbox-keyed
+        # cache); offline/HTTP/DEM failures degrade to a warning + no
+        # contour lines. The override dict is demonstrated in the second
+        # call (contour config is builder-level).
     },
     savedir=output_dir,
 )
@@ -70,11 +84,16 @@ print(f"Rendered {len(figures)} figure(s) -> {output_dir}")
 
 facility_figures = render_template(
     data=view,
-    template="site_map",
+    # Contour config is a builder-level setting (render_template's settings
+    # merge onto the recipe at render time, so layer-shaping options like
+    # "contours" / "contours": None are passed here): {"interval": 5,
+    # "alpha": 0.5} merge over the old-geomapper defaults (white, 0.5 pt);
+    # {"contours": None} would omit the layer entirely.
+    template=site_map_builder(
+        settings={"contours": {"interval": 5, "color": "white", "alpha": 0.5}}
+    ),
     mapping={"color": "facility"},
-    settings={
-        "title": "Wells by Facility",
-    },
+    settings={"title": "Wells by Facility"},
     savedir=facility_dir,
 )
 print(f"Rendered {len(facility_figures)} figure(s) (facility coloring) -> {facility_dir}")

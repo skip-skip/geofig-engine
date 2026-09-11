@@ -25,6 +25,7 @@ from PIL import Image
 import geofig_engine.renderers.matplotlib.basemap as basemap_mod
 from geofig_engine import render_template
 from geofig_engine.core.coord import CoordGeo
+from geofig_engine.templates.site_map import site_map_builder
 from geofig_engine.renderers.matplotlib.basemap import (
     DEFAULT_PROVIDERS,
     BasemapTiles,
@@ -309,7 +310,7 @@ class TestRendererIntegration:
         )
         figures = render_template(
             data=SAMPLE_DF,
-            template="site_map",
+            template=site_map_builder(settings={"contours": None}),
             settings={"basemap": {"zoom": 12, "alpha": 0.5}},
         )
         assert len(figures) == 1
@@ -336,7 +337,9 @@ class TestRendererIntegration:
             return self._fake_tiles()
 
         monkeypatch.setattr(basemap_mod, "fetch_basemap", capture)
-        figures = render_template(data=SAMPLE_DF, template="site_map")
+        figures = render_template(
+            data=SAMPLE_DF, template=site_map_builder(settings={"contours": None})
+        )
         assert seen["provider"]["name"] == "esri_world_imagery"
         ax = figures[0].axes[0]
         assert len(ax.images) == 1
@@ -356,7 +359,7 @@ class TestRendererIntegration:
         monkeypatch.setattr(basemap_mod, "fetch_basemap", capture)
         figures = render_template(
             data=SAMPLE_DF,
-            template="site_map",
+            template=site_map_builder(settings={"contours": None}),
             settings={"basemap": {"alpha": 0.3}},
         )
         assert seen["provider"]["name"] == "esri_world_imagery"
@@ -371,7 +374,7 @@ class TestRendererIntegration:
         with pytest.warns(UserWarning, match="basemap tiles unavailable"):
             figures = render_template(
                 data=SAMPLE_DF,
-                template="site_map",
+                template=site_map_builder(settings={"contours": None}),
                 settings={"basemap": True},
             )
         assert len(figures) == 1
@@ -386,7 +389,7 @@ class TestRendererIntegration:
         monkeypatch.setattr(basemap_mod, "fetch_basemap", boom)
         figures = render_template(
             data=SAMPLE_DF,
-            template="site_map",
+            template=site_map_builder(settings={"contours": None}),
             settings={"basemap": None},
         )
         assert len(figures[0].axes[0].images) == 0
@@ -400,7 +403,7 @@ class TestRendererIntegration:
         with pytest.warns(UserWarning, match="pyproj"):
             figures = render_template(
                 data=SAMPLE_DF,
-                template="site_map",
+                template=site_map_builder(settings={"contours": None}),
                 coord=CoordGeo(crs="EPSG:32612"),
                 settings={"basemap": True},
             )
@@ -413,7 +416,7 @@ class TestRendererIntegration:
         )
         figures = render_template(
             data=SAMPLE_DF,
-            template="site_map",
+            template=site_map_builder(settings={"contours": None}),
             coord=CoordGeo(crs="EPSG:32612"),
             settings={"basemap": {"zoom": 12, "alpha": 0.8}},
         )

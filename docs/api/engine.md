@@ -144,7 +144,7 @@ else raises `TypeError`.
 | `boxplot_with_points` | `boxplot_with_points_builder` | Pipeline builder. |
 | `dendrogram` | `dendrogram_builder` | Pipeline builder (takes the linkage-matrix ndarray via `data`). |
 | `particle_overlay` | `particle_overlay_builder` | Pipeline builder. |
-| `site_map` | `site_map_builder` | Pipeline builder (geo; use with `CoordGeo`). |
+| `site_map` | `site_map_builder` | Pipeline builder (geo; use with `CoordGeo`). Default-on DEM elevation contours (terrarium tiles, lazy fetch, bbox-keyed cache, old-geomapper defaults); disable with `settings={"contours": None}`. |
 | `histogram`, `pie`, `radar`, `timeseries`, `isotope`, `npr_nnp`, `anp_agp`, `nagph_nag` | legacy factories adapted via `legacy_adapter` | The shipped [`geofig_engine.templates`](templates.md) factories re-registered as registry builders. |
 | `piper`, `stiff` | spec builders | Keys resolve via `get_template`, but invoking them through `render_template` raises an informative `TypeError` pointing at the spec-builder route (these build `FigureSpec`s the layer→recipe pipeline cannot express — see [templates — Spec builders](templates.md#spec-builders)). |
 
