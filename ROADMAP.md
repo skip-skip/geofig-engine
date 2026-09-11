@@ -414,7 +414,6 @@ Unnumbered items not yet assigned to a phase; triaged into a numbered phase when
 
 - **Multi-level grouped legends** — `subseries_col` pattern with section headers and aligned columns (from geochemplot's grouped-legend pattern)
 - **Dimension legend builder** — `build_dimension_legend()` standalone function from color_col + shape_col + linetype_col
-- **Marker/color combinatorial generator** — `gen_markers()`, `gen_markers_series()` using `itertools.product` over marker list + color palette
 - **Legend ordering / filtering** — allow reordering legend entries, filtering by series
 
 ---
@@ -480,8 +479,16 @@ Replaced the function-registry JSON catalog (`data/functions.json`) with a data-
 
 ---
 
-## 📋 Phase 17 — IO / Data subpackage (`geofig_engine.io`)
-Port and generalize geochemplot's data-handling utilities.
+## ✅ Phase 17 — IO / Data subpackage (`geofig_engine.io`)
+Port and generalize geochemplot's data-handling utilities into a dedicated
+`io` subpackage. **Shipped for v0.3.0** — WPs delivered: wp1 EQuIS conversion,
+wp2 unit utilities, wp3 column utilities (`tasks/closed/17_*.md`), closed out
+by a wp4 epic review. Parts of the scope shipped earlier (Phase 14, `de36ea1`)
+under the same `tests/test_io.py`; the `Pipeline`/`PipelineStep` transforms
+also cover the Phase 18 "data preprocessing pipeline" item, and the
+marker/color combinatorial generators resolve the Backlog item of the same
+name. Full suite: **1387 passed / 6 skipped** — +55 over the v0.2.0 baseline
+of 1332 (the 6 skips are pyproj-gated; none from the warning policy).
 
 - **EQuIS format conversion**:
   - `equisflat_to_sample_df()` — pivot EQuIS flat to wide
@@ -497,6 +504,10 @@ Port and generalize geochemplot's data-handling utilities.
   - `haversine()` — great-circle distance
   - `path_distance()` — cumulative path distance along ordered points
 - **General generators**: `gen_markers()`, `gen_markers_series()`, `gen_markers_cross_grouping()`
+- **Constraints** — deterministic, pure-pandas (no new required dependencies);
+  input frames never mutated; malformed input raises `ValueError` with
+  informative messages; Excel file reading is gated on `openpyxl`
+  availability (`pytest.importorskip` in tests; no hard dependency).
 
 ---
 
