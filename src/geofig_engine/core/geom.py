@@ -409,6 +409,42 @@ class GeomBoundary(Geom):
 
 
 @dataclass(frozen=True)
+class GeomContour(Geom):
+    """Level contours from the DEM stat (edge machinery shared with
+    :class:`GeomPolygon`/:class:`GeomBoundary`).
+
+    M1 is constant-style: the per-level ``level`` channel is intentionally
+    **not** added — color/width/alpha are geometry params applied to the
+    whole contour-line set.
+    """
+
+    edgecolor: str = "white"
+    edgealpha: float | None = None
+    edgewidth: float = 0.5
+    edgestyle: str = "-"
+
+    def __init__(
+        self,
+        edgecolor: str = "white",
+        edgealpha: float | None = None,
+        edgewidth: float = 0.5,
+        edgestyle: str = "-",
+    ) -> None:
+        edgecolor, edgealpha, edgewidth, edgestyle = _normalize_edge_params(
+            edgecolor, edgealpha, edgewidth, edgestyle
+        )
+        object.__setattr__(self, "edgecolor", edgecolor)
+        object.__setattr__(self, "edgealpha", edgealpha)
+        object.__setattr__(self, "edgewidth", edgewidth)
+        object.__setattr__(self, "edgestyle", edgestyle)
+        super().__init__(
+            name="contour",
+            required_channels=("x", "y"),
+            optional_channels=("color", "alpha"),
+        )
+
+
+@dataclass(frozen=True)
 class GeomLabel(Geom):
     """Geo label text at ``x``/``y`` with a ``label`` channel; the geometry
     carries default ``size``/``rotation`` params (unlike the per-point

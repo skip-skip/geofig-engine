@@ -33,8 +33,11 @@ no such column the boundary layer renders nothing.
 
 from __future__ import annotations
 
-from typing import Any
+import math
+import warnings
+from typing import Any, Callable
 
+import numpy as np
 import pandas as pd
 
 from geofig_engine.core.coord import Coord, CoordGeo
@@ -247,6 +250,192 @@ class StatSiteMap(Stat):
         out["y"] = out[y_col]
         out["label"] = out[label_col]
         return out[["x", "y", "label"]]
+
+
+class StatContour(Stat):
+    """Spec-build transform that derives DEM elevation contour lines.
+
+    Acquires a DEM for the provider frame's lon/lat extent (via
+    ``geofig_engine.io.dem.fetch_dem``, which applies the old-geomapper 10%
+    lon/lat buffer), extracts isolines at multiples of ``interval`` meters,
+    and emits a NaN-separated ``x``/``y`` frame — one continuous open
+    polyline per contour segment, matching the ``StatParticleOverlay
+    (mode="contours")`` frame shape that ``render_boundary`` draws as open
+    multipart paths (handlers.py:1020).
+
+    M1 is constant-style: the whole line set shares the geom's single
+    ``edgecolor``/``edgewidth``/``edgealpha``/``edgestyle`` (old-geomapper
+    ``add_contours`` defaults); a per-level ``level`` channel is not added.
+
+    The DEM acquisition never raises into the layer pipeline: a fetch
+    failure or an all-NaN DEM warns (``UserWarning``) and yields an empty
+    ``x``/``y`` frame, so the contour layer simply renders nothing (mirrors
+    the basemap degrade).
+    """
+
+    def __init__(
+        self,
+        interval: float = 10,
+        dem_source: Callable[[tuple[float, float, float, float]], Any] | None = None,
+        dem_bounds: tuple[float, float, float, float] | None = None,
+    ) -> None:
+        if isinstance(interval, bool) or not isinstance(interval, (int, float)):
+            raise ValueError(
+                f"interval must be a positive real number, got {interval!r}"
+            )
+        if interval <= 0:
+            raise ValueError(
+                f"interval must be a positive real number, got {interval!r}"
+            )
+        if dem_source is not None and not callable(dem_source):
+            raise TypeError(f"dem_source must be callable or None, got {dem_source!r}")
+        if dem_bounds is not None:
+            if not isinstance(dem_bounds, (tuple, list)) or len(dem_bounds) != 4:
+                raise ValueError(
+                    "dem_bounds must be a (west, south, east, north) tuple of "
+                    f"four real numbers, got {dem_bounds!r}"
+                )
+            for value in dem_bounds:
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    raise ValueError(
+                        "dem_bounds must be a (west, south, east, north) tuple "
+                        f"of four real numbers, got {dem_bounds!r}"
+                    )
+        object.__setattr__(self, "dem_source", dem_source)
+        object.__setattr__(self, "dem_bounds", dem_bounds)
+        super().__init__(
+            name="contour",
+            params={
+                "interval": float(interval),
+                # JSON-safe (the callable dem_source seam is not recorded).
+                "dem_bounds": None if dem_bounds is None else tuple(dem_bounds),
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # Coordinate detection (non-raising — contour renders nothing instead)
+    # ------------------------------------------------------------------
+
+    def _coordinate_columns_or_none(
+        self, data: pd.DataFrame
+    ) -> tuple[str | None, str | None]:
+        x_col = _first_present(X_CANDIDATES, data)
+        y_col = _first_present(Y_CANDIDATES, data)
+        if (
+            x_col is None
+            or y_col is None
+            or x_col not in data.columns
+            or y_col not in data.columns
+        ):
+            return None, None
+        return x_col, y_col
+
+    @staticmethod
+    def _empty_frame() -> pd.DataFrame:
+        return _empty_with_columns(["x", "y"])
+
+    def _unavailable(self, reason: str) -> pd.DataFrame:
+        warnings.warn(
+            f"site_map contours unavailable: {reason}",
+            UserWarning,
+            stacklevel=2,
+        )
+        return self._empty_frame()
+
+    # ------------------------------------------------------------------
+    # Stat contract
+    # ------------------------------------------------------------------
+
+    def compute(self, data: pd.DataFrame) -> pd.DataFrame:
+        if len(data) == 0:
+            return self._empty_frame()
+
+        if self.dem_bounds is not None:
+            bbox = tuple(float(v) for v in self.dem_bounds)
+        else:
+            x_col, y_col = self._coordinate_columns_or_none(data)
+            if x_col is None or y_col is None:
+                return self._empty_frame()
+            lon = data[x_col]
+            lat = data[y_col]
+            if lon.notna().sum() == 0 or lat.notna().sum() == 0:
+                return self._empty_frame()
+            bbox = (
+                float(lon.min()),
+                float(lat.min()),
+                float(lon.max()),
+                float(lat.max()),
+            )
+        if not all(math.isfinite(v) for v in bbox):
+            return self._empty_frame()
+
+        try:
+            if self.dem_source is not None:
+                grid = self.dem_source(bbox)
+            else:
+                from geofig_engine.io.dem import fetch_dem
+
+                grid = fetch_dem(*bbox, interval=self.params["interval"])
+            if grid is None:
+                raise ValueError("DEM source returned nothing")
+            z = np.asarray(grid.z, dtype=float)
+            lon_2d = np.asarray(grid.lon, dtype=float)
+            lat_2d = np.asarray(grid.lat, dtype=float)
+        except Exception as exc:  # noqa: BLE001 — transport/HTTP/decoding degrade
+            return self._unavailable(str(exc))
+
+        if z.ndim != 2 or lon_2d.ndim != 2 or lat_2d.ndim != 2:
+            return self._unavailable(f"DEM grid must be 2-D, got z {z.shape}")
+        if np.isnan(z).all():
+            return self._unavailable("DEM is all NaNs")
+        if z.shape != lon_2d.shape or z.shape != lat_2d.shape:
+            return self._unavailable(
+                f"DEM lon/lat grids {lon_2d.shape} do not match z {z.shape}"
+            )
+
+        levels = np.arange(np.nanmin(z), np.nanmax(z), self.params["interval"])
+        if levels.size == 0:
+            return self._empty_frame()
+        return self._contour_frame(lon_2d, lat_2d, z, levels)
+
+    def _contour_frame(
+        self,
+        lon: np.ndarray,
+        lat: np.ndarray,
+        z: np.ndarray,
+        levels: np.ndarray,
+    ) -> pd.DataFrame:
+        """Flatten ``ax.contour`` segments into a NaN-separated x/y frame.
+
+        Each level's polylines become one continuous row series: every
+        polyline is followed by a NaN separator so ``render_boundary`` keeps
+        the paths open (trailing separator trimmed, matching
+        ``StatParticleOverlay._contours_frame``).
+        """
+        from matplotlib.figure import Figure
+
+        fig = Figure()
+        try:
+            ax = fig.add_subplot(111)
+            cs = ax.contour(lon, lat, z, levels=levels)
+            allsegs = cs.allsegs
+        finally:
+            del ax
+            del fig
+
+        xs: list[float] = []
+        ys: list[float] = []
+        for level_segs in allsegs:
+            for seg in level_segs:
+                xs.extend(seg[:, 0].tolist())
+                ys.extend(seg[:, 1].tolist())
+                xs.append(float("nan"))
+                ys.append(float("nan"))
+        if not xs:
+            return self._empty_frame()
+        xs = xs[:-1]
+        ys = ys[:-1]
+        return pd.DataFrame({"x": xs, "y": ys})
 
 
 def site_map_builder(

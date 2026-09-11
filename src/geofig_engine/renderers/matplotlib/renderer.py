@@ -76,6 +76,7 @@ _GEOM_HANDLERS = {
     "polygon": render_polygon,
     "site_point": render_site_point,
     "boundary": render_boundary,
+    "contour": render_boundary,
     "geo_label": render_geo_label,
     "image_inset": render_image_inset,
 }
