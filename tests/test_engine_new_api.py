@@ -374,6 +374,35 @@ class TestFigureGenerator:
         assert "group" not in spec.context
         assert spec.iterator_key == ()
 
+    def test_generator_matches_legacy_facet_behavior(self):
+        from geofig_engine.renderers import MatplotlibRenderer
+
+        dataset = make_dataset()
+        layers = [Layer(geom=GeomPoint(), mapping={"x": "x", "y": "y"})]
+        facet = FacetWrap(by="group")
+
+        legacy_specs = FigureEngine().build_specs_from_layers(
+            dataset, layers, facet=facet
+        )
+        generator_specs = FigureGenerator(
+            provider=DataFrameProvider(dataset.dataframe),
+            layers=layers,
+            coord=CoordCartesian(),
+            facet=facet,
+        ).build_specs()
+
+        assert len(legacy_specs) == len(generator_specs) == 1
+        assert legacy_specs[0].facet.name == "wrap"
+        assert generator_specs[0].facet.name == "wrap"
+
+        renderer = MatplotlibRenderer()
+        legacy_figs = list(renderer.render_all(legacy_specs))
+        generator_figs = list(renderer.render_all(generator_specs))
+        # both paths draw the same multi-panel layout: 1 spec → 1 figure,
+        # one axis per facet group (group A/B → 2)
+        assert [len(fig.axes) for fig in legacy_figs] == [2]
+        assert [len(fig.axes) for fig in generator_figs] == [2]
+
     def test_missing_required_channel_raises_informative(self):
         dataset = make_dataset()
         generator = FigureGenerator(

@@ -1438,6 +1438,8 @@ class MatplotlibRenderer(BaseRenderer):
             if not vals[chan]:
                 continue
             all_v = pd.concat(vals[chan])
+            if all_v.empty:
+                continue
             lo, hi = float(all_v.min()), float(all_v.max())
             if lo == hi:
                 lo, hi = lo - 1, hi + 1

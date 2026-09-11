@@ -29,8 +29,9 @@ from geofig_engine.engine.api import (
     render_template,
 )
 from geofig_engine.core.coord import CoordCartesian, CoordPolar
-from geofig_engine.core.facet import FacetWrap
+from geofig_engine.core.facet import FacetGrid, FacetWrap
 from geofig_engine.core.geom import GeomPoint
+from geofig_engine.core.iterator import DimensionIterator
 from geofig_engine.core.layer import Layer
 from geofig_engine.core.stat import StatIdentity
 from geofig_engine.provider import DataFrameProvider
@@ -230,6 +231,75 @@ class TestSavedir:
         assert len(figures) == 1
         pngs = sorted(p.name for p in tmp_path.glob("*.png"))
         assert pngs == ["001.png", "legend.png"]
+
+
+class TestFacet:
+    """Facet = panels within one figure (Phase 18.1 contract)."""
+
+    def test_facet_wrap_single_multi_panel_figure(self):
+        figures = render_template(
+            data=make_df(),
+            template=bivariate(mapping={"x": "x", "y": "y"}),
+            facet=FacetWrap(by="group"),
+        )
+        assert len(figures) == 1
+        assert len(figures[0].axes) == 2
+        assert {ax.get_title() for ax in figures[0].axes} == {"group=A", "group=B"}
+
+    def test_facet_grid_single_figure_layout(self):
+        df = pd.DataFrame({
+            "x": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "y": [2.0, 3.0, 5.0, 7.0, 1.0],
+            "row": ["R1", "R1", "R1", "R2", "R2"],
+            "col": ["C1", "C2", "C1", "C1", "C1"],  # R2 x C2 absent
+        })
+        figures = render_template(
+            data=df,
+            template=bivariate(mapping={"x": "x", "y": "y"}),
+            facet=FacetGrid(row="row", col="col"),
+        )
+        assert len(figures) == 1
+        axes = figures[0].axes
+        assert len(axes) == 4  # full 2x2 grid layout
+        # missing combo keeps a hidden axis, not an empty figure
+        assert not axes[3].get_visible()
+        # leading-edge labels: col across the top row, row down the left column
+        assert axes[0].get_title() == "C1"
+        assert axes[1].get_title() == "C2"
+        assert axes[0].get_ylabel() == "R1"
+        assert axes[2].get_ylabel() == "R2"
+
+    def test_facet_with_iterators_composes(self):
+        df = pd.DataFrame({
+            "x": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+            "y": [2.0, 3.0, 5.0, 7.0, 1.0, 4.0, 6.0, 9.0],
+            "group": ["A", "A", "B", "B", "A", "A", "B", "B"],
+            "cat": ["a", "a", "a", "a", "b", "b", "b", "b"],
+        })
+        figures = render_template(
+            data=df,
+            template=bivariate(mapping={"x": "x", "y": "y"}),
+            facet=FacetWrap(by="group"),
+            iterators=[DimensionIterator(
+                channel="cat",
+                dimensions=["cat"],
+                mode=DimensionIterator.Mode.VALUE,
+            )],
+        )
+        # one figure per iterator value, each carrying the full facet grid
+        assert len(figures) == 2
+        for fig in figures:
+            assert len(fig.axes) == 2
+            assert {ax.get_title() for ax in fig.axes} == {"group=A", "group=B"}
+
+    def test_facet_empty_data_returns_one_figure(self):
+        df = pd.DataFrame({"x": [], "y": [], "group": []})
+        figures = render_template(
+            data=df,
+            template=bivariate(mapping={"x": "x", "y": "y"}),
+            facet=FacetWrap(by="group"),
+        )
+        assert len(figures) == 1
 
 
 class TestNoUpstreamImports:

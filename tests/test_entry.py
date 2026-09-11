@@ -121,6 +121,8 @@ class TestRenderTemplate:
         assert len(figures) == 1
 
     def test_with_facet_renders_multi_panel_figure(self, sample_df, sample_template, tmp_path):
+        import matplotlib.figure
+
         figures = render_template(
             data=sample_df,
             template=sample_template,
@@ -128,7 +130,9 @@ class TestRenderTemplate:
         )
         # one figure whose panels split the facet groups
         assert len(figures) == 1
+        assert isinstance(figures[0], matplotlib.figure.Figure)
         assert len(figures[0].axes) == 2
+        assert {ax.get_title() for ax in figures[0].axes} == {"group=A", "group=B"}
         # savedir naming uses iterator keys only (facet keys stay out)
         render_template(
             data=sample_df,
