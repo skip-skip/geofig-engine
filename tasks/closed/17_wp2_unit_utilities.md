@@ -1,6 +1,6 @@
 # Phase 17: Unit utilities (`io/units.py`)
 
-**Status**: open
+**Status**: complete
 **Phase**: 17
 **Version target**: v0.3.0
 **Dependencies**: `17_00_epic`
@@ -21,7 +21,7 @@ SI prefixes within analyte groups. Contracts are deterministic and documented
   - Works per `parameter_col` group: the canonical unit for a group is the
     most frequent unit string (ties → lexicographically smallest); every
     row's value is rescaled
-    `value * 10 ** (prefix_exponent(canonical) - prefix_exponent(row_unit))`
+    `value * 10 ** (prefix_exponent(row_unit) - prefix_exponent(canonical))`
     and the unit string replaced by the canonical one.
   - Prefix table (module `SI_PREFIXES`, documented): `n` 1e-9, `u`/`µ` 1e-6,
     `m` 1e-3, `c` 1e-2, `d` 1e-1, (base) 1e0, `k` 1e3, `M` 1e6, `G` 1e9.

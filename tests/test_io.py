@@ -7,6 +7,7 @@ import pytest
 from geofig_engine.io import (
     haversine, path_distance, gen_markers, gen_markers_series, Pipeline, PipelineStep,
     equisflat_to_sample_df, sample_df_to_equisflat, equis_crosstab_to_flat,
+    equisflat_normalize_units, SI_PREFIXES,
 )
 from geofig_engine.io.markers import gen_markers_cross_grouping, DEFAULT_MARKERS, DEFAULT_PALETTE
 
@@ -167,6 +168,8 @@ class TestConstants:
         assert "equisflat_to_sample_df" in __all__
         assert "sample_df_to_equisflat" in __all__
         assert "equis_crosstab_to_flat" in __all__
+        assert "equisflat_normalize_units" in __all__
+        assert "SI_PREFIXES" in __all__
 
 
 class TestEquisFlatToSample:
@@ -383,3 +386,123 @@ class TestEquisCrosstabToFlat:
         rows = out.set_index(["Location", "Parameter"])
         assert rows.loc[("A", "NO3"), "Result"] == 1.0
         assert rows.loc[("B", "Ca"), "Result_Unit"] == "mg/L"
+
+
+class TestEquisflatNormalizeUnits:
+    def test_single_group_rescale(self):
+        flat = pd.DataFrame({
+            "Parameter": ["NO3"] * 4,
+            "Result": [1.0, 1.0, 1.0, 1.0],
+            "Result_Unit": ["ng/L", "ug/L", "mg/L", "g/L"],
+        })
+        out = equisflat_normalize_units(flat)
+        # tie (1 occurrence each) → lexicographically smallest recognized unit
+        assert out["Result_Unit"].tolist() == ["g/L"] * 4
+        assert out["Result"].tolist() == [1e-9, 1e-6, 1e-3, 1.0]
+
+    def test_majority_canonical(self):
+        flat = pd.DataFrame({
+            "Parameter": ["NO3"] * 3,
+            "Result": [1.0, 1.0, 1000.0],
+            "Result_Unit": ["mg/L", "mg/L", "ug/L"],
+        })
+        out = equisflat_normalize_units(flat)
+        assert out["Result_Unit"].tolist() == ["mg/L"] * 3
+        assert out["Result"].tolist() == [1.0, 1.0, 1.0]
+
+    def test_inter_group_independence(self):
+        flat = pd.DataFrame({
+            "Parameter": ["Ca", "Ca", "NO3", "NO3", "NO3"],
+            "Result": [1.0, 2.0, 1.0, 1.0, 1000.0],
+            "Result_Unit": ["mg/L", "mg/L", "ug/L", "ug/L", "ng/L"],
+        })
+        out = equisflat_normalize_units(flat)
+        # Ca keeps mg/L; NO3 canonical is ug/L (majority), ng/L row rescales
+        assert out["Result_Unit"].tolist() == ["mg/L", "mg/L", "ug/L", "ug/L", "ug/L"]
+        assert out["Result"].tolist() == [1.0, 2.0, 1.0, 1.0, 1.0]
+
+    def test_tie_lexicographically_smallest(self):
+        flat = pd.DataFrame({
+            "Parameter": ["Na"] * 2,
+            "Result": [1.0, 1.0],
+            "Result_Unit": ["ug/L", "mg/L"],
+        })
+        out = equisflat_normalize_units(flat)
+        assert out["Result_Unit"].tolist() == ["mg/L", "mg/L"]
+        assert out["Result"].tolist() == [0.001, 1.0]
+
+    def test_micro_sign_and_u_equivalent(self):
+        flat = pd.DataFrame({
+            "Parameter": ["NO3", "NO3"],
+            "Result": [1.0, 1000.0],
+            "Result_Unit": ["µg/L", "ug/L"],
+        })
+        out = equisflat_normalize_units(flat)
+        assert out["Result_Unit"].tolist() == ["ug/L", "ug/L"]
+        assert out["Result"].tolist() == [1.0, 1000.0]
+
+    def test_unrecognized_units_untouched(self):
+        flat = pd.DataFrame({
+            "Parameter": ["pH", "pH"],
+            "Result": [7.2, 0.5],
+            "Result_Unit": ["N/A", "ppb"],
+        })
+        out = equisflat_normalize_units(flat)
+        pd.testing.assert_frame_equal(out, flat)
+
+    def test_unrecognized_rows_untouched_in_mixed_group(self):
+        flat = pd.DataFrame({
+            "Parameter": ["NO3", "NO3", "NO3"],
+            "Result": [1.0, "n.d.", 1.0],
+            "Result_Unit": ["mg/L", "ppb", "mg/L"],
+        })
+        out = equisflat_normalize_units(flat)
+        assert out["Result_Unit"].tolist() == ["mg/L", "ppb", "mg/L"]
+        assert out["Result"].tolist() == [1.0, "n.d.", 1.0]
+
+    def test_nan_unit_row_untouched(self):
+        flat = pd.DataFrame({
+            "Parameter": ["NO3", "NO3"],
+            "Result": [1.0, 2.0],
+            "Result_Unit": ["mg/L", None],
+        })
+        out = equisflat_normalize_units(flat)
+        assert out["Result_Unit"].tolist() == ["mg/L", None]
+        assert out["Result"].tolist() == [1.0, 2.0]
+
+    def test_custom_column_names(self):
+        flat = pd.DataFrame({
+            "Analyte": ["NO3", "NO3"],
+            "Value": [1000.0, 1.0],
+            "Unit": ["ug/L", "mg/L"],
+        })
+        out = equisflat_normalize_units(
+            flat, parameter_col="Analyte", value_col="Value", unit_col="Unit")
+        assert out["Unit"].tolist() == ["mg/L", "mg/L"]
+        assert out["Value"].tolist() == [1.0, 1.0]
+
+    def test_inplace_mutates_and_returns_input(self):
+        flat = pd.DataFrame({
+            "Parameter": ["NO3", "NO3"],
+            "Result": [1000.0, 1.0],
+            "Result_Unit": ["ug/L", "mg/L"],
+        })
+        out = equisflat_normalize_units(flat, inplace=True)
+        assert out is flat
+        assert flat["Result_Unit"].tolist() == ["mg/L", "mg/L"]
+        assert flat["Result"].tolist() == [1.0, 1.0]
+
+    def test_input_not_mutated_by_default(self):
+        flat = pd.DataFrame({
+            "Parameter": ["NO3", "NO3"],
+            "Result": [1000.0, 1.0],
+            "Result_Unit": ["ug/L", "mg/L"],
+        })
+        snapshot = flat.copy()
+        equisflat_normalize_units(flat)
+        pd.testing.assert_frame_equal(flat, snapshot)
+
+    def test_missing_column_raises(self):
+        flat = pd.DataFrame({"Parameter": ["NO3"], "Result": [1.0]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            equisflat_normalize_units(flat)
