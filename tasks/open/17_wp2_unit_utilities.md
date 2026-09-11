@@ -7,10 +7,9 @@
 
 ## Description
 
-Unit-normalization and carbonate-species utilities for the `geofig_engine.io`
-subpackage: normalize SI prefixes within analyte groups, and compute
-combined HCO3+CO3 from alkalinity + pH + temperature. Contracts are
-deterministic and documented (no reference codebase on disk).
+Unit-normalization utilities for the `geofig_engine.io` subpackage: normalize
+SI prefixes within analyte groups. Contracts are deterministic and documented
+(no reference codebase on disk).
 
 ## Changes
 
@@ -31,23 +30,10 @@ deterministic and documented (no reference codebase on disk).
     (value and unit unchanged, documented).
   - Returns a new frame by default; `inplace=True` mutates and returns the
     input frame.
-- `fill_bicarbonate_as_hco3(df, alkalinity_col, ph_col, temperature_col=None, out_col="HCO3_CO3", inplace=False) -> pd.DataFrame`
-  - Adds `out_col` = combined bicarbonate + carbonate alkalinity equivalent
-    using carbonate speciation at (pH, temperature): the HCO3⁻+CO3²⁻ fraction
-    of total alkalinity,
-    `f = (K1·[H] + 2·K1·K2) / ([H]² + K1·[H] + K1·K2)`,
-    with `[H] = 10**(-pH)` and temperature-corrected dissociation constants
-    (documented Arrhenius-style corrections of pKa1 = 6.35, pKa2 = 10.33 at
-    25 °C; `temperature_col` optional, defaults to 25 °C).
-  - Rows with NaN pH → NaN result; missing columns raise `KeyError` with an
-    informative message. Units are those of the input alkalinity column
-    (mg/L ↔ meq/L conversion intentionally not performed — deferred to an
-    external data system).
 
 ### `src/geofig_engine/io/__init__.py`
 
-- Export `equisflat_normalize_units`, `fill_bicarbonate_as_hco3` (append to
-  `__all__`).
+- Export `equisflat_normalize_units` (append to `__all__`).
 
 ### `tests/test_io.py` (extended)
 
@@ -56,19 +42,14 @@ deterministic and documented (no reference codebase on disk).
   independence (two parameters keep different canonical units), ties →
   lexicographically smallest, unrecognized units untouched, `inplace`
   semantics, input never mutated when `inplace=False`.
-- `TestFillBicarbonateAsHco3` — known pH 25 °C speciation fractions (pH 8.3:
-  f ≈ 0.97–0.98; pH 10.3: f ≈ 1.0 dominated by carbonate), NaN pH → NaN,
-  missing column raises, temperature column path, `inplace` semantics.
 
 ## Acceptance criteria
 
 - [ ] Prefix normalization is deterministic and group-scoped; unrecognized
       units pass through untouched
-- [ ] `fill_bicarbonate_as_hco3` returns the documented speciation formula
-      (validated against hand-computed fractions at 25 °C)
 - [ ] Input frames not mutated unless `inplace=True`; no new required
       dependencies
-- [ ] Both exported from `geofig_engine.io`
+- [ ] Exported from `geofig_engine.io`
 - [ ] Full suite green; committed as a single commit
       (`geofig-engine: io unit utilities → v0.3.0`)
 

@@ -489,7 +489,6 @@ Port and generalize geochemplot's data-handling utilities.
   - `equis_crosstab_to_flat()` — parse EQuIS cross-tab Excel
 - **Unit utilities**:
   - `equisflat_normalize_units()` — normalize SI prefixes (nano→milli→kilo) within analyte groups
-  - `fill_bicarbonate_as_hco3()` — compute HCO3+CO3 from alkalinity + pH + temperature
   - Note: mg/L → meq/L conversion is intentionally excluded — deferred to an external data system
 - **Column utilities**:
   - `ecesis_to_sample_df()` — parse Ecesis-style column names with embedded units

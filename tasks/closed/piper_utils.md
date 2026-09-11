@@ -21,9 +21,6 @@ Ion → (charge, molar mass) mapping for common ions:
 **`convert_to_meq(df: pd.DataFrame, ion_map: dict[str, str]) -> pd.DataFrame`**
 Convert multiple mg/L columns to meq/L using the ion table. `ion_map` maps column names to ion names (e.g., `{"Ca": "Ca", "Mg": "Mg"}`).
 
-**`fill_bicarbonate_as_hco3(alkalinity_col: str, ph_col: str, temperature_c: float = 25.0) -> Callable`**
-Returns a function that computes HCO3+CO3 from alkalinity + pH + temperature using temperature-dependent pKa1/pKa2.
-
 **`combined_na_k(na_col: str, k_col: str) -> Callable`**
 Returns a function that sums Na and K columns.
 
@@ -34,13 +31,11 @@ These are pure utility functions, not GoG components. They transform DataFrames 
 
 - `src/geofig_engine/chemistry/__init__.py` — export all functions
 - `src/geofig_engine/chemistry/ion_utils.py` — meq conversion, ion table
-- `src/geofig_engine/chemistry/alkalinity.py` — HCO3/CO3 from alkalinity + pH + temp
 
 ## Acceptance criteria
 
 - [ ] `meq_per_l()` returns correct values for Ca, Mg, Na, K, HCO3, CO3, SO4, Cl
 - [ ] `convert_to_meq()` converts multiple columns in one call
-- [ ] `fill_bicarbonate_as_hco3()` returns a callable that adds an `hco3_meq` column
 - [ ] `combined_na_k()` returns a callable that adds a `na_k_meq` column
 - [ ] All functions handle missing values (NaN) gracefully
 - [ ] No dependencies on `geofig_engine` core types (pure data transformations)

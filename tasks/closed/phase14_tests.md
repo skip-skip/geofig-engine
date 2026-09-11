@@ -13,7 +13,6 @@ Write pytest tests covering all Phase 14 additions.
 **Chemistry utilities** (unit tests)
 - `meq_per_l()` for each common ion
 - `convert_to_meq()` multi-column conversion
-- `fill_bicarbonate_as_hco3()` computation
 - `combined_na_k()` computation
 - NaN/edge-case handling
 
