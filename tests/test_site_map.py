@@ -5,7 +5,8 @@ Covers the coordinate/row-selection stat (candidate detection, boundary
 flag filtering incl. NaN-separator rows, label detection, informative
 errors), registry resolution + recipe shape, mapping-free rendering via
 ``render_template``, point coloring by group with grouped legend sections,
-boundary ring drawing, the no-geo identity fallback, and the optional
+boundary ring drawing, default-on DEM elevation contours (synthetic-DEM
+seam, opt-out), the no-geo identity fallback, and the optional
 pyproj projection path (skipped when the ``[geo]`` extra is absent).
 """
 
@@ -26,6 +27,7 @@ from geofig_engine.core.coord import CoordGeo
 from geofig_engine.core.geom import GeomSitePoint
 from geofig_engine.engine.api import _apply_mapping_override, recipe_from
 from geofig_engine.engine.generator import FigureGenerator
+from geofig_engine.io.dem import DemGrid
 from geofig_engine.provider import DataFrameProvider
 from geofig_engine.renderers.matplotlib.legend import (
     LegendAccumulator,
@@ -77,6 +79,18 @@ def sample_frame_with(columns: dict[str, list]) -> pd.DataFrame:
     for name, values in columns.items():
         frame[name] = values
     return frame
+
+
+def _fake_dem(bbox):
+    """Deterministic undulating DEM over the frame bbox (no network)."""
+    west, south, east, north = (float(v) for v in bbox)
+    lon = np.linspace(west, east, 24)
+    lat = np.linspace(south, north, 24)
+    lon_2d, lat_2d = np.meshgrid(lon, lat)
+    u = (lon_2d - west) / (east - west)
+    v = (lat_2d - south) / (north - south)
+    z = 100.0 + 25.0 * np.sin(2.0 * np.pi * u) * np.cos(2.0 * np.pi * v)
+    return DemGrid(lon=lon_2d, lat=lat_2d, z=z)
 
 
 class TestStatSiteMap:
@@ -385,6 +399,27 @@ class TestSiteMapRender:
             settings={"basemap": None},
         )
         assert len(figures[0].axes[0].texts) == 0
+
+    def test_contours_render_default_on_and_opt_out(self):
+        # The wp3 seam: the default recipe draws contour line artists (the
+        # synthetic DEM is injected via the contours setting — no network);
+        # settings={"contours": None} leaves just the boundary ring.
+        figures = render_template(
+            data=MERGED_DF,
+            template=site_map_builder(settings={"contours": {"dem_source": _fake_dem}}),
+            settings={"basemap": None},
+        )
+        ax = figures[0].axes[0]
+        # contour multipath + boundary ring (points are a scatter collection)
+        assert len(ax.lines) == 2
+        assert any(len(line.get_xdata()) > 20 for line in ax.lines)
+
+        figures_off = render_template(
+            data=MERGED_DF,
+            template=site_map_builder(settings={"contours": None}),
+            settings={"basemap": None},
+        )
+        assert len(figures_off[0].axes[0].lines) == 1  # ring only
 
     def test_default_identity_projection(self):
         recipe = recipe_from(get_template("site_map")())

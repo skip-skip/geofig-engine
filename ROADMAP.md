@@ -452,8 +452,9 @@ baseline of 1039 (the 6 skips are pyproj-gated; none from the warning policy).
   `npr_nnp`, `anp_agp`, `nagph_nag`, `piper`, `stiff`).
 - **Geo support** — `CoordGeo`, geo geoms (site point, boundary, label,
   annotation-inset, image), geometry/image renderer handlers, and the `[geo]`
-  extra. **Deferred to M2:** DEM contour, stream geoms (tile basemaps were
-  pulled forward from M2 and shipped with `site_map` in wp14).
+  extra. **Deferred to M2:** stream geoms (tile basemaps were pulled forward
+  from M2 and shipped with `site_map` in wp14; the DEM contour geom shipped
+  earlier via Phase 18.2).
 - **Audit / compat** — legacy entry preserved as `render_template_legacy`
   (call-time `DeprecationWarning`); `Dataset` & co. re-exported through a
   `deprecated.py` module with **import-time** warnings; public vs deprecated
@@ -525,6 +526,23 @@ carry iterator keys only, so savedir filenames no longer include facet
 values. WPs: generator (`18_1_wp1_facet_generator`), tests
 (`18_1_wp2_facet_tests`), docs/ROADMAP (`18_1_wp3_facet_docs_roadmap`) —
 `tasks/closed/18_1_*.md`. Full suite: **1392 passed / 6 skipped**.
+
+---
+
+## ✅ Phase 18.2 — DEM elevation contours (site_map)
+
+DEM elevation contours for the `site_map` template, ported from the old
+geomapper's `add_contours` with a self-contained terrarium DEM stack (no
+elevation/GDAL/rasterio dependencies): lazy AWS Terrain Tiles fetches over the
+frame's lon/lat extent (10% buffer, bbox-keyed PNG cache) decoded to meters,
+with old-geomapper parity (10 m white 0.5 pt at alpha 0.6) and **default-on**
+contours — a `dem_source` seam allows synthetic in-bounds DEMs (no network),
+`settings={"contours": None}` opts out, and offline/HTTP/DEM failures degrade
+to a warning + a contour-free render. WPs: DEM access (`18_2_wp1_dem_io`),
+contour stat/geom (`18_2_wp2_stat_geom_contour`), template wiring
+(`18_2_wp3_template_wiring`), tests/docs/ROADMAP (`18_2_wp4_tests_docs_roadmap`)
+— `tasks/closed/18_2_*.md`. Full suite: **1439 passed / 7 skipped** (all 7
+skips gated on pyproj/upstream extras; +16 over the Phase 18.1 baseline of 1392).
 
 ---
 
