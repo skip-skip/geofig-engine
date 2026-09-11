@@ -6,6 +6,33 @@ the policy in `ARCHITECTURE.md` `## Versioning`: version authority is
 commit. Deprecations are introduced in MINOR releases and removed **no earlier
 than the next MAJOR** (>= 1.0.0).
 
+## [v0.3.0] - 2026-09-10
+
+### Added
+
+- `geofig_engine.io` data-utilities subpackage (pandas-only, no new required
+  dependencies; input frames/series never mutated):
+  - **EQuIS format conversion** (`io/equis.py`) — `equisflat_to_sample_df()`
+    (flat→wide pivot, first-appearance parameter order, duplicate
+    `(sample, parameter)` and non-constant extra columns raise
+    `ValueError`), `sample_df_to_equisflat()` (inverse melt, round-trips),
+    `equis_crosstab_to_flat()` (parse cross-tab DataFrames or Excel paths;
+    underscore / parenthesized unit suffixes; `openpyxl` needed only by
+    callers/tests exercising Excel files).
+  - **Unit utilities** (`io/units.py`) — `equisflat_normalize_units()`
+    group-scoped SI-prefix normalization (documented `SI_PREFIXES` n→G;
+    most-frequent recognized unit wins, ties → lexicographically smallest;
+    unrecognized units pass through untouched).
+  - **Column utilities** (`io/columns.py`) — `ecesis_to_sample_df()` (parse
+    Ecesis-style column names into a wide `(analyte, unit)` MultiIndex
+    frame) and `create_bins()` (range / quantile categorical binning of
+    numeric or datetime columns; NaN → NaN category).
+
+Nothing removed or deprecated in this release (additive MINOR).
+
+Per the versioning policy, deprecations introduced in v0.2.0 are retained
+through at least the next MAJOR (>= 1.0.0).
+
 ## [v0.2.0] - 2026-09-10
 
 ### Added
