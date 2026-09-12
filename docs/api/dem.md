@@ -79,11 +79,14 @@ pixels, north→south / west→east) and `z` the elevation in meters with
 `StatContour` (in `geofig_engine.templates.site_map`) calls
 `fetch_dem(*bbox, interval=…)` for the frame's lon/lat extent when no
 `dem_source` is injected; the `site_map` template renders contours
-**default-on** (old-geomapper 10 m white 0.5 pt at alpha 0.6, above the
-basemap, below the boundary ring). `settings={"contours": None}` on the
-builder disables the layer; a dict can override `interval`/`color`/
-`linewidth`/`alpha` and supply a synthetic `dem_source` (test seam — no
-network).
+**default-on** (white 0.5 pt at alpha 0.6, above the basemap, below the
+boundary ring) with a relief-aware default interval — `None` (the
+`SITE_MAP_DEFAULTS["contours"]["interval"]` default) means at least 10 m
+spacing coarsened to ~20 lines across the DEM's elevation range, and an
+explicit `interval` (e.g. 10 for old-geomapper parity) is honored.
+`settings={"contours": None}` on the builder disables the layer; a dict
+can override `interval`/`color`/`linewidth`/`alpha` and supply a
+synthetic `dem_source` (test seam — no network).
 
 ---
 

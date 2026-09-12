@@ -168,6 +168,38 @@ class TestStatContour:
         for bad in (0, -5, 0.0, True):
             with pytest.raises(ValueError, match="interval"):
                 StatContour(interval=bad, dem_source=synthetic_dem)
+        # None (the site_map default) is the relief-aware auto mode, not
+        # an error, and the params record it as-is (JSON-safe).
+        assert StatContour(dem_source=synthetic_dem).params["interval"] is None
+
+    def test_auto_interval_is_relief_aware(self):
+        # interval=None resolves the level spacing from the DEM relief:
+        # modest relief keeps the old-geomapper 10 m floor, while a
+        # large-relief extent coarsens to ~20 levels so the map does not
+        # wall up with tightly-packed 10 m lines.
+        def ramp_dem(relief):
+            def _dem(bbox):
+                west, south, east, north = (float(v) for v in bbox)
+                lon_2d, lat_2d = np.meshgrid(
+                    np.linspace(west, east, 32),
+                    np.linspace(south, north, 32),
+                )
+                u = (lon_2d - west) / (east - west)
+                return DemGrid(lon=lon_2d, lat=lat_2d, z=100.0 + relief * u)
+
+            return _dem
+
+        segments = lambda frame: int(frame["x"].isna().sum()) + 1  # noqa: E731
+
+        small = StatContour(dem_source=ramp_dem(40)).compute(COORD_FRAME)
+        assert segments(small) <= 5  # 40 m relief at the 10 m floor
+
+        big_auto = StatContour(dem_source=ramp_dem(600)).compute(COORD_FRAME)
+        big_fine = StatContour(interval=10, dem_source=ramp_dem(600)).compute(COORD_FRAME)
+        assert not big_auto.empty
+        # ~600 m relief at the auto spacing (30 m) -> ~20 levels, far fewer
+        # polylines than the 10 m spacing would emit (60 levels).
+        assert segments(big_auto) < segments(big_fine)
 
     def test_dem_bounds_override_pins_source_bbox(self):
         calls: list[tuple] = []

@@ -916,9 +916,18 @@ class MatplotlibRenderer(BaseRenderer):
 
         data_idx = 0
         func_layers = []
+        contour_layers = []
         for i, layer in enumerate(spec.layers):
             if layer.geom.name == "function_line":
                 func_layers.append((i, layer))
+                continue
+            if layer.geom.name == "contour":
+                # Contour layers are extent-unbounded decorative geometry (the
+                # DEM grid is buffered beyond the data extent): defer them until
+                # the viewport is captured so the figure frames the data instead
+                # of widening to the buffered grid, and the linework clips at
+                # the axes (old-geomapper presentation).
+                contour_layers.append((i, layer))
                 continue
             order = layer.zorder if layer.zorder is not None else (10 + data_idx)
             filtered = LayerSpec(
@@ -942,6 +951,37 @@ class MatplotlibRenderer(BaseRenderer):
 
         xlim_data = ax.get_xlim()
         ylim_data = ax.get_ylim()
+
+        # Draw the deferred contour layers now that the viewport is fixed:
+        # their buffered-DEM linework covers the whole figure and clips at the
+        # axes (the DEM extends beyond the data-framed viewport, 10% buffer).
+        # Restore the spec draw order afterwards: contour layers are inserted
+        # before the data layers, so their artists must stay ahead of the data
+        # artists in the axes' draw list (equal-zorder stacking below the ring).
+        for _, layer in contour_layers:
+            order = layer.zorder if layer.zorder is not None else (10 + data_idx)
+            filtered = LayerSpec(
+                geom=layer.geom,
+                stat=layer.stat,
+                visual_mapping={k: _filter_series(v, rows, all_rows) for k, v in layer.visual_mapping.items()},
+                data_override=layer.data_override,
+                zorder=layer.zorder,
+                xlim=layer.xlim,
+                ylim=layer.ylim,
+            )
+            snapshot = self._snapshot_artists(ax)
+            self._render_layer(ax, spec, filtered, order)
+            if layer_affine is not None:
+                self._stamp_new_artists(ax, snapshot, layer_affine(filtered), ax.transData)
+            new_artists = [
+                artist
+                for artist in self._new_artists(ax, snapshot)
+                if artist in ax._children
+            ]
+            if new_artists:
+                for artist in new_artists:
+                    ax._children.remove(artist)
+                ax._children[0:0] = new_artists
 
         basemap_setting = spec.settings.get("basemap")
         if basemap_setting and isinstance(spec.coord, CoordGeo):

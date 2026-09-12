@@ -64,7 +64,11 @@ SITE_MAP_DEFAULTS: dict[str, Any] = {
     "xlabel": "Longitude",
     "ylabel": "Latitude",
     "basemap": {"provider": "esri_world_imagery", "alpha": 0.6},
-    "contours": {"interval": 10, "color": "white", "linewidth": 0.5, "alpha": 0.6},
+    # ``contours["interval"]``: ``None`` (the default) is relief-aware —
+    # StatContour derives the spacing from the DEM's elevation range
+    # (10 m minimum, ~20 lines across the relief); an explicit number
+    # (e.g. 10 for old-geomapper parity) is honored verbatim.
+    "contours": {"interval": None, "color": "white", "linewidth": 0.5, "alpha": 0.6},
 }
 
 
@@ -286,16 +290,35 @@ class StatSiteMap(Stat):
         return out[["x", "y", "label"]]
 
 
+def _auto_contour_interval(z: np.ndarray, minimum: float = 10.0, target_levels: float = 20.0) -> float:
+    """Relief-derived contour spacing in meters.
+
+    At least *minimum* meters (old-geomapper 10 m parity for
+    modest-relief sites), coarsened for large-relief extents so the figure
+    does not wall up with dozens of tightly-packed 10 m lines — roughly
+    *target_levels* levels across the DEM's elevation range, rounded to a
+    multiple of 5 m for readable level values. Deterministic per-grid.
+    """
+    relief = float(np.nanmax(z) - np.nanmin(z))
+    return max(minimum, 5.0 * round(relief / target_levels / 5.0))
+
+
 class StatContour(Stat):
     """Spec-build transform that derives DEM elevation contour lines.
 
     Acquires a DEM for the provider frame's lon/lat extent (via
     ``geofig_engine.io.dem.fetch_dem``, which applies the old-geomapper 10%
-    lon/lat buffer), extracts isolines at multiples of ``interval`` meters,
-    and emits a NaN-separated ``x``/``y`` frame — one continuous open
+    lon/lat buffer), extracts isolines at multiples of the contour interval
+    meters, and emits a NaN-separated ``x``/``y`` frame — one continuous open
     polyline per contour segment, matching the ``StatParticleOverlay
     (mode="contours")`` frame shape that ``render_boundary`` draws as open
     multipart paths (handlers.py:1020).
+
+    The interval is relief-aware when left at the ``None`` default
+    (``SITE_MAP_DEFAULTS["contours"]["interval"]``): at least the
+    old-geomapper 10 m spacing, coarsened so a large-relief extent does not
+    wall up with dozens of tightly-packed 10 m lines (~20 levels across the
+    DEM's elevation range). An explicit ``interval`` is honored verbatim.
 
     M1 is constant-style: the whole line set shares the geom's single
     ``edgecolor``/``edgewidth``/``edgealpha``/``edgestyle`` (old-geomapper
@@ -309,18 +332,19 @@ class StatContour(Stat):
 
     def __init__(
         self,
-        interval: float = 10,
+        interval: float | None = None,
         dem_source: Callable[[tuple[float, float, float, float]], Any] | None = None,
         dem_bounds: tuple[float, float, float, float] | None = None,
     ) -> None:
-        if isinstance(interval, bool) or not isinstance(interval, (int, float)):
-            raise ValueError(
-                f"interval must be a positive real number, got {interval!r}"
-            )
-        if interval <= 0:
-            raise ValueError(
-                f"interval must be a positive real number, got {interval!r}"
-            )
+        if interval is not None:
+            if isinstance(interval, bool) or not isinstance(interval, (int, float)):
+                raise ValueError(
+                    f"interval must be a positive real number or None, got {interval!r}"
+                )
+            if interval <= 0:
+                raise ValueError(
+                    f"interval must be a positive real number or None, got {interval!r}"
+                )
         if dem_source is not None and not callable(dem_source):
             raise TypeError(f"dem_source must be callable or None, got {dem_source!r}")
         if dem_bounds is not None:
@@ -340,7 +364,7 @@ class StatContour(Stat):
         super().__init__(
             name="contour",
             params={
-                "interval": float(interval),
+                "interval": None if interval is None else float(interval),
                 # JSON-safe (the callable dem_source seam is not recorded).
                 "dem_bounds": None if dem_bounds is None else tuple(dem_bounds),
             },
@@ -403,13 +427,19 @@ class StatContour(Stat):
         if not all(math.isfinite(v) for v in bbox):
             return self._empty_frame()
 
+        explicit_interval = self.params["interval"]
+        # ``None`` resolves against the DEM's relief AFTER the fetch (the
+        # auto-zoom resolution only needs a magnitude, so the fetch reuses
+        # the old-geomapper 10 m default until the grid is in hand).
+        fetch_interval = 10.0 if explicit_interval is None else explicit_interval
+
         try:
             if self.dem_source is not None:
                 grid = self.dem_source(bbox)
             else:
                 from geofig_engine.io.dem import fetch_dem
 
-                grid = fetch_dem(*bbox, interval=self.params["interval"])
+                grid = fetch_dem(*bbox, interval=fetch_interval)
             if grid is None:
                 raise ValueError("DEM source returned nothing")
             z = np.asarray(grid.z, dtype=float)
@@ -427,7 +457,10 @@ class StatContour(Stat):
                 f"DEM lon/lat grids {lon_2d.shape} do not match z {z.shape}"
             )
 
-        levels = np.arange(np.nanmin(z), np.nanmax(z), self.params["interval"])
+        level_interval = (
+            explicit_interval if explicit_interval is not None else _auto_contour_interval(z)
+        )
+        levels = np.arange(np.nanmin(z), np.nanmax(z), level_interval)
         if levels.size == 0:
             return self._empty_frame()
         return self._contour_frame(lon_2d, lat_2d, z, levels)
@@ -500,10 +533,12 @@ def site_map_builder(
     ``[geo]``-less projected render degrades to tiles-off with a warning.
 
     Elevation contours are **on by default**
-    (``SITE_MAP_DEFAULTS["contours"]`` — old-geomapper 10 m interval, white
-    0.5 pt at alpha 0.6, constant style): a ``GeomContour`` layer above the
-    zorder-0 basemap image and below the boundary ring, fed by a lazy
-    terrarium DEM fetch for the frame's lon/lat extent (10% buffer).
+    (``SITE_MAP_DEFAULTS["contours"]`` — relief-aware interval (``None``:
+    10 m minimum, ~20 lines across the DEM's elevation range; set an explicit
+    ``interval`` for old-geomapper 10 m parity), white 0.5 pt at alpha 0.6,
+    constant style): a ``GeomContour`` layer above the zorder-0 basemap image
+    and below the boundary ring, fed by a lazy terrarium DEM fetch for the
+    frame's lon/lat extent (10% buffer).
     ``settings={"contours": None}`` or ``{"enabled": False}`` omits the
     layer; a dict merges over the defaults (``interval``, ``color``,
     ``linewidth``, ``alpha``); ``dem_source`` may inject a synthetic DEM

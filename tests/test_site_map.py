@@ -208,10 +208,10 @@ class TestSiteMapTemplate:
         recipe = get_template("site_map")()
         assert len(recipe.layers) == 4  # contour joined below the boundary ring
         assert recipe.layers[0].geom.name == "contour"
-        assert recipe.layers[0].stat.params["interval"] == 10
+        assert recipe.layers[0].stat.params["interval"] is None  # relief-aware
         assert settings_contours(recipe.default_settings) is True
         assert recipe.default_settings["contours"] == {
-            "interval": 10,
+            "interval": None,
             "color": "white",
             "linewidth": 0.5,
             "alpha": 0.6,
