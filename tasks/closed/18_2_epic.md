@@ -1,8 +1,8 @@
 # Phase 18.2: DEM elevation contours for the site map template
 
-**Status**: open
+**Status**: complete
 **Phase**: 18.2
-**Version target**: v0.3.1+ (patch — bump decision deferred to the epic review WP)
+**Version target**: v0.3.1 (finalized at epic review)
 **Dependencies**: none (phase overview)
 
 ## Description

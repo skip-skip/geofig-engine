@@ -1,8 +1,8 @@
 # Phase 18.1: Facet / iterator consistency fix (bug-fix mini-phase)
 
-**Status**: open
+**Status**: complete
 **Phase**: 18.1
-**Version target**: v0.3.1+ (patch — bump decision deferred to the epic review WP)
+**Version target**: v0.3.1 (finalized at epic review)
 **Dependencies**: none (phase overview)
 
 ## Description
