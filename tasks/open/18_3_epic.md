@@ -102,7 +102,7 @@ contours; streams adds a 5th.
 
 | Ticket file | Scope | Depends |
 | --- | --- | --- |
-| `18_3_wp1_io_streams.md` | `io/streams.py`: REST query + pagination + GeoJSON parse + fetch + degrade | epic (context) |
+| `18_3_wp1_io_streams.md` | `io/streams.py`: REST query + pagination + GeoJSON parse + fetch + degrade | — (epic is a review ticket, not a dependency) |
 | `18_3_wp2_stat_template_wiring.md` | `GeomStreams` + handler + `StatStreams` (bbox → NaN-separated x/y) + default-on recipe wiring | `18_3_wp1_io_streams` |
 | `18_3_wp3_tests_docs_roadmap.md` | `test_streams.py` + network-free suite updates + ROADMAP/ARCHITECTURE un-defer + example regen | `18_3_wp2_stat_template_wiring` |
 

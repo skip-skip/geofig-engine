@@ -1,9 +1,10 @@
 # Phase 18.3: stream web-API I/O (`io/streams.py`)
 
-**Status**: open
+**Status**: complete
 **Phase**: 18.3
 **Version target**: v0.3.1+ (patch — bump decision deferred to the epic review WP)
-**Dependencies**: `18_3_epic`
+**Dependencies**: none (the open `18_3_epic` is a review ticket, not a
+blocking implementation dependency)
 
 ## Description
 
