@@ -17,19 +17,32 @@ NPR_NNP_DEFAULTS: dict[str, Any] = {
 }
 
 
-def npr_nnp(
+def npr_nnp_builder(
     mapping: dict[str, SourceType] | None = None,
-    npr_crit: float = 3,
-    nnp_crit: float = 20,
-    scales: dict[str, Scale] | None = None,
-) -> FigureTemplate:
-    mapping = mapping or {}
+    settings: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> "TemplateRecipe":
+    """Native registry builder for ``npr_nnp`` (18.4).
+
+    ``npr_crit`` / ``nnp_crit`` come from flat settings or direct factory
+    kwargs; renderer settings merge into ``default_settings``.
+    """
+    from geofig_engine.engine.api import DEFAULT_TEMPLATE_MAPPING, TemplateRecipe
+
+    options = settings or {}
+    effective_mapping = (
+        dict(mapping or {})
+        if kwargs.get("_legacy_factory", False)
+        else {**DEFAULT_TEMPLATE_MAPPING, **(mapping or {})}
+    )
+    npr_crit = kwargs.get("npr_crit", options.get("npr_crit", 3))
+    nnp_crit = kwargs.get("nnp_crit", options.get("nnp_crit", 20))
     npr_low = 1
     npr_high = npr_crit
     nnp_low = -nnp_crit
     nnp_high = nnp_crit
 
-    return FigureTemplate(
+    return TemplateRecipe(
         name="npr_nnp",
         layers=[
             Layer(
@@ -95,10 +108,32 @@ def npr_nnp(
             Layer(
                 geom=GeomPoint(),
                 stat=StatIdentity(),
-                mapping=mapping,
-                scales=scales,
+                mapping=effective_mapping,
+                scales=kwargs.get("scales"),
                 zorder=10,
             ),
         ],
-        default_settings=dict(NPR_NNP_DEFAULTS),
+        default_settings={**NPR_NNP_DEFAULTS, **options},
+        mapping_consumed=True,
+    )
+
+
+def npr_nnp(
+    mapping: dict[str, SourceType] | None = None,
+    npr_crit: float = 3,
+    nnp_crit: float = 20,
+    scales: dict[str, Scale] | None = None,
+) -> FigureTemplate:
+    recipe = npr_nnp_builder(
+        mapping=mapping,
+        npr_crit=npr_crit,
+        nnp_crit=nnp_crit,
+        scales=scales,
+        _legacy_factory=True,
+    )
+    return FigureTemplate(
+        name=recipe.name,
+        layers=recipe.layers,
+        coord=recipe.coord,
+        default_settings=recipe.default_settings,
     )

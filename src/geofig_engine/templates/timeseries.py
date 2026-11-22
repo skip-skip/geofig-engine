@@ -25,25 +25,50 @@ TIMESERIES_DEFAULTS: dict[str, Any] = {
 }
 
 
-def timeseries(
+def timeseries_builder(
     mapping: dict[str, SourceType] | None = None,
-    scales: dict[str, Scale] | None = None,
-) -> FigureTemplate:
-    return FigureTemplate(
+    settings: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> "TemplateRecipe":
+    """Native registry builder for ``timeseries`` (18.4)."""
+    from geofig_engine.engine.api import DEFAULT_TEMPLATE_MAPPING, TemplateRecipe
+
+    options = settings or {}
+    effective_mapping = (
+        dict(mapping or {})
+        if kwargs.get("_legacy_factory", False)
+        else {**DEFAULT_TEMPLATE_MAPPING, **(mapping or {})}
+    )
+    scales = kwargs.get("scales")
+    return TemplateRecipe(
         name="timeseries",
         layers=[
             Layer(
                 geom=GeomLine(),
                 stat=StatIdentity(),
-                mapping=mapping or {},
+                mapping=effective_mapping,
                 scales=scales,
             ),
             Layer(
                 geom=GeomPoint(),
                 stat=StatIdentity(),
-                mapping=mapping or {},
+                mapping=effective_mapping,
                 scales=scales,
             ),
         ],
-        default_settings=dict(TIMESERIES_DEFAULTS),
+        default_settings={**TIMESERIES_DEFAULTS, **options},
+        mapping_consumed=True,
+    )
+
+
+def timeseries(
+    mapping: dict[str, SourceType] | None = None,
+    scales: dict[str, Scale] | None = None,
+) -> FigureTemplate:
+    recipe = timeseries_builder(mapping=mapping, scales=scales, _legacy_factory=True)
+    return FigureTemplate(
+        name=recipe.name,
+        layers=recipe.layers,
+        coord=recipe.coord,
+        default_settings=recipe.default_settings,
     )

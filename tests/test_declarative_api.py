@@ -142,6 +142,28 @@ class TestTemplateResolution:
         figures = render_template(data=make_df(), template=recipe)
         assert len(figures) == 1
 
+    def test_string_key_builder_receives_mapping_and_settings(self):
+        calls = {}
+
+        def recording(mapping=None, settings=None, **_):
+            calls["mapping"] = mapping
+            calls["settings"] = settings
+            return TemplateRecipe(
+                name="recording",
+                layers=[point_layer(mapping={"x": "x", "y": "y"})],
+                mapping_consumed=True,
+            )
+
+        register_template("recording", recording)
+        render_template(
+            data=make_df(),
+            template="recording",
+            mapping={"x": "y"},
+            settings={"title": "T"},
+        )
+        assert calls["mapping"] == {"x": "y"}
+        assert calls["settings"] == {"title": "T"}
+
 
 class TestOverrides:
     def test_mapping_overrides_recipe_layers(self):

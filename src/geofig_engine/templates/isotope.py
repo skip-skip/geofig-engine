@@ -75,21 +75,58 @@ def _load_functions(
         return []
 
 
+def isotope_builder(
+    mapping: dict[str, SourceType] | None = None,
+    settings: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> "TemplateRecipe":
+    """Native registry builder for ``isotope`` (18.4).
+
+    ``functions`` / ``auto_filter`` come from flat settings or direct factory
+    kwargs; renderer settings merge into ``default_settings``.
+    """
+    from geofig_engine.engine.api import DEFAULT_TEMPLATE_MAPPING, TemplateRecipe
+
+    options = settings or {}
+    effective_mapping = (
+        dict(mapping or {})
+        if kwargs.get("_legacy_factory", False)
+        else {**DEFAULT_TEMPLATE_MAPPING, **(mapping or {})}
+    )
+    func_layers = _load_functions(
+        functions=kwargs.get("functions", options.get("functions")),
+        auto_filter=kwargs.get("auto_filter", options.get("auto_filter", True)),
+    )
+    data_layer = Layer(
+        geom=GeomPoint(),
+        stat=StatIdentity(),
+        mapping=effective_mapping,
+        scales=kwargs.get("scales"),
+    )
+    return TemplateRecipe(
+        name="isotope",
+        layers=[*func_layers, data_layer],
+        default_settings={**ISOTOPE_DEFAULTS, **options},
+        mapping_consumed=True,
+    )
+
+
 def isotope(
     mapping: dict[str, SourceType] | None = None,
     scales: dict[str, Scale] | None = None,
     functions: Sequence[str] | None = None,
     auto_filter: bool = True,
 ) -> FigureTemplate:
-    func_layers = _load_functions(functions=functions, auto_filter=auto_filter)
-    data_layer = Layer(
-        geom=GeomPoint(),
-        stat=StatIdentity(),
-        mapping=mapping or {},
+    recipe = isotope_builder(
+        mapping=mapping,
         scales=scales,
+        functions=functions,
+        auto_filter=auto_filter,
+        _legacy_factory=True,
     )
     return FigureTemplate(
-        name="isotope",
-        layers=[*func_layers, data_layer],
-        default_settings=dict(ISOTOPE_DEFAULTS),
+        name=recipe.name,
+        layers=recipe.layers,
+        coord=recipe.coord,
+        default_settings=recipe.default_settings,
     )

@@ -1,11 +1,10 @@
 """
-Phase 15 wp6: registry-templated rendering through ``render_template``.
+Phase 15 wp6 / 18.4 wp1: registry-templated rendering through ``render_template``.
 
-Covers the two pipeline builders seeded under ``bivariate`` and
-``boxplot_with_points`` plus the ten legacy adapter keys registered from
-``templates/legacy.py`` (eight figure-template factories that render through
-the recipe pipeline, and the two spec builders — ``piper``/``stiff`` — whose
-keys resolve but raise informative ''not registry-adaptable'' errors).
+Covers the pipeline builders plus the ten legacy keys. The eight
+``FigureTemplate`` factories now resolve to native ``*_builder`` functions;
+``piper``/``stiff`` keep resolvable placeholders until 18.4 wp2 replaces them
+with first-class spec recipes.
 """
 
 import hashlib
@@ -20,6 +19,16 @@ import pytest
 import pandas as pd
 
 from geofig_engine import TEMPLATES, get_template, render_template
+from geofig_engine.templates import (
+    anp_agp_builder,
+    histogram_builder,
+    isotope_builder,
+    nagph_nag_builder,
+    npr_nnp_builder,
+    pie_builder,
+    radar_builder,
+    timeseries_builder,
+)
 
 
 def make_df():
@@ -55,6 +64,17 @@ LEGACY_RENDER_CASES = [
 ]
 
 SPEC_BUILDER_KEYS = ["piper", "stiff"]
+
+NATIVE_BUILDERS = {
+    "histogram": histogram_builder,
+    "pie": pie_builder,
+    "radar": radar_builder,
+    "timeseries": timeseries_builder,
+    "isotope": isotope_builder,
+    "npr_nnp": npr_nnp_builder,
+    "anp_agp": anp_agp_builder,
+    "nagph_nag": nagph_nag_builder,
+}
 
 
 class TestPipelineBuilders:
@@ -140,10 +160,50 @@ class TestLegacyRegistryKeys:
         for key in keys:
             assert callable(get_template(key))
 
+    @pytest.mark.parametrize("key,builder", NATIVE_BUILDERS.items())
+    def test_factory_keys_seed_native_builders(self, key, builder):
+        assert get_template(key) is builder
+
+    def test_registry_seed_has_no_legacy_adapter(self):
+        import inspect
+
+        from geofig_engine.engine import api
+
+        assert "legacy_adapter" not in inspect.getsource(api)
+
     @pytest.mark.parametrize("key,mapping", LEGACY_RENDER_CASES)
     def test_legacy_factory_renders_via_pipeline(self, key, mapping):
         figures = render_template(data=make_df(), template=key, mapping=mapping)
         assert len(figures) == 1
+
+    @pytest.mark.parametrize("key,mapping", LEGACY_RENDER_CASES)
+    def test_legacy_keys_honor_settings(self, key, mapping):
+        figures = render_template(
+            data=make_df(), template=key, mapping=mapping,
+            settings={"title": "T"},
+        )
+        assert figures[0].axes[0].get_title() == "T"
+
+    def test_histogram_settings_honor_bins(self):
+        figures = render_template(
+            data=make_df(), template="histogram", mapping={"x": "x"},
+            settings={"bins": 5},
+        )
+        assert len(figures[0].axes[0].patches) == 5
+
+    def test_histogram_mapping_bins_mapped_column(self):
+        df = make_df()
+        df["other_col"] = [10.0, 20.0, 30.0, 40.0]
+        figures = render_template(
+            data=df, template="histogram", mapping={"x": "other_col"},
+            settings={"bins": 4},
+        )
+        centers = [
+            patch.get_x() + patch.get_width() / 2
+            for patch in figures[0].axes[0].patches
+        ]
+        assert min(centers) > 5.0
+        assert max(centers) < 45.0
 
     @pytest.mark.parametrize("key", SPEC_BUILDER_KEYS)
     def test_spec_builder_keys_raise_with_guidance(self, key):

@@ -8,11 +8,14 @@ import pandas as pd
 from geofig_engine.templates import (
     FigureTemplate,
     bivariate,
+    histogram,
+    histogram_builder,
     timeseries,
     isotope,
     pie,
     radar,
 )
+from geofig_engine.templates.histogram import HISTOGRAM_DEFAULTS
 from geofig_engine.core.geom import GeomPoint, GeomLine, GeomFunctionLine, GeomBar, GeomArea, GeomText
 from geofig_engine.core.layer import Layer
 from geofig_engine.core.coord import CoordPolar
@@ -183,7 +186,8 @@ class TestLegacyAdapter:
         from geofig_engine.templates import histogram
         from geofig_engine.templates.legacy import legacy_adapter
 
-        recipe = recipe_from(legacy_adapter(histogram)(mapping={"x": "x"}))
+        with pytest.warns(DeprecationWarning, match="legacy_adapter"):
+            recipe = recipe_from(legacy_adapter(histogram)(mapping={"x": "x"}))
         assert recipe.name == "histogram"
         assert len(recipe.layers) >= 1
 
@@ -192,9 +196,10 @@ class TestLegacyAdapter:
         from geofig_engine.templates import histogram
         from geofig_engine.templates.legacy import legacy_adapter
 
-        recipe = recipe_from(
-            legacy_adapter(histogram)(mapping={"x": "x"}, bins=5)
-        )
+        with pytest.warns(DeprecationWarning, match="legacy_adapter"):
+            recipe = recipe_from(
+                legacy_adapter(histogram)(mapping={"x": "x"}, bins=5)
+            )
         stat = recipe.layers[0].stat
         assert getattr(stat, "bins", None) == 5
 
@@ -203,14 +208,50 @@ class TestLegacyAdapter:
         from geofig_engine.templates import bivariate
         from geofig_engine.templates.legacy import legacy_adapter
 
-        recipe = recipe_from(
-            legacy_adapter(bivariate)(mapping={"x": "x", "y": "y"}, settings={"title": "T"})
-        )
+        with pytest.warns(DeprecationWarning, match="legacy_adapter"):
+            recipe = recipe_from(
+                legacy_adapter(bivariate)(mapping={"x": "x", "y": "y"}, settings={"title": "T"})
+            )
         assert recipe.default_settings["title"] == "T"
 
     def test_spec_builder_result_rejected_with_guidance(self):
         from geofig_engine.templates.legacy import legacy_adapter
         from geofig_engine.templates.stiff import plot_stiff
 
-        with pytest.raises(TypeError, match="not registry-adaptable"):
-            legacy_adapter(plot_stiff)()
+        with pytest.warns(DeprecationWarning, match="legacy_adapter"):
+            with pytest.raises(TypeError, match="not registry-adaptable"):
+                legacy_adapter(plot_stiff)()
+
+
+class TestNativeBuilders:
+    def test_histogram_factory_delegates_to_builder(self):
+        recipe = histogram_builder(
+            mapping={"x": "x"},
+            bins=5,
+            density=True,
+            cumulative=True,
+            _legacy_factory=True,
+        )
+        template = histogram(
+            mapping={"x": "x"}, bins=5, density=True, cumulative=True
+        )
+        assert isinstance(template, FigureTemplate)
+        assert template.layers == recipe.layers
+        assert template.default_settings == recipe.default_settings
+        assert template.default_settings == HISTOGRAM_DEFAULTS
+
+    def test_factory_keeps_required_mapping_validation(self):
+        with pytest.raises(ValueError, match="requires 'x'"):
+            histogram()
+        # Registry builders fill the x/y stub so keys work mapping-free.
+        recipe = histogram_builder()
+        assert recipe.layers[0].stat.params["column"] == "x"
+        assert recipe.mapping_consumed is True
+
+    def test_builder_flat_settings_are_template_kwargs_and_defaults(self):
+        recipe = histogram_builder(
+            mapping={"x": "x"}, settings={"bins": 7, "title": "T"}
+        )
+        assert recipe.layers[0].stat.params["bins"] == 7
+        assert recipe.default_settings["bins"] == 7
+        assert recipe.default_settings["title"] == "T"

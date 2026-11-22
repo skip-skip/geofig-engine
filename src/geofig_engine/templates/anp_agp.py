@@ -17,16 +17,25 @@ ANP_AGP_DEFAULTS: dict[str, Any] = {
 }
 
 
-def anp_agp(
+def anp_agp_builder(
     mapping: dict[str, SourceType] | None = None,
-    scales: dict[str, Scale] | None = None,
-) -> FigureTemplate:
-    mapping = mapping or {}
+    settings: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> "TemplateRecipe":
+    """Native registry builder for ``anp_agp`` (18.4)."""
+    from geofig_engine.engine.api import DEFAULT_TEMPLATE_MAPPING, TemplateRecipe
+
+    options = settings or {}
+    effective_mapping = (
+        dict(mapping or {})
+        if kwargs.get("_legacy_factory", False)
+        else {**DEFAULT_TEMPLATE_MAPPING, **(mapping or {})}
+    )
     slopes = [1, 2, 3, 4]
     labels = ["NP:AP = 1:1", "NP:AP = 2:1", "NP:AP = 3:1", "NP:AP = 4:1"]
 
     layers: list[Layer] = []
-    for i, (s, lbl) in enumerate(zip(slopes, labels)):
+    for s, lbl in zip(slopes, labels):
         layers.append(
             Layer(
                 geom=GeomAbline(slope=s, intercept=0),
@@ -81,14 +90,28 @@ def anp_agp(
         Layer(
             geom=GeomPoint(),
             stat=StatIdentity(),
-            mapping=mapping,
-            scales=scales,
+            mapping=effective_mapping,
+            scales=kwargs.get("scales"),
             zorder=10,
         ),
     ])
 
-    return FigureTemplate(
+    return TemplateRecipe(
         name="anp_agp",
         layers=layers,
-        default_settings=dict(ANP_AGP_DEFAULTS),
+        default_settings={**ANP_AGP_DEFAULTS, **options},
+        mapping_consumed=True,
+    )
+
+
+def anp_agp(
+    mapping: dict[str, SourceType] | None = None,
+    scales: dict[str, Scale] | None = None,
+) -> FigureTemplate:
+    recipe = anp_agp_builder(mapping=mapping, scales=scales, _legacy_factory=True)
+    return FigureTemplate(
+        name=recipe.name,
+        layers=recipe.layers,
+        coord=recipe.coord,
+        default_settings=recipe.default_settings,
     )

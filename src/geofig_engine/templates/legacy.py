@@ -1,11 +1,12 @@
 """
-Thin adapters re-registering the legacy template factories (15_wp6).
+Retained compatibility shim for the legacy template factories (15_wp6).
 
 ``legacy_adapter(builder)`` wraps a legacy ``FigureTemplate`` factory and
 returns a registry builder ``(mapping=None, settings=None, **kwargs)`` whose
-product is normalized to the canonical recipe shape via ``recipe_from``. The
-adapters keep the whole legacy factory set usable through the same
-``TEMPLATES`` registry and ``render_template``.
+product is normalized to the canonical recipe shape via ``recipe_from``. It is
+**no longer used for registry seeding**: Phase 18.4 seeds native ``*_builder``
+functions instead. The adapter remains importable and deprecated (call-time
+``DeprecationWarning``), removed no earlier than geofig-engine 1.0.0.
 
 The legacy ``FigureTemplate`` factories are all data-free builders:
 ``histogram``, ``pie``, ``radar``, ``timeseries``, ``isotope``, ``npr_nnp``,
@@ -15,14 +16,14 @@ The legacy ``FigureTemplate`` factories are all data-free builders:
 **spec builders** — they require ``data``/scalar arguments and return
 ``FigureSpec`` objects (child-spec/ternary/linked-axes figures that the
 layer->recipe pipeline cannot express). Their registry keys still resolve
-through ``get_template``, but invoking them through ``render_template``
-raises an explicit, informative ``TypeError`` pointing at the spec-builder
-route (``MatplotlibRenderer`` on the builder's specs).
+through ``get_template``; 18.4 wp2 replaces their placeholders with native
+``SpecRecipe`` builders.
 """
 
 from __future__ import annotations
 
 import functools
+import warnings
 from typing import Any, Callable
 
 from geofig_engine.templates.anp_agp import anp_agp
@@ -63,11 +64,11 @@ LEGACY_FACTORIES: dict[str, Callable[..., Any]] = {
 def legacy_adapter(builder: Callable[..., Any]) -> Callable[..., Any]:
     """Adapt a legacy template factory to a registry builder.
 
-    The returned builder accepts ``mapping``/``settings``/factory kwargs,
-    calls the legacy factory, and normalizes the result to a recipe via
-    ``recipe_from`` (imported lazily to keep ``templates`` decoupled from
-    ``engine.api``). Spec-builder products (``FigureSpec``/lists) raise an
-    informative ``TypeError``.
+    Deprecated compatibility wrapper: the returned builder accepts
+    ``mapping``/``settings``/factory kwargs, calls the legacy factory, and
+    normalizes the result to a recipe via ``recipe_from`` (imported lazily to
+    keep ``templates`` decoupled from ``engine.api``). Spec-builder products
+    (``FigureSpec``/lists) raise an informative ``TypeError``.
     """
 
     @functools.wraps(builder)
@@ -76,6 +77,13 @@ def legacy_adapter(builder: Callable[..., Any]) -> Callable[..., Any]:
         settings: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> Any:
+        warnings.warn(
+            "legacy_adapter is deprecated; use the native *_builder template "
+            "keys instead. It will be removed no earlier than geofig-engine "
+            "1.0.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         try:
             product = builder(
                 mapping=mapping or dict(LEGACY_DEFAULT_MAPPING),

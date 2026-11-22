@@ -17,15 +17,24 @@ NAGPH_NAG_DEFAULTS: dict[str, Any] = {
 }
 
 
-def nagph_nag(
+def nagph_nag_builder(
     mapping: dict[str, SourceType] | None = None,
-    scales: dict[str, Scale] | None = None,
-) -> FigureTemplate:
-    mapping = mapping or {}
+    settings: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> "TemplateRecipe":
+    """Native registry builder for ``nagph_nag`` (18.4)."""
+    from geofig_engine.engine.api import DEFAULT_TEMPLATE_MAPPING, TemplateRecipe
+
+    options = settings or {}
+    effective_mapping = (
+        dict(mapping or {})
+        if kwargs.get("_legacy_factory", False)
+        else {**DEFAULT_TEMPLATE_MAPPING, **(mapping or {})}
+    )
     vline_x = 4.5
     hline_y = 18.14
 
-    return FigureTemplate(
+    return TemplateRecipe(
         name="nagph_nag",
         layers=[
             Layer(
@@ -102,10 +111,24 @@ def nagph_nag(
             Layer(
                 geom=GeomPoint(),
                 stat=StatIdentity(),
-                mapping=mapping,
-                scales=scales,
+                mapping=effective_mapping,
+                scales=kwargs.get("scales"),
                 zorder=10,
             ),
         ],
-        default_settings=dict(NAGPH_NAG_DEFAULTS),
+        default_settings={**NAGPH_NAG_DEFAULTS, **options},
+        mapping_consumed=True,
+    )
+
+
+def nagph_nag(
+    mapping: dict[str, SourceType] | None = None,
+    scales: dict[str, Scale] | None = None,
+) -> FigureTemplate:
+    recipe = nagph_nag_builder(mapping=mapping, scales=scales, _legacy_factory=True)
+    return FigureTemplate(
+        name=recipe.name,
+        layers=recipe.layers,
+        coord=recipe.coord,
+        default_settings=recipe.default_settings,
     )

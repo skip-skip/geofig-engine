@@ -4,9 +4,9 @@ Declarative API: template registry + recipe shape + canonical ``render_template`
 
 The exported ``TEMPLATES`` registry maps a template key to a builder callable
 that returns a duck-typed **template recipe** (``name`` / ``layers`` / ``coord``
-/ ``default_settings``). ``FigureTemplate`` objects from the legacy template
-set are adapted to the same shape via ``recipe_from`` so the whole legacy set
-stays usable through the registry.
+/ ``default_settings``). Native builders own the legacy factory set; the
+``FigureTemplate`` factories remain compatibility wrappers and are still
+adapted via ``recipe_from`` when passed directly.
 
 ``render_template`` is the **one canonical entry point**: it coerces raw
 ``pandas.DataFrame``/ndarray input into a ``DataProvider``, resolves the
@@ -36,13 +36,26 @@ from geofig_engine.engine.entry import render_template_legacy
 from geofig_engine.engine.generator import FigureGenerator
 from geofig_engine.provider import DataProvider, DataFrameProvider
 from geofig_engine.renderers.matplotlib.legend import LegendAccumulator
+from geofig_engine.templates.anp_agp import anp_agp_builder
 from geofig_engine.templates.base import FigureTemplate
 from geofig_engine.templates.bivariate import bivariate_builder
 from geofig_engine.templates.boxplot_with_points import boxplot_with_points_builder
 from geofig_engine.templates.dendrogram import dendrogram_builder
-from geofig_engine.templates.legacy import LEGACY_FACTORIES, legacy_adapter
+from geofig_engine.templates.histogram import histogram_builder
+from geofig_engine.templates.isotope import isotope_builder
+from geofig_engine.templates.nagph_nag import nagph_nag_builder
+from geofig_engine.templates.npr_nnp import npr_nnp_builder
 from geofig_engine.templates.particle_overlay import particle_overlay_builder
+from geofig_engine.templates.pie import pie_builder
+from geofig_engine.templates.radar import radar_builder
 from geofig_engine.templates.site_map import site_map_builder
+from geofig_engine.templates.timeseries import timeseries_builder
+
+
+#: Stub channels native builders merge under a user mapping so registry keys
+#: stay usable without one. Kept separate from ``legacy.py`` so adapter and
+#: native paths can evolve independently.
+DEFAULT_TEMPLATE_MAPPING: dict[str, str] = {"x": "x", "y": "y"}
 
 
 @dataclass(frozen=True)
@@ -52,6 +65,8 @@ class TemplateRecipe:
     A recipe carries everything ``render_template`` needs to build specs:
     ``name`` (registry key), ``layers`` (Layer list), ``coord`` (the
     coordinate system), and ``default_settings`` (renderer defaults).
+    ``mapping_consumed`` marks builders that already bound the user mapping
+    into their layers/stats, so the generic override pass is skipped for them.
     Missing *required channels* are **not** validated here — that check
     happens lazily at spec-build time (see ``15_wp3`` / ``15_wp4``).
     """
@@ -60,6 +75,7 @@ class TemplateRecipe:
     layers: list[Layer]
     coord: Coord = field(default_factory=CoordCartesian)
     default_settings: dict[str, Any] = field(default_factory=dict)
+    mapping_consumed: bool = False
 
 
 def _is_recipe(obj: Any) -> bool:
@@ -134,7 +150,7 @@ def get_template(name: str) -> Callable[..., TemplateRecipe]:
 
 
 # ---------------------------------------------------------------------------
-# Seed the registry (15_wp6): the two pipeline builders + legacy adapters
+# Seed the registry (18.4): native builders + composite spec placeholders
 # ---------------------------------------------------------------------------
 
 TEMPLATES["bivariate"] = bivariate_builder
@@ -142,8 +158,41 @@ TEMPLATES["boxplot_with_points"] = boxplot_with_points_builder
 TEMPLATES["dendrogram"] = dendrogram_builder
 TEMPLATES["particle_overlay"] = particle_overlay_builder
 TEMPLATES["site_map"] = site_map_builder
-for _template_key, _factory in LEGACY_FACTORIES.items():
-    TEMPLATES[_template_key] = legacy_adapter(_factory)
+TEMPLATES["histogram"] = histogram_builder
+TEMPLATES["pie"] = pie_builder
+TEMPLATES["radar"] = radar_builder
+TEMPLATES["timeseries"] = timeseries_builder
+TEMPLATES["isotope"] = isotope_builder
+TEMPLATES["npr_nnp"] = npr_nnp_builder
+TEMPLATES["anp_agp"] = anp_agp_builder
+TEMPLATES["nagph_nag"] = nagph_nag_builder
+
+
+def _spec_builder_placeholder(name: str) -> Callable[..., Any]:
+    """Keep a spec-builder key resolvable until 18.4 wp2 lands.
+
+    The key stays callable so ``get_template`` and the registry surface are
+    unchanged, but invoking it through ``render_template`` keeps the existing
+    informative error instead of silently producing a wrong figure.
+    """
+
+    def builder(
+        mapping: dict[str, Any] | None = None,
+        settings: dict[str, Any] | None = None,
+        **_: Any,
+    ) -> Any:
+        raise TypeError(
+            f"template '{name}' is not registry-adaptable in this phase: it is "
+            "a spec builder requiring data/scalar arguments. Call the spec "
+            "builder directly and render its FigureSpec objects via "
+            "MatplotlibRenderer."
+        )
+
+    return builder
+
+
+TEMPLATES["piper"] = _spec_builder_placeholder("piper")
+TEMPLATES["stiff"] = _spec_builder_placeholder("stiff")
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +250,13 @@ def _apply_mapping_override(
     return overridden
 
 
+def _mapping_consumed(recipe: Any) -> bool:
+    """Whether a recipe bound the user mapping itself (native legacy builders)."""
+    if isinstance(recipe, dict):
+        return bool(recipe.get("mapping_consumed", False))
+    return bool(getattr(recipe, "mapping_consumed", False))
+
+
 def render_template(
     data: pd.DataFrame | DataProvider,
     template: str | FigureTemplate,
@@ -218,10 +274,13 @@ def render_template(
         data: ``DataProvider`` (passed through), ``pd.DataFrame`` (wrapped in
             ``DataFrameProvider``), or an ndarray (wrapped in a frame with
             positional columns — e.g. dendrogram linkage matrices).
-        template: Registry key (``str``) resolved via ``get_template``, or a
-            ``FigureTemplate`` / duck-typed recipe adapted via ``recipe_from``.
-        mapping: Per-layer mapping override, merged over the recipe layers.
-        settings: User settings merged on top of the recipe defaults.
+        template: Registry key (``str``) resolved via ``get_template`` and
+            called with ``mapping``/``settings``, or a ``FigureTemplate`` /
+            duck-typed recipe adapted via ``recipe_from``.
+        mapping: Per-layer mapping override, merged over the recipe layers for
+            templates that do not consume it themselves.
+        settings: User settings merged on top of the recipe defaults (and
+            passed to key builders as flat template-specific knobs).
         iterators: Optional dimension iterators for multi-figure expansion.
         facet: Optional facet spec; splits the data into panels within a
             single figure (renderer-side). One figure per iterator
@@ -249,12 +308,14 @@ def render_template(
 
     # 2. Resolve template → recipe (registry key or FigureTemplate/recipe)
     if isinstance(template, str):
-        recipe = recipe_from(get_template(template)())
+        recipe = recipe_from(get_template(template)(mapping=mapping, settings=settings))
     else:
         recipe = recipe_from(template)
 
-    # 3. Merge user overrides with recipe defaults
-    layers = _apply_mapping_override(recipe.layers, mapping)
+    # 3. Merge user overrides with recipe defaults. Native builders already
+    #    bound the mapping into their stats/layers, so skip the generic pass.
+    effective_mapping = None if _mapping_consumed(recipe) else mapping
+    layers = _apply_mapping_override(recipe.layers, effective_mapping)
     merged_settings = {**recipe.default_settings, **(settings or {})}
     final_coord = coord if coord is not None else recipe.coord
     if isinstance(iterators, DimensionIterator):
