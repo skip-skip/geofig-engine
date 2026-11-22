@@ -77,6 +77,8 @@ _GEOM_HANDLERS = {
     "site_point": render_site_point,
     "boundary": render_boundary,
     "contour": render_boundary,
+    # Streams share the contour frame shape (NaN-separated open multiparts).
+    "streams": render_boundary,
     "geo_label": render_geo_label,
     "image_inset": render_image_inset,
 }

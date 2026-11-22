@@ -279,7 +279,10 @@ MERGED_DF = pd.concat([_RING, _SAMPLES], ignore_index=True)
 
 def _contour_recipe(**contour_settings):
     return site_map_builder(
-        settings={"contours": {"dem_source": synthetic_dem, **contour_settings}}
+        settings={
+            "contours": {"dem_source": synthetic_dem, **contour_settings},
+            "streams": None,
+        }
     )
 
 
@@ -306,7 +309,7 @@ class TestContourRender:
     def test_contours_opt_out_leaves_only_the_ring(self):
         figures = render_template(
             data=MERGED_DF,
-            template=site_map_builder(settings={"contours": None}),
+            template=site_map_builder(settings={"contours": None, "streams": None}),
             settings={"basemap": None},
         )
         assert len(figures[0].axes[0].lines) == 1

@@ -37,6 +37,20 @@ A ``dem_bounds`` entry (``west, south, east, north``) pins the DEM fetch extent
 instead of deriving it from the frame. Contour lon/lat polylines project
 through ``CoordGeo`` like every other geo layer.
 
+**Streams** (18.3): a default-on ``GeomStreams`` layer queries the public USGS
+National Map ``NHDPlus_HR`` REST service (layer 3, ``ftype = 460``) for the
+provider frame's WGS84 lon/lat bbox — no buffer, old-geomapper parity — and
+draws the returned LineString/MultiLineString polylines in one constant style
+(blue, 0.7 pt, alpha 0.7) with no legend entry. Results are fetched lazily per
+render via :func:`geofig_engine.io.streams.fetch_streams` (no API key, no new
+dependency), paginated up to ``max_pages`` batches; a transport/HTTP/parse
+failure or truncation warns and yields no lines, while an empty successful
+query (US-only NHD coverage) is silent. Disable with
+``settings={"streams": None}`` or ``{"enabled": False}``; override the style,
+``service_url``, ``layer_id``, ``where``, ``max_pages``, or inject a
+network-free ``streams_source(bbox)`` callable through the streams dict. The
+callable is a test/downstream seam and is never recorded in JSON settings.
+
 Optional boundary: when the provider frame carries a boundary-flag column
 (name auto-detected from ``boundary``/``is_boundary``/``feature``/``ring``, or
 set explicitly via ``mapping={"boundary": <column>}`` on a direct builder
@@ -55,9 +69,20 @@ import numpy as np
 import pandas as pd
 
 from geofig_engine.core.coord import Coord, CoordGeo
-from geofig_engine.core.geom import GeomBoundary, GeomContour, GeomLabel, GeomSitePoint
+from geofig_engine.core.geom import (
+    GeomBoundary,
+    GeomContour,
+    GeomLabel,
+    GeomSitePoint,
+    GeomStreams,
+)
 from geofig_engine.core.layer import Layer
 from geofig_engine.core.stat import Stat
+from geofig_engine.io.streams import (
+    DEFAULT_MAX_PAGES,
+    DEFAULT_STREAM_SERVICE_URL,
+    STREAM_WHERE,
+)
 
 SITE_MAP_DEFAULTS: dict[str, Any] = {
     "figsize": (10, 8),
@@ -70,7 +95,52 @@ SITE_MAP_DEFAULTS: dict[str, Any] = {
     # (10 m minimum, ~20 lines across the relief); an explicit number
     # (e.g. 10 for old-geomapper parity) is honored verbatim.
     "contours": {"interval": None, "color": "white", "linewidth": 0.5, "alpha": 0.6},
+    "streams": {
+        "enabled": True,
+        "color": "blue",
+        "linewidth": 0.7,
+        "alpha": 0.7,
+        "service_url": DEFAULT_STREAM_SERVICE_URL,
+        "layer_id": 3,
+        "where": STREAM_WHERE,
+        "max_pages": DEFAULT_MAX_PAGES,
+        "streams_source": None,
+    },
 }
+
+#: Allowed keys for the ``streams`` settings dict (unknown keys are rejected).
+STREAM_SETTING_KEYS = frozenset(SITE_MAP_DEFAULTS["streams"])
+
+
+def settings_streams(recipe_settings: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the merged stream config, or ``None`` when streams are disabled.
+
+    Mirrors :func:`settings_contours` but returns the config instead of a
+    boolean so the builder can pass the seam/query knobs to ``StatStreams``.
+    ``None``/``False``/``{"enabled": False}`` disable the layer; ``True`` or a
+    dict enable it. Dict keys merge over ``SITE_MAP_DEFAULTS["streams"]`` and
+    unknown keys are rejected (unlike the permissive basemap/contour settings).
+    """
+    value = recipe_settings.get("streams")
+    if value is None or value is False:
+        return None
+    if value is True:
+        value = {}
+    if not isinstance(value, dict):
+        raise ValueError(
+            "streams settings must be None, a bool, or a dict, "
+            f"got {value!r}"
+        )
+    unknown = set(value) - STREAM_SETTING_KEYS
+    if unknown:
+        raise ValueError(
+            "unknown streams setting(s): " + ", ".join(sorted(unknown))
+        )
+    if not bool(value.get("enabled", True)):
+        return None
+    config = dict(SITE_MAP_DEFAULTS["streams"])
+    config.update(value)
+    return config
 
 
 def settings_contours(recipe_settings: dict[str, Any]) -> bool:
@@ -506,6 +576,112 @@ class StatContour(Stat):
         return pd.DataFrame({"x": xs, "y": ys})
 
 
+class StatStreams(Stat):
+    """Spec-build transform that derives surface-water stream polylines.
+
+    Acquires NHDPlus_HR stream geometry for the provider frame's lon/lat bbox
+    (min/max of the detected coordinate columns — no DEM-style buffer) and
+    emits the same NaN-separated ``x``/``y`` multipart frame as
+    :class:`StatContour`, which ``render_boundary`` draws as open paths.
+    ``streams_source(bbox)`` replaces the network fetch (the ``dem_source``
+    seam pattern); the callable is held as an attribute and never serialized.
+    JSON-safe query knobs live in ``params``.
+
+    The default :func:`geofig_engine.io.streams.fetch_streams` path never
+    raises: transport/HTTP/parse failures and pagination truncation warn and
+    yield an empty frame; an empty but successful query (non-US coverage) is
+    silent. A raising/invalid seam degrades the same way.
+    """
+
+    def __init__(
+        self,
+        streams_source: Callable[[tuple[float, float, float, float]], Any] | None = None,
+        service_url: str = DEFAULT_STREAM_SERVICE_URL,
+        layer_id: int = 3,
+        where: str = STREAM_WHERE,
+        max_pages: int = DEFAULT_MAX_PAGES,
+    ) -> None:
+        if streams_source is not None and not callable(streams_source):
+            raise TypeError(
+                f"streams_source must be callable or None, got {streams_source!r}"
+            )
+        if not isinstance(service_url, str) or not service_url.strip():
+            raise ValueError(f"service_url must be a non-empty string, got {service_url!r}")
+        if isinstance(layer_id, bool) or not isinstance(layer_id, int):
+            raise ValueError(f"layer_id must be an integer, got {layer_id!r}")
+        if not isinstance(where, str) or not where.strip():
+            raise ValueError(f"where must be a non-empty string, got {where!r}")
+        if isinstance(max_pages, bool) or not isinstance(max_pages, int) or max_pages < 1:
+            raise ValueError(f"max_pages must be an integer >= 1, got {max_pages!r}")
+        object.__setattr__(self, "streams_source", streams_source)
+        super().__init__(
+            name="streams",
+            params={
+                "service_url": service_url,
+                "layer_id": layer_id,
+                "where": where,
+                "max_pages": max_pages,
+            },
+        )
+
+    @staticmethod
+    def _empty_frame() -> pd.DataFrame:
+        return _empty_with_columns(["x", "y"])
+
+    def _unavailable(self, reason: str) -> pd.DataFrame:
+        warnings.warn(
+            f"site_map streams unavailable: {reason}",
+            UserWarning,
+            stacklevel=2,
+        )
+        return self._empty_frame()
+
+    def compute(self, data: pd.DataFrame) -> pd.DataFrame:
+        if len(data) == 0:
+            return self._empty_frame()
+
+        x_col = _first_present(X_CANDIDATES, data)
+        y_col = _first_present(Y_CANDIDATES, data)
+        if x_col is None or y_col is None:
+            return self._empty_frame()
+        lon, lat = data[x_col], data[y_col]
+        if lon.notna().sum() == 0 or lat.notna().sum() == 0:
+            return self._empty_frame()
+        bbox = (
+            float(lon.min()),
+            float(lat.min()),
+            float(lon.max()),
+            float(lat.max()),
+        )
+        if not all(math.isfinite(v) for v in bbox):
+            return self._empty_frame()
+
+        try:
+            if self.streams_source is not None:
+                frame = self.streams_source(bbox)
+            else:
+                from geofig_engine.io.streams import fetch_streams
+
+                frame = fetch_streams(
+                    bbox,
+                    service_url=self.params["service_url"],
+                    layer_id=self.params["layer_id"],
+                    where=self.params["where"],
+                    max_pages=self.params["max_pages"],
+                )
+        except Exception as exc:  # noqa: BLE001 — seam/network degrade
+            return self._unavailable(str(exc))
+
+        if frame is None:
+            return self._unavailable("streams source returned nothing")
+        if not isinstance(frame, pd.DataFrame) or not {"x", "y"}.issubset(frame.columns):
+            return self._unavailable("streams source must return an x/y DataFrame")
+        out = frame.loc[:, ["x", "y"]].copy()
+        for column in ("x", "y"):
+            out[column] = pd.to_numeric(out[column], errors="coerce")
+        return out.reset_index(drop=True)
+
+
 def site_map_builder(
     mapping: dict[str, Any] | None = None,
     settings: dict[str, Any] | None = None,
@@ -546,6 +722,17 @@ def site_map_builder(
     (test seam — no network). Offline/HTTP/DEM failures warn and render no
     contours.
 
+    Surface-water streams are **on by default** too
+    (``SITE_MAP_DEFAULTS["streams"]`` — blue 0.7 pt at alpha 0.7, no legend):
+    a ``GeomStreams`` layer in the zorder-1 band above the contour/boundary
+    linework and below the sites/labels, fed by a lazy USGS NHDPlus_HR query
+    for the frame's unbuffered lon/lat bbox. Query knobs (``service_url``,
+    ``layer_id``, ``where``, ``max_pages``) and the ``streams_source`` seam are
+    set via ``settings={"streams": {...}}``; ``{"streams": None}`` or
+    ``{"enabled": False}`` omits the layer and skips the HTTP query entirely.
+    Failures/truncation warn and render no lines; an empty successful query is
+    silent. The callable seam is never recorded in the JSON-safe settings.
+
     The ``TemplateRecipe`` import is deferred to call time so this template
     module never depends on ``engine.api`` at import time.
     """
@@ -553,6 +740,16 @@ def site_map_builder(
 
     mapping = dict(mapping or {})
     recipe_settings = {**SITE_MAP_DEFAULTS, **(settings or {})}
+    streams_cfg = settings_streams(recipe_settings)
+
+    # The injected callable is a real builder seam but must not leak into the
+    # recipe's JSON-safe settings.
+    default_settings = dict(recipe_settings)
+    if streams_cfg is not None:
+        safe_streams_cfg = dict(streams_cfg)
+        if callable(safe_streams_cfg.get("streams_source")):
+            safe_streams_cfg["streams_source"] = None
+        default_settings["streams"] = safe_streams_cfg
 
     # All channels bind the stat-produced canonical columns ("x"/"y"/"color"/
     # "label") as plain strings, so render_template's per-layer override can
@@ -617,9 +814,30 @@ def site_map_builder(
             ),
         )
 
+    if streams_cfg is not None:
+        layers.insert(
+            2,
+            Layer(
+                geom=GeomStreams(
+                    edgecolor=streams_cfg["color"],
+                    edgealpha=streams_cfg.get("alpha"),
+                    edgewidth=streams_cfg["linewidth"],
+                ),
+                stat=StatStreams(
+                    streams_source=streams_cfg.get("streams_source"),
+                    service_url=streams_cfg["service_url"],
+                    layer_id=streams_cfg["layer_id"],
+                    where=streams_cfg["where"],
+                    max_pages=streams_cfg["max_pages"],
+                ),
+                mapping={"x": "x", "y": "y"},
+                zorder=1,
+            ),
+        )
+
     return TemplateRecipe(
         name="site_map",
         layers=layers,
         coord=coord if coord is not None else CoordGeo(),
-        default_settings=recipe_settings,
+        default_settings=default_settings,
     )

@@ -445,6 +445,41 @@ class GeomContour(Geom):
 
 
 @dataclass(frozen=True)
+class GeomStreams(Geom):
+    """Surface-water stream polylines from the ``StatStreams`` source.
+
+    One constant style is applied to the whole NaN-separated multipart line
+    set (old-geomapper ``add_streams`` look); there is no per-feature channel
+    and no legend entry. Rendering reuses the open-path boundary handler.
+    """
+
+    edgecolor: str = "blue"
+    edgealpha: float | None = 0.7
+    edgewidth: float = 0.7
+    edgestyle: str = "-"
+
+    def __init__(
+        self,
+        edgecolor: str = "blue",
+        edgealpha: float | None = 0.7,
+        edgewidth: float = 0.7,
+        edgestyle: str = "-",
+    ) -> None:
+        edgecolor, edgealpha, edgewidth, edgestyle = _normalize_edge_params(
+            edgecolor, edgealpha, edgewidth, edgestyle
+        )
+        object.__setattr__(self, "edgecolor", edgecolor)
+        object.__setattr__(self, "edgealpha", edgealpha)
+        object.__setattr__(self, "edgewidth", edgewidth)
+        object.__setattr__(self, "edgestyle", edgestyle)
+        super().__init__(
+            name="streams",
+            required_channels=("x", "y"),
+            optional_channels=("color", "alpha"),
+        )
+
+
+@dataclass(frozen=True)
 class GeomLabel(Geom):
     """Geo label text at ``x``/``y`` with a ``label`` channel; the geometry
     carries default ``size``/``rotation`` params (unlike the per-point

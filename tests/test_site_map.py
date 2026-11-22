@@ -183,15 +183,19 @@ class TestSiteMapTemplate:
         assert callable(get_template("site_map"))
 
     def test_builder_returns_recipe_with_defaults(self):
-        # Contours pinned off so the canonical pre-18.2 shape stays intact;
-        # the default 4-layer shape is covered by
+        # Contours and streams pinned off so the original 3-layer shape stays
+        # intact; the default 5-layer shape is covered by
         # test_default_settings_include_contours / test_contours_opt_out_omits_layer.
-        recipe = site_map_builder(settings={"contours": None})
+        recipe = site_map_builder(settings={"contours": None, "streams": None})
         assert recipe.name == "site_map"
         assert len(recipe.layers) == 3
         assert [layer.zorder for layer in recipe.layers] == [1, 2, 3]
         assert isinstance(recipe.coord, CoordGeo)
-        assert recipe.default_settings == {**SITE_MAP_DEFAULTS, "contours": None}
+        assert recipe.default_settings == {
+            **SITE_MAP_DEFAULTS,
+            "contours": None,
+            "streams": None,
+        }
         # points layer: pre-bound color channel + string x/y for overrides
         assert recipe.layers[1].mapping["color"] == "color"
         assert recipe.layers[1].mapping["x"] == "x"
@@ -206,8 +210,10 @@ class TestSiteMapTemplate:
 
     def test_default_settings_include_contours(self):
         recipe = get_template("site_map")()
-        assert len(recipe.layers) == 4  # contour joined below the boundary ring
+        # contour below the ring, streams above it, then sites/labels
+        assert len(recipe.layers) == 5
         assert recipe.layers[0].geom.name == "contour"
+        assert recipe.layers[2].geom.name == "streams"
         assert recipe.layers[0].stat.params["interval"] is None  # relief-aware
         assert settings_contours(recipe.default_settings) is True
         assert recipe.default_settings["contours"] == {
@@ -220,18 +226,23 @@ class TestSiteMapTemplate:
     def test_contours_opt_out_omits_layer(self):
         # settings={"contours": None} restores the 3-layer recipe; the
         # omitted layer keeps the count at 3 (no fetch, no legend noise).
-        recipe = site_map_builder(settings={"contours": None})
+        recipe = site_map_builder(settings={"contours": None, "streams": None})
         assert len(recipe.layers) == 3
         assert settings_contours(recipe.default_settings) is False
 
         # {"enabled": False} disables within a config dict
-        disabled = site_map_builder(settings={"contours": {"enabled": False}})
+        disabled = site_map_builder(
+            settings={"contours": {"enabled": False}, "streams": None}
+        )
         assert len(disabled.layers) == 3
         assert settings_contours(disabled.default_settings) is False
 
         # an explicit dict keeps the layer, merged over the defaults
         overridden = site_map_builder(
-            settings={"contours": {"interval": 5, "alpha": 0.5}}
+            settings={
+                "contours": {"interval": 5, "alpha": 0.5},
+                "streams": None,
+            }
         )
         assert len(overridden.layers) == 4
         assert overridden.layers[0].stat.params["interval"] == 5
@@ -242,7 +253,7 @@ class TestSiteMapTemplate:
     def test_direct_mapping_consumed(self):
         recipe = site_map_builder(
             mapping={"x": "my_lon", "y": "my_lat", "boundary": "bm", "label": "nm"},
-            settings={"contours": None},
+            settings={"contours": None, "streams": None},
         )
         assert recipe.layers[0].stat.x_source == "my_lon"
         assert recipe.layers[0].stat.boundary_column == "bm"
@@ -269,7 +280,7 @@ class TestSiteMapRender:
     def test_no_mapping_renders_points_and_labels(self):
         figures = render_template(
             data=SAMPLE_DF,
-            template=site_map_builder(settings={"contours": None}),
+            template=site_map_builder(settings={"contours": None, "streams": None}),
             settings={"basemap": None},
         )
         assert len(figures) == 1
@@ -286,7 +297,7 @@ class TestSiteMapRender:
         )
         figures = render_template(
             data=frame,
-            template=site_map_builder(settings={"contours": None}),
+            template=site_map_builder(settings={"contours": None, "streams": None}),
             settings={"basemap": None},
         )
         assert len(figures) == 1
@@ -296,7 +307,7 @@ class TestSiteMapRender:
     def test_color_mapping_colors_points_by_group(self):
         figures = render_template(
             data=SAMPLE_DF,
-            template=site_map_builder(settings={"contours": None}),
+            template=site_map_builder(settings={"contours": None, "streams": None}),
             mapping={"color": "facility"},
             settings={"basemap": None},
         )
@@ -309,7 +320,7 @@ class TestSiteMapRender:
     def test_grouped_legend_sections(self):
         # Replicate render_template's spec path so the accumulator is fed
         # exactly what the engine accumulates for the color override.
-        recipe = recipe_from(site_map_builder(settings={"contours": None}))
+        recipe = recipe_from(site_map_builder(settings={"contours": None, "streams": None}))
         layers = _apply_mapping_override(recipe.layers, {"color": "facility"})
         generator = FigureGenerator(
             provider=DataFrameProvider(SAMPLE_DF),
@@ -342,7 +353,7 @@ class TestSiteMapRender:
     def test_boundary_draws_closed_ring(self):
         figures = render_template(
             data=MERGED_DF,
-            template=site_map_builder(settings={"contours": None}),
+            template=site_map_builder(settings={"contours": None, "streams": None}),
             settings={"basemap": None},
         )
         assert len(figures) == 1
@@ -360,7 +371,7 @@ class TestSiteMapRender:
         # No-mapping merged render: the points color channel (canonical
         # "color" = facility, NaN ring rows -> "Sites") accumulates into one
         # grouped legend section with entries for the distinct sites.
-        recipe = recipe_from(site_map_builder(settings={"contours": None}))
+        recipe = recipe_from(site_map_builder(settings={"contours": None, "streams": None}))
         generator = FigureGenerator(
             provider=DataFrameProvider(MERGED_DF),
             layers=recipe.layers,
@@ -383,7 +394,7 @@ class TestSiteMapRender:
         # the neutral color instead of an "Invalid RGBA argument: nan").
         figures = render_template(
             data=MERGED_DF,
-            template=site_map_builder(settings={"contours": None}),
+            template=site_map_builder(settings={"contours": None, "streams": None}),
             mapping={"color": "facility"},
             settings={"basemap": None},
         )
@@ -395,7 +406,7 @@ class TestSiteMapRender:
         frame = SAMPLE_DF.drop(columns=["name"])
         figures = render_template(
             data=frame,
-            template=site_map_builder(settings={"contours": None}),
+            template=site_map_builder(settings={"contours": None, "streams": None}),
             settings={"basemap": None},
         )
         assert len(figures[0].axes[0].texts) == 0
@@ -406,7 +417,12 @@ class TestSiteMapRender:
         # settings={"contours": None} leaves just the boundary ring.
         figures = render_template(
             data=MERGED_DF,
-            template=site_map_builder(settings={"contours": {"dem_source": _fake_dem}}),
+            template=site_map_builder(
+                settings={
+                    "contours": {"dem_source": _fake_dem},
+                    "streams": None,
+                }
+            ),
             settings={"basemap": None},
         )
         ax = figures[0].axes[0]
@@ -416,7 +432,7 @@ class TestSiteMapRender:
 
         figures_off = render_template(
             data=MERGED_DF,
-            template=site_map_builder(settings={"contours": None}),
+            template=site_map_builder(settings={"contours": None, "streams": None}),
             settings={"basemap": None},
         )
         assert len(figures_off[0].axes[0].lines) == 1  # ring only
@@ -433,7 +449,7 @@ class TestSiteMapRender:
         with pytest.warns(UserWarning, match="pyproj"):
             figures = render_template(
                 data=SAMPLE_DF,
-                template=site_map_builder(settings={"contours": None}),
+                template=site_map_builder(settings={"contours": None, "streams": None}),
                 coord=CoordGeo(crs="EPSG:32612"),
                 settings={"basemap": None},
             )

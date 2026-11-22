@@ -1,8 +1,8 @@
 # Phase 18.3: stream geom + stat + `site_map` template wiring
 
-**Status**: open
+**Status**: complete
 **Phase**: 18.3
-**Version target**: v0.3.1+ (patch — bump decision deferred to the epic review WP)
+**Version target**: v0.3.2 (finalized at epic review)
 **Dependencies**: `18_3_wp1_io_streams`
 
 ## Description
@@ -62,20 +62,20 @@ io module or the `streams_source` seam), and the default-on recipe wiring in
 
 ## Acceptance criteria
 
-- [ ] `GeomStreams` registered (name `"streams"`, channels, old defaults);
+- [x] `GeomStreams` registered (name `"streams"`, channels, old defaults);
       renderer dispatch draws it exactly like a contour layer (open multipart
       lines via `render_boundary`)
-- [ ] `StatStreams` seam produces the contour-frame shape; missing coordinate
+- [x] `StatStreams` seam produces the contour-frame shape; missing coordinate
       columns → empty frame with no seam call; bbox is the provider frame's
       lon/lat bbox (no 10% DEM buffer — old stream parity)
-- [ ] Default path (no seam) routes through `io.streams.fetch_streams`; a
+- [x] Default path (no seam) routes through `io.streams.fetch_streams`; a
       failing fetch or truncated results warns + empty frame; empty-success
       renders nothing silently
-- [ ] `site_map_builder(settings={})` includes the stream layer (5 layers
+- [x] `site_map_builder(settings={})` includes the stream layer (5 layers
       with contours); `{"streams": None}` / `{"enabled": False}` omits it;
       styling overrides propagate (`color`/`linewidth`/`alpha`); unknown
       stream keys rejected
-- [ ] `settings_streams` on `recipe.default_settings` reflects on/off and is
+- [x] `settings_streams` on `recipe.default_settings` reflects on/off and is
       JSON-safe (no callable recorded)
-- [ ] Committed as a single commit
-      (`geofig-engine: site_map stream wiring -> v0.3.1`)
+- [x] Committed as a single commit
+      (`geofig-engine: site_map stream wiring -> v0.3.2`)

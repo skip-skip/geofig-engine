@@ -6,7 +6,8 @@ Covers the paginated USGS NHDPlus_HR REST query (URL params asserted, the
 `truncated` flag, bbox validation before any HTTP), the NaN-separated
 multipart GeoJSON parse (LineString/MultiLineString fixtures, degenerate-part
 skipping, trailing-separator trim, non-polyline/malformed raises), the
-never-raise `fetch_streams` degrade, and the io-layer import discipline.
+never-raise `fetch_streams` degrade (failures/truncation warn, empty success
+is silent), and the io-layer import discipline.
 All network access goes through monkeypatched `requests.get` with canned
 JSON payloads — no live calls.
 """
@@ -15,13 +16,16 @@ from __future__ import annotations
 
 import json
 import math
+import warnings
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 import requests
 
 import geofig_engine.io.streams as streams_mod
+from geofig_engine.core.geom import GeomStreams
 from geofig_engine.io.streams import (
     DEFAULT_STREAM_SERVICE_URL,
     StreamsError,
@@ -29,6 +33,7 @@ from geofig_engine.io.streams import (
     parse_lines,
     query_lines,
 )
+from geofig_engine.templates.site_map import StatStreams, settings_streams, site_map_builder
 
 
 def _bbox(west=-116.55, south=41.18, east=-116.24, north=41.36):
@@ -332,10 +337,12 @@ class TestFetchStreams:
             df = fetch_streams(_bbox())
         assert df.empty
 
-    def test_empty_features_warns_and_empty(self, fake_requests):
+    def test_empty_features_is_silent_and_empty(self, fake_requests):
         fake_requests.pages = [_payload([])]
-        with pytest.warns(UserWarning, match="streams unavailable"):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
             df = fetch_streams(_bbox())
+        assert not [w for w in caught if issubclass(w.category, UserWarning)]
         assert list(df.columns) == ["x", "y"]
         assert df.empty
 
@@ -345,11 +352,105 @@ class TestFetchStreams:
         assert df.empty
         assert fake_requests.calls == []
 
-    def test_all_degenerate_warns_and_empty(self, fake_requests):
-        fake_requests.pages = [_payload([_multi([[], [[-116.4, 41.3]]])])]
-        with pytest.warns(UserWarning, match="streams unavailable"):
-            df = fetch_streams(_bbox())
+    def test_truncated_result_warns_and_empty(self, fake_requests):
+        fake_requests.pages = [
+            _payload([_line([[-116.4, 41.3], [-116.3, 41.3]])], exceeded=True),
+            _payload([_line([[-116.2, 41.3], [-116.1, 41.3]])], exceeded=True),
+        ]
+        with pytest.warns(UserWarning, match="truncated"):
+            df = fetch_streams(_bbox(), max_pages=2)
         assert df.empty
+        assert len(fake_requests.calls) == 2
+
+    def test_all_degenerate_is_silent_and_empty(self, fake_requests):
+        fake_requests.pages = [_payload([_multi([[], [[-116.4, 41.3]]])])]
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            df = fetch_streams(_bbox())
+        assert not [w for w in caught if issubclass(w.category, UserWarning)]
+        assert df.empty
+
+
+class TestStreamWiring:
+    """WP2: geom/stat/recipe plumbing (no renderer/network here)."""
+
+    @staticmethod
+    def _seam(bbox):
+        assert bbox == _bbox()
+        return pd.DataFrame(
+            {
+                "x": [-116.4, -116.3, np.nan, -116.2, -116.1],
+                "y": [41.3, 41.3, np.nan, 41.2, 41.2],
+            }
+        )
+
+    def test_geom_defaults_and_channels(self):
+        geom = GeomStreams()
+        assert geom.name == "streams"
+        assert geom.required_channels == ("x", "y")
+        assert (geom.edgecolor, geom.edgewidth, geom.edgealpha) == ("blue", 0.7, 0.7)
+        assert geom.edgestyle == "-"
+
+    def test_stat_seam_emits_nan_separated_frame(self):
+        out = StatStreams(streams_source=self._seam).compute(
+            pd.DataFrame({"longitude": [-116.55, -116.24], "latitude": [41.18, 41.36]})
+        )
+        assert list(out.columns) == ["x", "y"]
+        assert math.isnan(out["x"].iloc[2])
+        assert not math.isnan(out["x"].iloc[-1])
+
+    def test_stat_missing_coordinates_never_calls_seam(self):
+        called = []
+
+        def seam(bbox):
+            called.append(bbox)
+            return self._seam(bbox)
+
+        out = StatStreams(streams_source=seam).compute(pd.DataFrame({"a": [1]}))
+        assert out.empty
+        assert called == []
+
+    def test_stat_rejects_invalid_query_knobs(self):
+        with pytest.raises(TypeError, match="streams_source"):
+            StatStreams(streams_source="not-callable")
+        with pytest.raises(ValueError, match="layer_id"):
+            StatStreams(layer_id="3")
+        with pytest.raises(ValueError, match="where"):
+            StatStreams(where="")
+        with pytest.raises(ValueError, match="max_pages"):
+            StatStreams(max_pages=0)
+
+    def test_recipe_default_on_opt_out_and_json_safe_seam(self):
+        default = site_map_builder()
+        assert [layer.geom.name for layer in default.layers] == [
+            "contour", "boundary", "streams", "site_point", "geo_label",
+        ]
+        assert default.layers[2].zorder == 1
+        assert settings_streams(default.default_settings) is not None
+
+        off = site_map_builder(settings={"streams": None})
+        assert "streams" not in [layer.geom.name for layer in off.layers]
+        assert settings_streams(off.default_settings) is None
+
+        disabled = site_map_builder(settings={"streams": {"enabled": False}})
+        assert "streams" not in [layer.geom.name for layer in disabled.layers]
+
+        seam_recipe = site_map_builder(settings={"streams": {"streams_source": self._seam}})
+        assert seam_recipe.layers[2].stat.streams_source is self._seam
+        assert seam_recipe.default_settings["streams"]["streams_source"] is None
+        json.dumps(seam_recipe.default_settings)
+
+    def test_recipe_style_overrides_and_unknown_keys(self):
+        recipe = site_map_builder(
+            settings={
+                "contours": None,
+                "streams": {"color": "cyan", "linewidth": 1.5, "alpha": 0.4},
+            }
+        )
+        geom = next(layer.geom for layer in recipe.layers if layer.geom.name == "streams")
+        assert (geom.edgecolor, geom.edgewidth, geom.edgealpha) == ("cyan", 1.5, 0.4)
+        with pytest.raises(ValueError, match="unknown streams setting"):
+            site_map_builder(settings={"streams": {"bogus": 1}})
 
 
 class TestImportDiscipline:

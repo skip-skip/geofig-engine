@@ -323,7 +323,7 @@ class TestRendererIntegration:
         )
         figures = render_template(
             data=SAMPLE_DF,
-            template=site_map_builder(settings={"contours": None}),
+            template=site_map_builder(settings={"contours": None, "streams": None}),
             settings={"basemap": {"zoom": 12, "alpha": 0.5}},
         )
         assert len(figures) == 1
@@ -351,7 +351,7 @@ class TestRendererIntegration:
 
         monkeypatch.setattr(basemap_mod, "fetch_basemap", capture)
         figures = render_template(
-            data=SAMPLE_DF, template=site_map_builder(settings={"contours": None})
+            data=SAMPLE_DF, template=site_map_builder(settings={"contours": None, "streams": None})
         )
         assert seen["provider"]["name"] == "esri_world_imagery"
         ax = figures[0].axes[0]
@@ -437,7 +437,7 @@ class TestRendererIntegration:
         monkeypatch.setattr(basemap_mod, "fetch_basemap", capture)
         figures = render_template(
             data=SAMPLE_DF,
-            template=site_map_builder(settings={"contours": None}),
+            template=site_map_builder(settings={"contours": None, "streams": None}),
             settings={"basemap": {"alpha": 0.3}},
         )
         assert seen["provider"]["name"] == "esri_world_imagery"
@@ -452,7 +452,7 @@ class TestRendererIntegration:
         with pytest.warns(UserWarning, match="basemap tiles unavailable"):
             figures = render_template(
                 data=SAMPLE_DF,
-                template=site_map_builder(settings={"contours": None}),
+                template=site_map_builder(settings={"contours": None, "streams": None}),
                 settings={"basemap": True},
             )
         assert len(figures) == 1
@@ -467,7 +467,7 @@ class TestRendererIntegration:
         monkeypatch.setattr(basemap_mod, "fetch_basemap", boom)
         figures = render_template(
             data=SAMPLE_DF,
-            template=site_map_builder(settings={"contours": None}),
+            template=site_map_builder(settings={"contours": None, "streams": None}),
             settings={"basemap": None},
         )
         assert len(figures[0].axes[0].images) == 0
@@ -481,7 +481,7 @@ class TestRendererIntegration:
         with pytest.warns(UserWarning, match="pyproj"):
             figures = render_template(
                 data=SAMPLE_DF,
-                template=site_map_builder(settings={"contours": None}),
+                template=site_map_builder(settings={"contours": None, "streams": None}),
                 coord=CoordGeo(crs="EPSG:32612"),
                 settings={"basemap": True},
             )
@@ -494,7 +494,7 @@ class TestRendererIntegration:
         )
         figures = render_template(
             data=SAMPLE_DF,
-            template=site_map_builder(settings={"contours": None}),
+            template=site_map_builder(settings={"contours": None, "streams": None}),
             coord=CoordGeo(crs="EPSG:32612"),
             settings={"basemap": {"zoom": 12, "alpha": 0.8}},
         )

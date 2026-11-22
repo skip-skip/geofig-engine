@@ -17,7 +17,8 @@ the service's ``exceededTransferLimit`` flag. The service publishes a
 ``MaxRecordCount`` of 2000; a query is capped at ``max_pages`` offset batches
 and the returned ``truncated`` flag reports whether more results still exist.
 Coverage is US-only (the NHD), so an empty result outside the US is an
-expected outcome, not an error.
+expected, **silent** outcome — not an error. A truncated result, by contrast,
+is incomplete and warns before degrading to an empty frame.
 
 Parsing: every ``LineString``/``MultiLineString`` part is exploded into one
 appended ``x``/``y`` vertex list with ``np.nan`` inserted between parts (and a
@@ -286,9 +287,10 @@ def fetch_streams(bbox, **kwargs) -> pd.DataFrame:
     (NaN-separated open multipart polylines — the StatContour / particle
     overlay frame shape). **Never raises**: invalid/degenerate bbox input
     returns an empty frame without any HTTP call; transport/HTTP/parse
-    failures and empty feature lists warn ``UserWarning`` ("streams
-    unavailable") and return an empty frame, so the layer pipeline always
-    receives a plottable shape.
+    failures and pagination truncation warn ``UserWarning`` ("streams
+    unavailable") and return an empty frame. An empty but successful result
+    (e.g. a non-US bbox) is silent and also returns an empty frame, so the
+    layer pipeline always receives a plottable shape.
 
     Args:
         bbox: ``(west, south, east, north)`` in WGS84 degrees.
@@ -298,7 +300,7 @@ def fetch_streams(bbox, **kwargs) -> pd.DataFrame:
 
     Returns:
         ``pd.DataFrame({"x": float64 array, "y": float64 array})`` — empty
-        (zero rows) on any failure or empty result.
+        (zero rows) on failure, truncation, or an empty result.
     """
     empty = pd.DataFrame(
         {
@@ -307,7 +309,17 @@ def fetch_streams(bbox, **kwargs) -> pd.DataFrame:
         }
     )
     try:
-        features, _ = query_lines(bbox, **kwargs)
+        features, truncated = query_lines(bbox, **kwargs)
+        if truncated:
+            # Returning a partial stream set would silently drop upstream
+            # reaches, so keep the degrade visible and render nothing.
+            warnings.warn(
+                "streams unavailable: query exceeded max_pages; results were "
+                "truncated",
+                UserWarning,
+                stacklevel=2,
+            )
+            return empty
         x, y = parse_lines(features)
     except ValueError:
         # Invalid/degenerate bbox: no HTTP call was made, stay silent.
@@ -316,12 +328,8 @@ def fetch_streams(bbox, **kwargs) -> pd.DataFrame:
         warnings.warn(f"streams unavailable: {exc}", UserWarning, stacklevel=2)
         return empty
     if not x:
-        warnings.warn(
-            "streams unavailable: no stream features returned for the bbox "
-            "(US-only NHD coverage?)",
-            UserWarning,
-            stacklevel=2,
-        )
+        # An empty successful query (US-only coverage outside the NHD, or a
+        # bbox with no streams) is expected — the empty layer renders nothing.
         return empty
     return pd.DataFrame(
         {
