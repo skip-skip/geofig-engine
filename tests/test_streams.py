@@ -14,17 +14,25 @@ JSON payloads — no live calls.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import math
 import warnings
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
+
 import numpy as np
 import pandas as pd
 import pytest
 import requests
+from matplotlib.colors import to_rgba
 
 import geofig_engine.io.streams as streams_mod
+from geofig_engine import render_template
+from geofig_engine.core.coord import CoordGeo
 from geofig_engine.core.geom import GeomStreams
 from geofig_engine.io.streams import (
     DEFAULT_STREAM_SERVICE_URL,
@@ -34,6 +42,8 @@ from geofig_engine.io.streams import (
     query_lines,
 )
 from geofig_engine.templates.site_map import StatStreams, settings_streams, site_map_builder
+
+GEO_INSTALLED = importlib.util.find_spec("pyproj") is not None
 
 
 def _bbox(west=-116.55, south=41.18, east=-116.24, north=41.36):
@@ -451,6 +461,100 @@ class TestStreamWiring:
         assert (geom.edgecolor, geom.edgewidth, geom.edgealpha) == ("cyan", 1.5, 0.4)
         with pytest.raises(ValueError, match="unknown streams setting"):
             site_map_builder(settings={"streams": {"bogus": 1}})
+
+
+class TestStreamRenderIntegration:
+    """WP3: renderer stacking/style, projection parity, and default routing."""
+
+    @staticmethod
+    def _frame():
+        return pd.DataFrame(
+            {
+                "longitude": [-116.6, -116.1, -116.1, -116.6, -116.5, -116.4],
+                "latitude": [41.3, 41.3, 40.8, 40.8, 41.2, 41.1],
+                "boundary": [1, 1, 1, 1, 0, 0],
+                "name": [None, None, None, None, "MW-1", "MW-2"],
+            }
+        )
+
+    @staticmethod
+    def _seam(bbox):
+        return pd.DataFrame(
+            {
+                "x": [-116.4, -116.3, np.nan, -116.2, -116.1],
+                "y": [41.3, 41.3, np.nan, 41.2, 41.2],
+            }
+        )
+
+    def _render(self, **coord_kwargs):
+        return render_template(
+            data=self._frame(),
+            template=site_map_builder(
+                settings={
+                    "contours": None,
+                    "streams": {"streams_source": self._seam},
+                }
+            ),
+            coord=CoordGeo(**coord_kwargs) if coord_kwargs else None,
+            settings={"basemap": None},
+        )
+
+    def test_streams_draw_above_boundary_below_points_with_default_style(self):
+        figures = self._render()
+        assert len(figures) == 1
+        ax = figures[0].axes[0]
+        assert len(ax.lines) == 2  # boundary ring + one stream multipath
+        boundary_line, stream_line = ax.lines
+        assert np.isnan(stream_line.get_xdata()).any()  # open multipart
+        # equal zorder, but streams are emitted after the boundary in spec order
+        assert stream_line.get_zorder() == boundary_line.get_zorder() == 1
+        assert ax.lines.index(stream_line) > ax.lines.index(boundary_line)
+        points = ax.collections[0]
+        assert points.get_zorder() == 2
+        assert len(points.get_offsets()) == len(self._frame())
+
+        rgba = to_rgba(stream_line.get_color())
+        assert np.allclose(rgba[:3], (0.0, 0.0, 1.0))
+        assert np.isclose(rgba[3], 0.7)
+        assert np.isclose(stream_line.get_linewidth(), 0.7)
+
+    def test_default_path_routes_kwargs_to_io_fetch(self, monkeypatch):
+        calls = []
+
+        def fake_fetch(bbox, **kwargs):
+            calls.append((tuple(bbox), kwargs))
+            return self._seam(bbox)
+
+        monkeypatch.setattr(streams_mod, "fetch_streams", fake_fetch)
+        out = StatStreams().compute(
+            pd.DataFrame({"longitude": [-116.55, -116.24], "latitude": [41.18, 41.36]})
+        )
+        assert len(calls) == 1
+        bbox, kwargs = calls[0]
+        assert bbox == (-116.55, 41.18, -116.24, 41.36)
+        assert kwargs["where"] == "ftype = 460"
+        assert kwargs["layer_id"] == 3
+        assert kwargs["max_pages"] == 5
+        assert len(out) == 5
+
+    @pytest.mark.skipif(GEO_INSTALLED, reason="requires absent [geo] extra")
+    def test_projection_fallback_warns_and_keeps_lonlat(self):
+        with pytest.warns(UserWarning, match="pyproj"):
+            figures = self._render(crs="EPSG:32612")
+        ax = figures[0].axes[0]
+        stream_line = ax.lines[1]
+        assert not np.isnan(stream_line.get_xdata()).all()
+        assert np.nanmin(stream_line.get_xdata()) < -100  # still degrees
+
+    @pytest.mark.skipif(not GEO_INSTALLED, reason="requires [geo] extra")
+    def test_projection_applies_to_stream_geom(self):
+        x = pd.Series([-116.5, -116.4, -116.3])
+        y = pd.Series([41.2, 41.1, 41.0])
+        out = CoordGeo(crs="EPSG:32612").transform_visual_mapping(
+            {"x": x, "y": y}, GeomStreams()
+        )
+        assert not np.allclose(out["x"].to_numpy(), x.to_numpy())
+        assert not np.allclose(out["y"].to_numpy(), y.to_numpy())
 
 
 class TestImportDiscipline:

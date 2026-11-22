@@ -19,6 +19,7 @@ from geofig_engine.io.markers import gen_markers_cross_grouping, DEFAULT_MARKERS
 ## Contents
 
 - [Geo helpers](#geo-helpers)
+- [Geo web sources](#geo-web-sources)
 - [Markers](#markers)
 - [Preprocessing pipeline](#preprocessing-pipeline)
 - [EQuIS conversion](#equis-conversion)
@@ -58,6 +59,21 @@ Distance along a lon/lat path.
 
 **Returns:** a `pd.Series` in kilometers with the same index. A path of fewer
 than 2 points returns all zeros.
+
+---
+
+## Geo web sources
+
+The `site_map` overlay stack uses two standalone io modules that fetch web
+data without geospatial stack dependencies:
+
+- [DEM access](dem.md) — terrarium elevation tiles for default-on contours.
+- [Stream access](streams.md) — USGS `NHDPlus_HR` polylines for default-on
+  surface-water streams.
+
+Both are lazily imported by their `site_map` stats and expose callable seams
+(`dem_source` / `streams_source`) so tests and downstream callers stay
+network-free.
 
 ---
 

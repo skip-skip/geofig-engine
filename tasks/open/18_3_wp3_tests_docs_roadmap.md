@@ -1,8 +1,8 @@
 # Phase 18.3: stream tests, docs, ROADMAP/ARCHITECTURE un-defer, example regen
 
-**Status**: open
+**Status**: complete
 **Phase**: 18.3
-**Version target**: v0.3.1+ (patch — bump decision deferred to the epic review WP)
+**Version target**: v0.3.2 (finalized at epic review)
 **Dependencies**: `18_3_wp2_stat_template_wiring`
 
 ## Description
@@ -70,19 +70,22 @@ recipe pins. Closes the epic.
 
 ## Acceptance criteria
 
-- [ ] `tests/test_streams.py` covers io (parse/paginate/fetch-degrade) +
+- [x] `tests/test_streams.py` covers io (parse/paginate/fetch-degrade) +
       stat seam + renderer integration; **no test in the suite hits the
       network**
-- [ ] Every pre-existing `site_map` render test that would inherit default-on
+- [x] Every pre-existing `site_map` render test that would inherit default-on
       streams is pinned to `"streams": None` or an autouse seam; layer-count
       and defaults pins updated (4→5 / 3 with both disabled)
-- [ ] ROADMAP Phase 18.3 entry added; Phase 15 deferral line and
+- [x] ROADMAP Phase 18.3 entry added; Phase 15 deferral line and
       ARCHITECTURE deferral rows/checkboxes updated (streams shipped, only
       `GeomTable`/`GeomColorbar` deferred)
-- [ ] `docs/api/streams.md` + `docs/api/engine.md` document the stream
+- [x] `docs/api/streams.md` + `docs/api/engine.md` document the stream
       setting and the access contract
-- [ ] Example regenerated with the streams layer present; outputs refreshed
-- [ ] Full suite green (baseline 1440 passed / 7 skipped — pyproj-gated skips
-      unchanged; no new skips from the warning policy)
-- [ ] Committed as a single commit
-      (`geofig-engine: stream tests + docs -> v0.3.1`)
+- [x] Example regenerated; the live USGS stream endpoint timed out in this
+      environment, so the documented degrade path (warning + no lines) was
+      exercised and the output PNGs were refreshed. Outputs are gitignored.
+- [x] Full suite green (**1501 passed / 8 skipped** — all skips are
+      pyproj/upstream-gated; the extra one is the new projection test, and
+      none come from the warning policy)
+- [x] Committed as a single commit
+      (`geofig-engine: stream tests + docs -> v0.3.2`)

@@ -452,9 +452,9 @@ baseline of 1039 (the 6 skips are pyproj-gated; none from the warning policy).
   `npr_nnp`, `anp_agp`, `nagph_nag`, `piper`, `stiff`).
 - **Geo support** — `CoordGeo`, geo geoms (site point, boundary, label,
   annotation-inset, image), geometry/image renderer handlers, and the `[geo]`
-  extra. **Deferred to M2:** stream geoms (tile basemaps were pulled forward
-  from M2 and shipped with `site_map` in wp14; the DEM contour geom shipped
-  earlier via Phase 18.2).
+  extra. Tile basemaps were pulled forward from M2 and shipped with `site_map`
+  in wp14; the DEM contour geom shipped via Phase 18.2 and the stream geom via
+  Phase 18.3. **Deferred to M2:** `GeomTable` / `GeomColorbar`.
 - **Audit / compat** — legacy entry preserved as `render_template_legacy`
   (call-time `DeprecationWarning`); `Dataset` & co. re-exported through a
   `deprecated.py` module with **import-time** warnings; public vs deprecated
@@ -543,6 +543,25 @@ contour stat/geom (`18_2_wp2_stat_geom_contour`), template wiring
 (`18_2_wp3_template_wiring`), tests/docs/ROADMAP (`18_2_wp4_tests_docs_roadmap`)
 — `tasks/closed/18_2_*.md`. Full suite: **1439 passed / 7 skipped** (all 7
 skips gated on pyproj/upstream extras; +16 over the Phase 18.1 baseline of 1392).
+
+---
+
+## ✅ Phase 18.3 — Stream overlay (site_map)
+
+Default-on surface-water streams for the `site_map` template, pulled forward
+from M2: a self-contained `io/streams.py` access layer queries the public USGS
+National Map `NHDPlus_HR` ArcGIS REST service (layer 3, `ftype = 460`, WGS84
+envelope, `resultOffset` pagination capped at `max_pages=5`) with `requests` +
+stdlib `json` only — no API key, geopandas/fiona, or `[geo]` extra. A
+`GeomStreams` layer in the zorder-1 band (above contour/boundary, below
+sites/labels) draws the NaN-separated open multipart frame with the
+old-geomapper blue 0.7 pt / alpha 0.7 constant style and **no legend entry**.
+A `streams_source(bbox)` seam keeps the whole suite network-free; failures and
+truncation warn and render no lines, while an empty successful query (US-only
+coverage) is silent. WPs: IO (`18_3_wp1_io_streams`), stat/template wiring
+(`18_3_wp2_stat_template_wiring`), tests/docs/roadmap (`18_3_wp3_tests_docs_roadmap`)
+— `tasks/closed/18_3_*.md`. Full suite: **1501 passed / 8 skipped** (all 8
+skips gated on pyproj/upstream extras; none from the warning policy).
 
 ---
 

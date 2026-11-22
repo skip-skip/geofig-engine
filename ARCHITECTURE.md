@@ -77,7 +77,7 @@ written against the contract. Every M1 row is now **shipped in v0.2.0**:
 | Templates `dendrogram`, `site_map`, `particle_overlay` | implemented |
 | Deprecated shims with import-time warnings | implemented (deprecated.py) |
 | Basemap tiles (site_map default imagery, opt-out) | implemented (wp14 pull-forward) |
-| DEM contour (site_map, 18.2) / stream geoms | contour implemented, streams deferred |
+| DEM contour (site_map, 18.2) / stream geoms | both implemented (streams shipped in 18.3) |
 
 ### Core GoG Concepts
 
@@ -350,7 +350,8 @@ added for Stage-4 spatial/particle output:
 | --- | --- |
 | site/resource point geoms | categorical + gradient point layers (site symbols) |
 | label geom | location labels (incl. callout/stagger layout, `add_labels`) |
-| boundary/streams geoms | shapefile/geojson/kmz polygon + line boundaries, streams |
+| boundary geom | shapefile/geojson/kmz polygon + line boundaries |
+| streams geom ✅ | USGS `NHDPlus_HR` stream polylines (shipped with `site_map`, Phase 18.3) |
 | contour geom ✅ | DEM contour lines (shipped with `site_map`, Phase 18.2) |
 | annotation/inset geom | figure callouts + OffsetImage particle insets |
 | image geom | raw-image overlays in data space |
@@ -631,15 +632,15 @@ geofig-engine is the downstream consumer (workflows W1/W2 in
 - [ ] Required geo support: `CoordGeo`, geometry/image channels, geoms
       (site point, boundary, label, annotation/inset, image) + `[geo]` extra.
       Basemap tiles delivered with the `site_map` template (wp14); the DEM
-      contour geom delivered with `site_map` (Phase 18.2); streams remain
-      deferred.
+      contour geom delivered with `site_map` (Phase 18.2); stream geom
+      delivered with `site_map` (Phase 18.3).
 - [ ] Interop tests: `geochemmodel.ModelResult.render()` smoke through the new path;
       standalone DataFrame render (basic analysis) works without geodata/geochemmodel.
 
 ### M2 — Figure/geo depth (v0.2.x)
 
-- [ ] Deferred geoms (streams, `GeomTable`/`GeomColorbar`);
-      `CoordGeo` polish (bounds/aspect/axis format).
+- [ ] Deferred geoms (`GeomTable`/`GeomColorbar`);
+      `CoordGeo` polish (bounds/aspect/axis format). Streams shipped in 18.3.
 - [ ] Template breadth and consistency across renderers; Plotly backend candidate.
 
 ### M3 — Hardening (→ v1.0.0)

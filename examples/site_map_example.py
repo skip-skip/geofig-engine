@@ -21,8 +21,16 @@ the contour layer above the basemap and below the boundary ring, at the
 old-geomapper defaults (10 m interval, white, alpha 0.6). Offline/HTTP/DEM
 failures degrade to a warning + no contours. Contours are configured at the
 **builder** level — the second call demonstrates an override dict; disable
-entirely with ``site_map_builder(settings={"contours": None})``. Output goes
-to examples/outputs/site_map_output as ``001.png`` / ``002.png`` plus the
+entirely with ``site_map_builder(settings={"contours": None})``.
+
+Surface-water streams (18.3) are also **on by default**: a lazy USGS
+`NHDPlus_HR` query for the frame's unbuffered lon/lat bbox draws blue 0.7 pt /
+alpha 0.7 polylines above the contour/boundary band and below the wells, with
+no legend entry. HTTP failures/truncation degrade to a warning + no lines;
+an empty (non-US) query is silent. Disable with
+``site_map_builder(settings={"streams": None})`` or override the query/style
+via the builder's ``streams`` dict. Output goes to
+examples/outputs/site_map_output as ``001.png`` / ``002.png`` plus the
 grouped ``legend.png``.
 """
 
@@ -77,6 +85,8 @@ figures = render_template(
         # cache); offline/HTTP/DEM failures degrade to a warning + no
         # contour lines. The override dict is demonstrated in the second
         # call (contour config is builder-level).
+        # Streams (18.3) are also on by default and query lazily here via the
+        # public USGS NHDPlus_HR endpoint; no extra setting is required.
     },
     savedir=output_dir,
 )
