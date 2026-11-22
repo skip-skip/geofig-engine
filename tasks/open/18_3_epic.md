@@ -1,8 +1,8 @@
 # Phase 18.3: Surface-water stream overlay for the site map template
 
-**Status**: open
+**Status**: complete
 **Phase**: 18.3
-**Version target**: v0.3.1+ (patch — bump decision deferred to the epic review WP)
+**Version target**: v0.3.2 (finalized at epic review)
 **Dependencies**: none (phase overview)
 
 ## Description
@@ -44,8 +44,9 @@ Reference implementation: `../geochemmapper.py` `MapBuilder.download_streams`
   result is already lon/lat — no reprojection machinery.
 - **Default state: on.** The stream layer is part of the `site_map` recipe and
   the query is lazy per render. Offline/HTTP failure, a non-200, malformed
-  JSON, or an empty result warns (`UserWarning`) and yields an empty stream
-  layer (basemap/DEM contour degrade parity). Disable with
+  JSON, or pagination truncation warns (`UserWarning`) and yields an empty
+  stream layer (basemap/DEM contour degrade parity). An empty but successful
+  query (US-only coverage) is silent. Disable with
   `settings={"streams": None}` or `{"streams": {"enabled": False}}`.
 - **Seam:** `streams_source: Callable[[bbox], DataFrame]` (the `dem_source`
   pattern, site_map.py l.336) injects synthetic/network-free lines for tests
@@ -74,28 +75,29 @@ contours; streams adds a 5th.
 
 ## Phase-level acceptance criteria
 
-- [ ] `render_template(data, template="site_map")` renders blue stream lines
+- [x] `render_template(data, template="site_map")` renders blue stream lines
       by default (lazy USGS query, `ftype=460`, US-only coverage), painted
       above the contour/boundary band and below the site points
-- [ ] `settings={"streams": None}` (or `{"enabled": False}`) renders the
+- [x] `settings={"streams": None}` (or `{"enabled": False}`) renders the
       previous stream-free figure with no HTTP query attempt
-- [ ] Stream lines draw under a constant style with old-geomapper defaults
+- [x] Stream lines draw under a constant style with old-geomapper defaults
       (`color="blue"`, `linewidth=0.7`, `alpha=0.7`); **no legend entry**;
       styling overridable via `settings={"streams": {...}}`
-- [ ] Offline/HTTP failure, malformed payload, or empty result is non-fatal:
-      `UserWarning` + empty stream layer (render proceeds)
-- [ ] Pagination cap: `exceededTransferLimit` pages looped up to
+- [x] Offline/HTTP failure, malformed payload, or pagination truncation is
+      non-fatal: `UserWarning` + empty stream layer (render proceeds); an empty
+      successful query is silent
+- [x] Pagination cap: `exceededTransferLimit` pages looped up to
       `max_pages`; truncation warns
-- [ ] No new required dependency (`requests` + stdlib `json` only, lazy
+- [x] No new required dependency (`requests` + stdlib `json` only, lazy
       import); works without the `[geo]` extra (service returns WGS84 already)
-- [ ] `streams_source` seam (dem-style callable) keeps the entire test suite
+- [x] `streams_source` seam (dem-style callable) keeps the entire test suite
       network-free, including every existing `site_map` render test that would
       otherwise inherit the default-on fetch
-- [ ] Non-WGS84 `CoordGeo` `crs` projects the lon/lat stream polylines via the
+- [x] Non-WGS84 `CoordGeo` `crs` projects the lon/lat stream polylines via the
       existing `transform_visual_mapping` path (contour/boundary parity)
-- [ ] Full suite green (post-18.2-contour-fix baseline 1440 passed / 7
-      skipped, 0 warning skips) after every WP
-- [ ] Commits labeled `geofig-engine: <scope> → v0.3.1` (target finalized at
+- [x] Full suite green (**1501 passed / 8 skipped**, 0 warning skips) after
+      every WP
+- [x] Commits labeled `geofig-engine: <scope> → v0.3.2` (target finalized at
       epic review)
 
 ## Ticket map
