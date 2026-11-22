@@ -6,6 +6,38 @@ the policy in `ARCHITECTURE.md` `## Versioning`: version authority is
 commit. Deprecations are introduced in MINOR releases and removed **no earlier
 than the next MAJOR** (>= 1.0.0).
 
+## [v0.3.2] - 2026-11-22
+
+### Added
+
+- **Surface-water stream overlay for `site_map` (Phase 18.3)** — default-on
+  `GeomStreams` layer backed by a self-contained `io/streams.py` client for
+  the public USGS `NHDPlus_HR` ArcGIS REST service (layer 3,
+  `where=ftype = 460`, WGS84 envelope, `resultOffset` pagination capped at
+  `max_pages=5`). Old-geomapper constant style (blue, 0.7 pt, alpha 0.7), no
+  legend entry, zorder-1 band above contour/boundary and below sites/labels.
+  A `streams_source(bbox)` seam keeps tests network-free; HTTP/parse failures
+  and truncation warn and render no lines, while an empty successful query
+  (US-only coverage) is silent. No new required dependency (`requests` +
+  stdlib `json`; no `[geo]` extra needed).
+- **Style knobs** — generic `settings["point_size"]` for point/site-point
+  layers (iterator-resolved and validated), native-axis tick font sizing via
+  `tick_fontsize` / generic `fontsize`, and explicit `fontsize` /
+  `point_size` parameters on the Piper and Stiff spec builders. Omitting the
+  knobs preserves the existing appearance.
+
+### Fixed
+
+- **Geo viewport** — basemap tile fetches now use declared `xlim`/`ylim`
+  (with partial-axis fallback to the data window and `CoordFlipped` handling)
+  instead of the transient data auto-window.
+- **Contour DEM bounds** — `site_map_builder(settings={"contours":
+  {"dem_bounds": ...}})` now propagates the override to `StatContour`, with
+  clear validation for invalid bounds.
+
+Nothing removed or deprecated in this release. Deprecations introduced in
+v0.2.0 remain retained through at least the next MAJOR (>= 1.0.0).
+
 ## [v0.3.1] - 2026-09-11
 
 ### Added

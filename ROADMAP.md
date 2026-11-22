@@ -565,6 +565,17 @@ skips gated on pyproj/upstream extras; none from the warning policy).
 
 ---
 
+## ✅ v0.3.2 closeout — style and geo viewport patches
+
+Bundled with the 18.3 release: generic `point_size` and native tick-font
+knobs (plus explicit Piper/Stiff font/point-size builder parameters) with
+appearance-preserving defaults; basemap tile fetches now honor declared
+`xlim`/`ylim` (partial-axis fallback, `CoordFlipped` swap); and
+`site_map_builder(... {"contours": {"dem_bounds": ...}})` now pins the DEM
+fetch extent. Full suite: **1501 passed / 8 skipped**.
+
+---
+
 ## 📋 Phase 18 — Infrastructure
 
 - **Multithread / parallel iteration processing** — parse iterators in parallel thread pool *(open)*

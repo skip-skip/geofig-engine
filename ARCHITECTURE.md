@@ -652,7 +652,7 @@ geofig-engine is the downstream consumer (workflows W1/W2 in
 
 **Scheme — Semantic Versioning (`MAJOR.MINOR.PATCH`).** Version authority is
 `geofig-engine/pyproject.toml` → `[project] version` (single source of truth;
-current baseline: `0.1.0`). Releases are tagged `geofig-engine-v<version>`
+current baseline: `0.3.2`). Releases are tagged `geofig-engine-v<version>`
 (e.g. `geofig-engine-v0.2.0`).
 
 ### Public surface governed by this policy
