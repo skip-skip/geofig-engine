@@ -24,7 +24,7 @@ from PIL import Image
 
 import geofig_engine.renderers.matplotlib.basemap as basemap_mod
 from geofig_engine import render_template
-from geofig_engine.core.coord import CoordGeo
+from geofig_engine.core.coord import CoordFlipped, CoordGeo
 from geofig_engine.templates.site_map import site_map_builder
 from geofig_engine.renderers.matplotlib.basemap import (
     DEFAULT_PROVIDERS,
@@ -42,6 +42,19 @@ from geofig_engine.renderers.matplotlib.basemap import (
 )
 
 GEO_INSTALLED = importlib.util.find_spec("pyproj") is not None
+
+
+class _FlippedGeo(CoordGeo, CoordFlipped):
+    """Test coord that exercises the renderer's flipped-limit branch."""
+
+    def __init__(self) -> None:
+        object.__setattr__(self, "crs", "EPSG:4326")
+        object.__setattr__(self, "bounds", None)
+        object.__setattr__(self, "bounds_crs", None)
+        object.__setattr__(self, "aspect", None)
+        object.__setattr__(self, "name", "geo")
+        object.__setattr__(self, "params", {"crs": "EPSG:4326"})
+
 
 SAMPLE_DF = pd.DataFrame(
     {
@@ -345,6 +358,71 @@ class TestRendererIntegration:
         assert len(ax.images) == 1
         assert ax.images[0].get_alpha() == 0.6
         assert ax.images[0].get_zorder() == 0
+
+    def test_fetch_bbox_honors_declared_limits(self, monkeypatch):
+        # A declared xlim/ylim (the square site-map viewport) must drive the
+        # tile-fetch bbox, not the narrow data auto-window captured before the
+        # global settings limits are applied.
+        seen = {}
+
+        def capture(west, south, east, north, **kwargs):
+            seen["bbox"] = (west, south, east, north)
+            return self._fake_tiles()
+
+        monkeypatch.setattr(basemap_mod, "fetch_basemap", capture)
+        xlim, ylim = (-116.7, -116.1), (40.8, 41.3)
+        render_template(
+            data=SAMPLE_DF,
+            template=site_map_builder(settings={"contours": None, "streams": None}),
+            settings={
+                "basemap": {"zoom": 12},
+                "xlim": xlim,
+                "ylim": ylim,
+            },
+        )
+        assert seen["bbox"] == (xlim[0], ylim[0], xlim[1], ylim[1])
+
+    def test_fetch_bbox_partial_limit_uses_data_for_other_axis(self, monkeypatch):
+        seen = {}
+
+        def capture(west, south, east, north, **kwargs):
+            seen["bbox"] = (west, south, east, north)
+            return self._fake_tiles()
+
+        monkeypatch.setattr(basemap_mod, "fetch_basemap", capture)
+        xlim = (-116.7, -116.1)
+        render_template(
+            data=SAMPLE_DF,
+            template=site_map_builder(settings={"contours": None, "streams": None}),
+            settings={"basemap": {"zoom": 12}, "xlim": xlim},
+        )
+        west, south, east, north = seen["bbox"]
+        assert (west, east) == xlim
+        assert south < north
+        # The data-derived latitude window must remain in the fetch request.
+        assert south <= SAMPLE_DF["latitude"].min()
+        assert north >= SAMPLE_DF["latitude"].max()
+
+    def test_fetch_bbox_swaps_declared_limits_for_flipped_coord(self, monkeypatch):
+        seen = {}
+
+        def capture(west, south, east, north, **kwargs):
+            seen["bbox"] = (west, south, east, north)
+            return self._fake_tiles()
+
+        monkeypatch.setattr(basemap_mod, "fetch_basemap", capture)
+        xlim, ylim = (-116.7, -116.1), (40.8, 41.3)
+        render_template(
+            data=SAMPLE_DF,
+            template=site_map_builder(settings={"contours": None, "streams": None}),
+            coord=_FlippedGeo(),
+            settings={
+                "basemap": {"zoom": 12},
+                "xlim": xlim,
+                "ylim": ylim,
+            },
+        )
+        assert seen["bbox"] == (ylim[0], xlim[0], ylim[1], xlim[1])
 
     def test_partial_options_keep_default_provider(self, monkeypatch):
         # {"basemap": {"alpha": 0.3}} must still resolve the default Esri

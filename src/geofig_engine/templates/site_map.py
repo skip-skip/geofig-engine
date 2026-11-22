@@ -33,8 +33,9 @@ DEM degrades with a ``UserWarning`` and no contour lines (basemap-degrade
 parity). Disable with ``settings={"contours": None}`` or
 ``{"enabled": False}`` (the layer is then omitted from the recipe); override
 with a dict such as ``settings={"contours": {"interval": 5, "alpha": 0.5}}``.
-Contour lon/lat polylines project through ``CoordGeo`` like every other geo
-layer.
+A ``dem_bounds`` entry (``west, south, east, north``) pins the DEM fetch extent
+instead of deriving it from the frame. Contour lon/lat polylines project
+through ``CoordGeo`` like every other geo layer.
 
 Optional boundary: when the provider frame carries a boundary-flag column
 (name auto-detected from ``boundary``/``is_boundary``/``feature``/``ring``, or
@@ -609,6 +610,7 @@ def site_map_builder(
                 stat=StatContour(
                     interval=contours_cfg["interval"],
                     dem_source=contours_cfg.get("dem_source"),
+                    dem_bounds=contours_cfg.get("dem_bounds"),
                 ),
                 mapping={"x": "x", "y": "y"},
                 zorder=1,

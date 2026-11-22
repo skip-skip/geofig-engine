@@ -769,6 +769,42 @@ def _with_flat_secondary(axis: AxisFormat, settings: dict) -> AxisFormat:
     return dataclasses.replace(axis, options=options)
 
 
+def _basemap_fetch_limits(spec, xlim_data, ylim_data):
+    """Return the lon/lat window used to fetch basemap tiles.
+
+    Declared ``xlim``/``ylim`` win over the transient data auto-window because
+    they describe the viewport the caller will actually see (settings limits
+    are applied later by :meth:`MatplotlibRenderer._apply_settings`). A
+    partial declaration is validated by filling the missing axis with the
+    captured data window, then only the declared axis is used. The
+    ``CoordFlipped`` swap mirrors the axis-limit handling in the native path.
+    """
+    settings = spec.settings or {}
+    has_x = "xlim" in settings and settings["xlim"] is not None
+    has_y = "ylim" in settings and settings["ylim"] is not None
+    xlim = None
+    ylim = None
+    if has_x and has_y:
+        axis = parse_axis_settings(settings, spec.coord)
+        xlim, ylim = axis.xlim, axis.ylim
+    elif has_x:
+        axis = parse_axis_settings(
+            {**settings, "ylim": ylim_data}, spec.coord
+        )
+        xlim = axis.xlim
+    elif has_y:
+        axis = parse_axis_settings(
+            {**settings, "xlim": xlim_data}, spec.coord
+        )
+        ylim = axis.ylim
+
+    base_x = xlim if xlim is not None else xlim_data
+    base_y = ylim if ylim is not None else ylim_data
+    if isinstance(spec.coord, CoordFlipped):
+        return (base_y, base_x)
+    return (base_x, base_y)
+
+
 _ARTIST_CONTAINERS = ("lines", "collections", "patches", "texts", "images")
 
 
@@ -985,7 +1021,12 @@ class MatplotlibRenderer(BaseRenderer):
 
         basemap_setting = spec.settings.get("basemap")
         if basemap_setting and isinstance(spec.coord, CoordGeo):
-            self._render_basemap(ax, spec.coord, basemap_setting, (xlim_data, ylim_data))
+            self._render_basemap(
+                ax,
+                spec.coord,
+                basemap_setting,
+                _basemap_fetch_limits(spec, xlim_data, ylim_data),
+            )
 
         ax.autoscale(False)
 

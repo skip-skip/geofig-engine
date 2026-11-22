@@ -85,8 +85,10 @@ boundary ring) with a relief-aware default interval — `None` (the
 spacing coarsened to ~20 lines across the DEM's elevation range, and an
 explicit `interval` (e.g. 10 for old-geomapper parity) is honored.
 `settings={"contours": None}` on the builder disables the layer; a dict
-can override `interval`/`color`/`linewidth`/`alpha` and supply a
-synthetic `dem_source` (test seam — no network).
+can override `interval`/`color`/`linewidth`/`alpha`, supply a
+synthetic `dem_source` (test seam — no network), and set
+`dem_bounds=(west, south, east, north)` to pin the DEM fetch extent instead of
+deriving it from the frame's coordinate columns.
 
 ---
 

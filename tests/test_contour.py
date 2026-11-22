@@ -217,6 +217,28 @@ class TestStatContour:
         assert finite["x"].between(bounds[0] - 1e-9, bounds[2] + 1e-9).all()
         assert finite["y"].between(bounds[1] - 1e-9, bounds[3] + 1e-9).all()
 
+    def test_builder_propagates_dem_bounds_from_settings(self):
+        bounds = (-121.8065, 46.7514, -121.7625, 46.7816)
+        recipe = site_map_builder(
+            settings={
+                "contours": {"dem_bounds": bounds, "dem_source": synthetic_dem},
+                "streams": None,
+            }
+        )
+        contour_layer = next(
+            layer for layer in recipe.layers if layer.geom.name == "contour"
+        )
+        assert contour_layer.stat.params["dem_bounds"] == bounds
+
+    def test_builder_rejects_invalid_dem_bounds(self):
+        with pytest.raises(ValueError, match="dem_bounds"):
+            site_map_builder(
+                settings={
+                    "contours": {"dem_bounds": (-121.8, 46.75, -121.76)},
+                    "streams": None,
+                }
+            )
+
 
 class TestGeomContour:
     def test_registration_name_and_channels(self):
