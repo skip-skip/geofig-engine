@@ -58,6 +58,29 @@ class TestBuildPiperSpecs:
         assert left.coord.channels == ("Ca", "Mg", "Na+K")
         assert left.transform.ops == (("scale", (0.5, 0.5)),)
 
+
+class TestBuildPiperSpecsStyle:
+    def test_fontsize_threads_into_children_and_parent(self):
+        specs = build_piper_specs(_DATA, fontsize=14)
+        spec = specs[0]
+        assert spec.settings["fontsize"] == 14
+        for child in spec.children:
+            assert child.settings["fontsize"] == 14
+
+    def test_point_size_baked_into_point_layers(self):
+        specs = build_piper_specs(_DATA, point_size=40)
+        spec = specs[0]
+        for child in spec.children:
+            assert child.layers[0].visual_mapping["size"] == 40
+
+    def test_style_knobs_absent_by_default(self):
+        specs = build_piper_specs(_DATA)
+        spec = specs[0]
+        assert "fontsize" not in spec.settings
+        for child in spec.children:
+            assert "fontsize" not in child.settings
+            assert "size" not in child.layers[0].visual_mapping
+
     def test_right_child_has_ternary_coord_and_transform(self):
         specs = build_piper_specs(_DATA)
         right = specs[0].children[1]

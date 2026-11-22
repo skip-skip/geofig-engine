@@ -219,7 +219,7 @@ Violations raise `ValueError`.
 These two functions do **not** return a `FigureTemplate` — they build
 renderer-ready [`FigureSpec`](core.md#layers--specs) objects directly.
 
-### `build_piper_specs(data, left_tri=("Ca", "Mg", "Na+K"), right_tri=("HCO3", "SO4", "Cl"), mapping=None, title="Piper Diagram", labels=None, axis_label_policy="parallel")`
+### `build_piper_specs(data, left_tri=("Ca", "Mg", "Na+K"), right_tri=("HCO3", "SO4", "Cl"), mapping=None, title="Piper Diagram", labels=None, axis_label_policy="parallel", fontsize=None, point_size=None)`
 
 Builds a Piper diagram using linked axes. Returns a single-element `list` of
 `FigureSpec`: a parent cartesian axis (the diamond, world space) with three
@@ -237,11 +237,13 @@ with two `SecondaryAxis` declarations for the cation/anion percentage scales.
 | `title` | `str` | Figure title. |
 | `labels` | `dict[str, str] \| None` | Channel → display label overrides (defaults provide charge-bearing mathtext, e.g. `$Ca^{++}$`). |
 | `axis_label_policy` | `"upright" \| "parallel"` | Rotation of axis labels (ternary ion names + diamond titles). Default `"parallel"`. |
+| `fontsize` | `float \| None` | Generic font-size fallback on the parent and all three children; omitted by default. |
+| `point_size` | `float \| None` | Constant marker size on the three point layers; omitted by default. A `size` channel in `mapping` wins. |
 
 **Raises:** `ValueError` if `axis_label_policy` is invalid or if any ion column
 is missing from `data`.
 
-### `plot_stiff(ca, mg, na_k, cl, hco3, so4, title="", figsize=(6, 6))`
+### `plot_stiff(ca, mg, na_k, cl, hco3, so4, title="", figsize=(6, 6), fontsize=None)`
 
 Builds a single stiff-diagram `FigureSpec` from one water analysis.
 
@@ -250,6 +252,7 @@ Builds a single stiff-diagram `FigureSpec` from one water analysis.
 | `ca`, `mg`, `na_k`, `cl`, `hco3`, `so4` | `float` | Concentrations in meq/L (takes the max, picks a "nice" tick max from the built-in ladder). |
 | `title` | `str` | Figure title. |
 | `figsize` | `(float, float)` | Figure size. |
+| `fontsize` | `float \| None` | Generic font-size fallback; omitted by default. |
 
 Returns a `FigureSpec` with a `GeomPolygon` (filled, light blue, black
 1.5-width edge) and a dashed `GeomLine` divider at x=0, plus `settings` that

@@ -30,10 +30,11 @@ from geofig_engine.engine.api import (
 )
 from geofig_engine.core.coord import CoordCartesian, CoordPolar
 from geofig_engine.core.facet import FacetGrid, FacetWrap
-from geofig_engine.core.geom import GeomPoint
+from geofig_engine.core.geom import GeomPoint, GeomSitePoint, GeomText
 from geofig_engine.core.iterator import DimensionIterator
 from geofig_engine.core.layer import Layer
 from geofig_engine.core.stat import StatIdentity
+from geofig_engine.engine.generator import resolve_layer_sources
 from geofig_engine.provider import DataFrameProvider
 from geofig_engine.templates import bivariate
 
@@ -196,6 +197,116 @@ class TestOverrides:
             settings={"title": "from user"},
         )
         assert figures[0].axes[0].get_title() == "from user"
+
+
+class TestPointSize:
+    def test_point_size_setting_scales_point_markers(self):
+        figures = render_template(
+            data=make_df(),
+            template=bivariate(mapping={"x": "x", "y": "y"}),
+            settings={"point_size": 45},
+        )
+        sizes = figures[0].axes[0].collections[0].get_sizes()
+        assert np.allclose(sizes, 45.0)
+
+    def test_point_size_unset_keeps_handler_default(self):
+        figures = render_template(
+            data=make_df(),
+            template=bivariate(mapping={"x": "x", "y": "y"}),
+        )
+        sizes = figures[0].axes[0].collections[0].get_sizes()
+        assert np.allclose(sizes, 20.0)
+
+    def test_site_point_geom_receives_point_size(self):
+        layer = Layer(
+            geom=GeomSitePoint(),
+            stat=StatIdentity(),
+            mapping={"x": "x", "y": "y"},
+        )
+        specs = resolve_layer_sources(
+            [layer],
+            frame=make_df(),
+            resolve=lambda source: source,
+            point_size=90,
+        )
+        assert specs[0].visual_mapping["size"] == 90
+
+    def test_point_size_skips_text_geom_font_size(self):
+        layer = Layer(
+            geom=GeomText(),
+            stat=StatIdentity(),
+            mapping={"x": "x", "y": "y", "label": "id"},
+        )
+        specs = resolve_layer_sources(
+            [layer],
+            frame=make_df(),
+            resolve=lambda source: source,
+            point_size=45,
+        )
+        assert "size" not in specs[0].visual_mapping
+
+    def test_point_size_resolves_from_iterator_context(self):
+        df = pd.DataFrame({
+            "x": [1.0, 2.0, 3.0, 4.0],
+            "y": [2.0, 3.0, 5.0, 7.0],
+            "marker_size": [10.0, 20.0, 10.0, 20.0],
+        })
+        figures = render_template(
+            data=df,
+            template=bivariate(mapping={"x": "x", "y": "y"}),
+            settings={"point_size": "{marker_size}"},
+            iterators=[DimensionIterator(
+                channel="marker_size",
+                dimensions=["marker_size"],
+                mode=DimensionIterator.Mode.VALUE,
+            )],
+        )
+        assert len(figures) == 2
+        for figure, expected in zip(figures, (10.0, 20.0)):
+            assert np.allclose(
+                figure.axes[0].collections[0].get_sizes(), expected
+            )
+
+    @pytest.mark.parametrize("bad", [0, -1, "large", True])
+    def test_point_size_rejects_invalid_values(self, bad):
+        with pytest.raises(ValueError, match="point_size"):
+            render_template(
+                data=make_df(),
+                template=bivariate(mapping={"x": "x", "y": "y"}),
+                settings={"point_size": bad},
+            )
+
+
+class TestNativeTickFont:
+    def test_fontsize_knob_bumps_native_tick_labels(self):
+        figures = render_template(
+            data=make_df(),
+            template=bivariate(mapping={"x": "x", "y": "y"}),
+            settings={"fontsize": 12},
+        )
+        ax = figures[0].axes[0]
+        assert ax.get_xticklabels()[0].get_fontsize() == 12
+        assert ax.get_yticklabels()[0].get_fontsize() == 12
+
+    def test_tick_fontsize_wins_over_generic_fontsize(self):
+        figures = render_template(
+            data=make_df(),
+            template=bivariate(mapping={"x": "x", "y": "y"}),
+            settings={"fontsize": 12, "tick_fontsize": 9},
+        )
+        ax = figures[0].axes[0]
+        assert ax.get_xticklabels()[0].get_fontsize() == 9
+        assert ax.get_yticklabels()[0].get_fontsize() == 9
+
+    def test_unset_knob_keeps_rcparam_default(self):
+        import matplotlib.pyplot as plt
+
+        figures = render_template(
+            data=make_df(),
+            template=bivariate(mapping={"x": "x", "y": "y"}),
+        )
+        ax = figures[0].axes[0]
+        assert ax.get_xticklabels()[0].get_fontsize() == plt.rcParams["font.size"]
 
 
 class TestErrors:

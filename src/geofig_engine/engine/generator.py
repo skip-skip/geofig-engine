@@ -7,6 +7,7 @@ template, and mapping inputs, and optionally dispatches them to a renderer.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Sequence
 
@@ -30,10 +31,27 @@ from geofig_engine.utils.validation import validate_dict
 from geofig_engine.utils.typing import Mapping
 
 
+def _normalize_point_size(value: Any) -> float | None:
+    """Return ``value`` as a positive float, or ``None`` when unset."""
+    if value is None:
+        return None
+    message = f"point_size must be a positive real number or None, got {value!r}"
+    if isinstance(value, bool):
+        raise ValueError(message)
+    try:
+        size = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
+    if not math.isfinite(size) or size <= 0:
+        raise ValueError(message)
+    return size
+
+
 def resolve_layer_sources(
     layers: list[Layer],
     frame: pd.DataFrame,
     resolve: Callable[[Any], Any],
+    point_size: float | None = None,
 ) -> list[LayerSpec]:
     """Resolve a list of Layer objects into fully concrete LayerSpecs.
 
@@ -50,7 +68,11 @@ def resolve_layer_sources(
     ``resolve(source)`` maps a channel source to either a list of concrete
     column names (present in ``frame``) or a constant value, mirroring
     ``resolve_source`` semantics against a frame instead of a Dataset.
+
+    ``point_size`` supplies a constant ``size`` for point/site_point layers
+    that do not already bind a size channel.
     """
+    point_size = _normalize_point_size(point_size)
     layer_specs: list[LayerSpec] = []
 
     for layer in layers:
@@ -97,6 +119,17 @@ def resolve_layer_sources(
                     visual_mapping[channel] = layer.scales[channel].transform(values)
                 else:
                     visual_mapping[channel] = resolved
+
+        # A recipe-level "point_size" knob injects a constant size onto point
+        # geoms (scatter markers) unless the layer already binds a size
+        # channel. Text/annotation geoms share the "size" channel name for
+        # font size, so only point-style geoms are scaled.
+        if (
+            point_size is not None
+            and "size" not in visual_mapping
+            and layer.geom.name in ("point", "site_point")
+        ):
+            visual_mapping["size"] = point_size
 
         layer_specs.append(LayerSpec(
             geom=layer.geom,
@@ -491,6 +524,10 @@ class FigureGenerator:
         for frame, iter_ctx in self.provider.expand(self.iterators or []):
             context = {**iter_ctx}
             resolved_settings = resolve_settings(self.settings, context)
+            if "point_size" in resolved_settings:
+                resolved_settings["point_size"] = _normalize_point_size(
+                    resolved_settings["point_size"]
+                )
             layers = self._effective_layers()
             layer_specs = resolve_layer_sources(
                 layers,
@@ -498,6 +535,7 @@ class FigureGenerator:
                 resolve=lambda source, _f=frame, _c=context: (
                     self._resolve_source(source, _f, _c)
                 ),
+                point_size=resolved_settings.get("point_size"),
             )
             _check_required_channels(layer_specs)
             specs.append(

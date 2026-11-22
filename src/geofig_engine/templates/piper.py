@@ -55,6 +55,8 @@ def build_piper_specs(
     title: str = "Piper Diagram",
     labels: dict[str, str] | None = None,
     axis_label_policy: str = "parallel",
+    fontsize: float | None = None,
+    point_size: float | None = None,
 ) -> list[FigureSpec]:
     """Build a Piper FigureSpec using linked axes.
 
@@ -72,6 +74,11 @@ def build_piper_specs(
     ``"parallel"`` rotates them alongside their edge/axis while tick labels remain
     upright; pass ``"upright"`` to keep the ion names horizontal and the diamond
     titles horizontal.
+
+    ``fontsize`` sets the generic font-size fallback on the parent and all three
+    children. ``point_size`` sets a constant marker size on the three point
+    layers unless ``mapping`` already supplies a ``size`` channel. Both are
+    optional and absent by default.
     """
     if axis_label_policy not in ("upright", "parallel"):
         raise ValueError(
@@ -80,6 +87,11 @@ def build_piper_specs(
         )
     # axis_label_policy applies to the labels; tick labels stay on label_policy.
     child_settings = {"axis_arrows": True, "axis_label_policy": axis_label_policy}
+    if fontsize is not None:
+        child_settings["fontsize"] = fontsize
+    point_extra: dict[str, float] = {}
+    if point_size is not None:
+        point_extra["size"] = point_size
 
     # -- validate ion columns exist --
     all_ions = set(left_tri + right_tri)
@@ -147,7 +159,7 @@ def build_piper_specs(
         layers=[LayerSpec(
             geom=GeomPoint(),
             stat=StatIdentity(),
-            visual_mapping={**visuals, **{ch: aug[ch] for ch in left_channels}},
+            visual_mapping={**visuals, **point_extra, **{ch: aug[ch] for ch in left_channels}},
             zorder=10,
         )],
     )
@@ -166,35 +178,38 @@ def build_piper_specs(
         layers=[LayerSpec(
             geom=GeomPoint(),
             stat=StatIdentity(),
-            visual_mapping={**visuals, **{ch: aug[ch] for ch in right_channels}},
+            visual_mapping={**visuals, **point_extra, **{ch: aug[ch] for ch in right_channels}},
             zorder=10,
         )],
     )
 
     dia_pct = _SQRT3_2 / 100.0
+    diamond_settings = {
+        "axis_arrows": True,
+        "axis_label_policy": axis_label_policy,
+        "xlim": (0, 100),
+        "ylim": (0, 100),
+        "x_reversed": True,
+        "y_reversed": True,
+        "grid_step": 20,
+        "tick_step": 20,
+        "majortick_length": 2.0,
+        "majortick_offset": 0,
+        "secondary_x": {
+            "range": [0, 100],
+            "label": f"{_resolve_ion_label(right_tri[1], labels)} + {_resolve_ion_label(right_tri[2], labels)}",
+        },
+        "secondary_y": {
+            "range": [0, 100],
+            "label": f"{_resolve_ion_label(left_tri[0], labels)} + {_resolve_ion_label(left_tri[1], labels)}",
+        },
+    }
+    if fontsize is not None:
+        diamond_settings["fontsize"] = fontsize
     diamond = FigureSpec(
         data=aug,
         mappings=dia_mmap,
-        settings={
-            "axis_arrows": True,
-            "axis_label_policy": axis_label_policy,
-            "xlim": (0, 100),
-            "ylim": (0, 100),
-            "x_reversed": True,
-            "y_reversed": True,
-            "grid_step": 20,
-            "tick_step": 20,
-            "majortick_length": 2.0,
-            "majortick_offset": 0,
-            "secondary_x": {
-                "range": [0, 100],
-                "label": f"{_resolve_ion_label(right_tri[1], labels)} + {_resolve_ion_label(right_tri[2], labels)}",
-            },
-            "secondary_y": {
-                "range": [0, 100],
-                "label": f"{_resolve_ion_label(left_tri[0], labels)} + {_resolve_ion_label(left_tri[1], labels)}",
-            },
-        },
+        settings=diamond_settings,
         context={},
         template_name="piper",
         coord=CoordCartesian(),
@@ -205,16 +220,19 @@ def build_piper_specs(
         layers=[LayerSpec(
             geom=GeomPoint(),
             stat=StatIdentity(),
-            visual_mapping={**visuals, "x": aug["_dia_anion_pct"], "y": aug["_dia_cation_pct"]},
+            visual_mapping={**visuals, **point_extra, "x": aug["_dia_anion_pct"], "y": aug["_dia_cation_pct"]},
             zorder=10,
         )],
     )
 
     # -- parent FigureSpec --
+    parent_settings = {"figsize": (10, 8), "title": title}
+    if fontsize is not None:
+        parent_settings["fontsize"] = fontsize
     parent = FigureSpec(
         data=aug,
         mappings={},
-        settings={"figsize": (10, 8), "title": title},
+        settings=parent_settings,
         context={},
         template_name="piper",
         children=(left, right, diamond),

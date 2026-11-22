@@ -1300,6 +1300,11 @@ class MatplotlibRenderer(BaseRenderer):
                 ax.grid(False)
         if axis.time_format:
             ax.xaxis.set_major_formatter(DateFormatter(axis.time_format))
+        # Tick labels: only when a font knob is explicitly set, so the native
+        # path keeps matplotlib's rcParam default otherwise (matches current
+        # look); the drawn-frame path always resolves these.
+        if axis.tick_fontsize is not None or axis.fontsize is not None:
+            ax.tick_params(labelsize=axis.resolve_fontsize("tick"))
         figname = spec.settings.get("figname")
         if figname:
             fig.figname = figname

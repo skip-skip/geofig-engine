@@ -29,7 +29,13 @@ def plot_stiff(
     so4: float,
     title: str = "",
     figsize: tuple[float, float] = (6, 6),
+    fontsize: float | None = None,
 ):
+    """Build a stiff-diagram FigureSpec from one water analysis.
+
+    ``fontsize`` sets the generic font-size fallback on the spec; omit it to
+    keep renderer defaults.
+    """
     max_val = max(ca, mg, na_k, cl, hco3, so4) or 1.0
     tick_max = _nice_tick_max(max_val)
     half = tick_max / 2.0
@@ -83,6 +89,8 @@ def plot_stiff(
             },
         },
     }
+    if fontsize is not None:
+        settings["fontsize"] = fontsize
 
     layers = [
         LayerSpec(

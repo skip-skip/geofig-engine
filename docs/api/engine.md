@@ -67,8 +67,18 @@ legend figure are **not** returned here; they live in the legacy path
 
 - `KeyError` — unknown template key (the message lists the available keys).
 - `TypeError` — unsupported `data` or `template` type.
-- `ValueError` — unsupported `renderer_name`, or missing required channels at
-  spec-build time (informative message, not a generator-internals traceback).
+- `ValueError` — unsupported `renderer_name`, missing required channels at
+  spec-build time (informative message, not a generator-internals traceback),
+  or an invalid `point_size`.
+
+**Style knobs** — `settings={"point_size": <float>}` supplies a constant marker
+size for `point`/`site_point` layers. Layers that already bind a `size` channel
+win; text/annotation `size` channels are untouched. Numeric strings are
+accepted so an iterator-formatted value (e.g. `"{marker_size}"`) resolves per
+figure. A non-positive or non-numeric value raises `ValueError`. Tick-label
+font sizes follow `tick_fontsize`, then the generic `fontsize` fallback, then
+matplotlib's rcParam default (see
+[core.md](core.md#axisformat-frozen-dataclass)).
 
 ```python
 import pandas as pd

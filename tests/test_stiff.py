@@ -80,6 +80,13 @@ class TestStiffSpecContract:
         spec = self._spec()
         assert spec.settings["y_tick_labels"] == CATIONS
 
+    def test_fontsize_opt_in(self):
+        spec = self._spec(fontsize=13)
+        assert spec.settings["fontsize"] == 13
+
+    def test_fontsize_absent_by_default(self):
+        assert "fontsize" not in self._spec().settings
+
     def test_anion_labels_declared_on_secondary_y(self):
         spec = self._spec()
         assert spec.settings["secondary_y"]["tick_labels"] == ANIONS
