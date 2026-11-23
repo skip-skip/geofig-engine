@@ -6,7 +6,7 @@ the policy in `ARCHITECTURE.md` `## Versioning`: version authority is
 commit. Deprecations are introduced in MINOR releases and removed **no earlier
 than the next MAJOR** (>= 1.0.0).
 
-## [v0.4.0] - TBD
+## [v0.4.0] - 2026-11-22
 
 ### Added
 
