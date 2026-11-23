@@ -556,3 +556,32 @@ class TestPiperRegistryRecipe:
         )
         assert len(figures) == 1
         assert figures[0]._suptitle.get_text() == "Registry Piper"
+
+    def test_render_template_matches_build_piper_specs_png(self):
+        from io import BytesIO
+
+        from geofig_engine.renderers import MatplotlibRenderer
+
+        canonical = render_template(data=_DATA, template="piper")[0]
+        direct = MatplotlibRenderer().render(build_piper_specs(_DATA)[0])
+
+        payloads = []
+        for fig in (canonical, direct):
+            buffer = BytesIO()
+            fig.savefig(buffer, format="png")
+            payloads.append(buffer.getvalue())
+        assert payloads[0] == payloads[1]
+
+    def test_spec_recipe_rejects_iterators(self):
+        from geofig_engine.core.iterator import DimensionIterator
+
+        iterator = DimensionIterator(channel="Ca", dimensions=["Ca"])
+        with pytest.raises(ValueError, match="Unsupported combination"):
+            render_template(data=_DATA, template="piper", iterators=[iterator])
+
+    def test_spec_recipe_rejects_facets(self):
+        from geofig_engine.core.facet import Facet
+
+        facet = Facet(name="ion", by=("Ca",))
+        with pytest.raises(ValueError, match="Unsupported combination"):
+            render_template(data=_DATA, template="piper", facet=facet)

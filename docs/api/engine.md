@@ -1,11 +1,11 @@
 # API Reference — Engine
 
-`geofig_engine.engine` provides the **declarative entry surface** (Phase 15):
-a template-key registry (`TEMPLATES`), the canonical `render_template` entry
-point, and the provider-driven `FigureGenerator` orchestrator. The engine
-consumes **only** [`DataProvider`](provider.md) objects — raw frames are
-wrapped for you — resolves `Layer` objects into concrete `LayerSpec`s
-(applying stats and scales), builds validated
+`geofig_engine.engine` provides the **declarative entry surface** (Phase 15,
+unified in 18.4): a template-key registry (`TEMPLATES`), the canonical
+`render_template` entry point, and the provider-driven `FigureGenerator`
+orchestrator. The engine consumes **only** [`DataProvider`](provider.md)
+objects — raw frames are wrapped for you — resolves registry keys to native
+layer (`TemplateRecipe`) or composite (`SpecRecipe`) builders, builds validated
 [`FigureSpec`](core.md#layers--specs) objects, and dispatches them to a
 renderer.
 
@@ -36,7 +36,7 @@ from geofig_engine import render_template
 ```python
 def render_template(
     data: pd.DataFrame | DataProvider | np.ndarray,
-    template: str | FigureTemplate | TemplateRecipe | dict,
+    template: str | FigureTemplate | TemplateRecipe | SpecRecipe | dict,
     mapping: dict[str, Any] | None = None,
     settings: dict[str, Any] | None = None,
     iterators: list[DimensionIterator] | None = None,
@@ -50,11 +50,11 @@ def render_template(
 | Param | Type | Description |
 | --- | --- | --- |
 | `data` | `pd.DataFrame \| DataProvider \| np.ndarray` | A `DataProvider` passes through; a `pd.DataFrame` is wrapped in `DataFrameProvider`; an ndarray is wrapped in a frame with **string positional columns** (`"0"`, `"1"`, …) so mappings can address it (e.g. a dendrogram linkage matrix). |
-| `template` | `str \| FigureTemplate \| TemplateRecipe \| dict` | A registry **key** (resolved via `get_template`), or a `FigureTemplate` / duck-typed recipe (anything exposing `name`/`layers`/`coord`/`default_settings`) adapted via `recipe_from`. |
-| `mapping` | `dict[str, Any] \| None` | Per-layer mapping override, merged over the recipe layers. Only channels the layer already binds to a **string source** are remapped, so scalar-literal channels (fixed annotation text, …) are left intact. |
-| `settings` | `dict[str, Any] \| None` | User settings merged **on top of** the recipe's `default_settings`. |
-| `iterators` | `list[DimensionIterator] \| None` | Optional dimension iterators for multi-figure expansion (a single iterator is also accepted). |
-| `facet` | `Facet \| None` | Optional facet spec; splits the data into panels within a single figure (renderer-side). One figure per iterator combination, each containing the full facet panel grid. Defaults to `FacetNull()`. |
+| `template` | `str \| FigureTemplate \| TemplateRecipe \| SpecRecipe \| dict` | A registry **key** (resolved via `get_template`), or a `FigureTemplate` / duck-typed recipe (anything exposing `name`/`layers`/`coord`/`default_settings`) adapted via `recipe_from`. A `SpecRecipe` builds `FigureSpec`s directly. |
+| `mapping` | `dict[str, Any] \| None` | Per-layer mapping override, merged over the recipe layers. Only channels the layer already binds to a **string source** are remapped, so scalar-literal channels (fixed annotation text, …) are left intact. For `SpecRecipe` keys it is passed to `build_specs`. |
+| `settings` | `dict[str, Any] \| None` | User settings merged **on top of** the recipe's `default_settings`. For registry keys the flat template-specific keys below are also passed to the builder. |
+| `iterators` | `list[DimensionIterator] \| None` | Optional dimension iterators for multi-figure expansion (a single iterator is also accepted). **Unsupported with `SpecRecipe` keys** (`piper` / `stiff`). |
+| `facet` | `Facet \| None` | Optional facet spec; splits the data into panels within a single figure (renderer-side). One figure per iterator combination, each containing the full facet panel grid. Defaults to `FacetNull()`. **Unsupported with `SpecRecipe` keys.** |
 | `coord` | `Coord \| None` | Overrides the recipe's coord when given (e.g. `CoordGeo(crs=...)`); defaults to the recipe's. |
 | `savedir` | `str \| Path \| None` | If provided, each figure is persisted as `NNN_<iterator keys>.png` (zero-padded index + context values joined by `_`) plus a `legend.png`. |
 | `renderer_name` | `str` | Backend name; only `"matplotlib"` is supported. |
@@ -69,7 +69,8 @@ legend figure are **not** returned here; they live in the legacy path
 - `TypeError` — unsupported `data` or `template` type.
 - `ValueError` — unsupported `renderer_name`, missing required channels at
   spec-build time (informative message, not a generator-internals traceback),
-  or an invalid `point_size`.
+  an invalid `point_size`, or `iterators` / `facet` combined with a
+  `SpecRecipe` template.
 
 **Style knobs** — `settings={"point_size": <float>}` supplies a constant marker
 size for `point`/`site_point` layers. Layers that already bind a `size` channel
@@ -104,14 +105,21 @@ figures[0].show()
 ## TEMPLATES registry
 
 `TEMPLATES` is the exported registry mapping a **template key** to a builder
-callable. Recipes returned by the builders are duck-typed — they expose
-`name` / `layers` / `coord` / `default_settings` — so third-party builders
-(`geochemmodel` workflows, downstream adapters) register without engine
-changes.
+callable. Layer builders return a duck-typed recipe — `name` / `layers` /
+`coord` / `default_settings`; composite builders return a `SpecRecipe` — so
+third-party builders (`geochemmodel` workflows, downstream adapters) register
+without engine changes.
 
 ```python
 from geofig_engine import TEMPLATES, register_template, get_template
 ```
+
+Every seeded builder is called as `builder(mapping=None, settings=None,
+**kwargs)`. `render_template` supplies the user `mapping` and `settings`;
+callers of `get_template(key)` may also pass factory kwargs directly. Flat
+template-specific settings are read from `settings` (renderer keys such as
+`figsize`, `title`, and `grid` live there too). The `piper` / `stiff` spec
+builders consume only `mapping` / `settings`.
 
 ### `register_template(name, builder)`
 
@@ -133,30 +141,66 @@ class TemplateRecipe:
     layers: list[Layer]
     coord: Coord = CoordCartesian()
     default_settings: dict[str, Any] = {}
+    mapping_consumed: bool = False
 ```
 
-The canonical recipe shape returned by template builders. Missing *required
-channels* are not validated here — that check happens lazily at spec-build
-time.
+The canonical layer-recipe shape returned by template builders. Missing
+*required channels* are not validated here — that check happens lazily at
+spec-build time. `mapping_consumed=True` means the builder already bound the
+user mapping into its layers/stats, so the generic override pass is skipped.
+
+### `SpecRecipe` (frozen dataclass)
+
+```python
+@dataclass(frozen=True)
+class SpecRecipe:
+    name: str
+    default_settings: dict[str, Any]
+    build_specs: Callable[
+        [pd.DataFrame, dict[str, Any] | None, dict[str, Any] | None, Coord | None],
+        list[FigureSpec],
+    ]
+```
+
+Used for composite linked-axes templates (`piper` / `stiff`) that cannot be
+flattened into layer recipes without moving data math into the renderer.
+`render_template` calls `build_specs(frame, mapping, settings, coord)` with the
+coerced provider frame and then reuses the normal renderer, legend, and
+`savedir` path. It deliberately skips `FigureGenerator` and does **not**
+support `iterators` or `facet`. The `stiff` builder requires a one-row frame
+with columns `ca`, `mg`, `na_k`, `cl`, `hco3`, `so4`; the `piper` builder
+requires the six standard ion columns (or the columns named by `left_tri` /
+`right_tri`). See [templates — Spec builders](templates.md#spec-builders).
 
 ### `recipe_from(template_or_recipe)`
 
-Normalizes a template builder result to a recipe: `TemplateRecipe` and
-duck-typed recipes pass through unchanged; `FigureTemplate` objects are
-adapted (layers / coord / default settings / name are copied over). Anything
-else raises `TypeError`.
+Normalizes a template builder result to a recipe: `TemplateRecipe`,
+`SpecRecipe`, and duck-typed recipes pass through unchanged; `FigureTemplate`
+objects are adapted (layers / coord / default settings / name are copied
+over). Anything else raises `TypeError`.
 
 ### Seeded keys
 
-| Key | Builder | Notes |
-| --- | --- | --- |
-| `bivariate` | `bivariate_builder` | Pipeline builder (scatter). |
-| `boxplot_with_points` | `boxplot_with_points_builder` | Pipeline builder. |
-| `dendrogram` | `dendrogram_builder` | Pipeline builder (takes the linkage-matrix ndarray via `data`). |
-| `particle_overlay` | `particle_overlay_builder` | Pipeline builder. |
-| `site_map` | `site_map_builder` | Pipeline builder (geo; use with `CoordGeo`). Default-on DEM elevation contours — terrarium tiles, lazy 10%-buffered fetch, bbox-keyed cache, white 0.5 pt at alpha 0.6 with a relief-aware default interval (`None` = at least 10 m, ~20 lines across the DEM relief; set an explicit `interval` for old-geomapper 10 m parity; [DEM contract](dem.md)). Contour settings are builder-level (`site_map_builder(settings={"contours": ...})`): a dict overrides `interval`/`color`/`linewidth`/`alpha` (+ `dem_source` for synthetic DEMs and `dem_bounds=(west, south, east, north)` to pin the DEM fetch extent), `{"contours": None}` disables the layer; failures degrade to a warning + no contours. Default-on surface-water streams — blue 0.7 pt at alpha 0.7, no legend — query the public USGS `NHDPlus_HR` REST service for the frame's unbuffered lon/lat bbox ([stream contract](streams.md)). Stream settings are builder-level (`site_map_builder(settings={"streams": ...})`): a dict overrides `color`/`linewidth`/`alpha`/`service_url`/`layer_id`/`where`/`max_pages` or injects a `streams_source(bbox)` callable (never serialized); `{"streams": None}` or `{"enabled": False}` disables the layer and skips HTTP. Failures/truncation warn and render no lines; an empty successful query is silent. Basemap tiles configured via `settings={"basemap": ...}`; declared `xlim`/`ylim` drive the tile fetch extent (with a data-window fallback). |
-| `histogram`, `pie`, `radar`, `timeseries`, `isotope`, `npr_nnp`, `anp_agp`, `nagph_nag` | legacy factories adapted via `legacy_adapter` | The shipped [`geofig_engine.templates`](templates.md) factories re-registered as registry builders. |
-| `piper`, `stiff` | spec builders | Keys resolve via `get_template`, but invoking them through `render_template` raises an informative `TypeError` pointing at the spec-builder route (these build `FigureSpec`s the layer→recipe pipeline cannot express — see [templates — Spec builders](templates.md#spec-builders)). |
+| Key | Builder | Recipe | Flat template-specific settings / contract |
+| --- | --- | --- | --- |
+| `bivariate` | `bivariate_builder` | `TemplateRecipe` | Pipeline builder (scatter). |
+| `boxplot_with_points` | `boxplot_with_points_builder` | `TemplateRecipe` | Pipeline builder. |
+| `dendrogram` | `dendrogram_builder` | `TemplateRecipe` | Pipeline builder (takes the linkage-matrix ndarray via `data`). |
+| `particle_overlay` | `particle_overlay_builder` | `TemplateRecipe` | Pipeline builder. |
+| `site_map` | `site_map_builder` | `TemplateRecipe` | Pipeline builder (geo; use with `CoordGeo`). Default-on DEM elevation contours — terrarium tiles, lazy 10%-buffered fetch, bbox-keyed cache, white 0.5 pt at alpha 0.6 with a relief-aware default interval (`None` = at least 10 m, ~20 lines across the DEM relief; set an explicit `interval` for old-geomapper 10 m parity; [DEM contract](dem.md)). Contour settings are builder-level (`site_map_builder(settings={"contours": ...})`): a dict overrides `interval`/`color`/`linewidth`/`alpha` (+ `dem_source` for synthetic DEMs and `dem_bounds=(west, south, east, north)` to pin the DEM fetch extent), `{"contours": None}` disables the layer; failures degrade to a warning + no contours. Default-on surface-water streams — blue 0.7 pt at alpha 0.7, no legend — query the public USGS `NHDPlus_HR` REST service for the frame's unbuffered lon/lat bbox ([stream contract](streams.md)). Stream settings are builder-level (`site_map_builder(settings={"streams": ...})`): a dict overrides `color`/`linewidth`/`alpha`/`service_url`/`layer_id`/`where`/`max_pages` or injects a `streams_source(bbox)` callable (never serialized); `{"streams": None}` or `{"enabled": False}` disables the layer and skips HTTP. Failures/truncation warn and render no lines; an empty successful query is silent. Basemap tiles configured via `settings={"basemap": ...}`; declared `xlim`/`ylim` drive the tile fetch extent (with a data-window fallback). |
+| `histogram` | `histogram_builder` | `TemplateRecipe` | `bins`, `density`, `cumulative`; `scales` is also accepted as a direct builder kwarg. |
+| `pie` | `pie_builder` | `TemplateRecipe` | `show_percent`, `show_count`, `show_name`. |
+| `radar` | `radar_builder` | `TemplateRecipe` | `fill`, `fill_alpha`, `shared_axes`. |
+| `timeseries` | `timeseries_builder` | `TemplateRecipe` | No template-specific flat keys; `scales` is accepted as a direct builder kwarg. |
+| `isotope` | `isotope_builder` | `TemplateRecipe` | `functions`, `auto_filter`; `scales` is accepted as a direct builder kwarg. |
+| `npr_nnp` | `npr_nnp_builder` | `TemplateRecipe` | `npr_crit`, `nnp_crit`; `scales` is accepted as a direct builder kwarg. |
+| `anp_agp` | `anp_agp_builder` | `TemplateRecipe` | No template-specific flat keys; `scales` is accepted as a direct builder kwarg. |
+| `nagph_nag` | `nagph_nag_builder` | `TemplateRecipe` | No template-specific flat keys; `scales` is accepted as a direct builder kwarg. |
+| `piper` | `piper_builder` | `SpecRecipe` | `left_tri`, `right_tri`, `title`, `labels`, `axis_label_policy`, `fontsize`, `point_size`; standard ion frame. |
+| `stiff` | `stiff_builder` | `SpecRecipe` | `title`, `figsize`, `fontsize`; one-row ion frame (`ca`/`mg`/`na_k`/`cl`/`hco3`/`so4`). |
+
+All ten legacy keys are seeded directly to native builders; `legacy_adapter`
+is retained as a deprecated compatibility shim and is not used by the registry.
 
 ---
 
@@ -188,10 +232,12 @@ class FigureGenerator:
 | `build_specs` | `build_specs(self) -> list[FigureSpec]` | Expands the provider iterators (`provider.expand`) and builds one validated `FigureSpec` per iterator combination. Resolution order: expand → resolve channel selectors (`provider.resolve`) + scales → package into validated specs. Facets are stamped on each spec and applied panel-wise by the renderer (one multi-panel figure per spec). Missing required channels raise the informative spec-build error here. |
 | `render` | `render(self, renderer=None, renderer_name="matplotlib") -> list[Any]` | Builds the specs and hands them to a renderer (default `MatplotlibRenderer`); returns backend figures. `renderer_name` must be `"matplotlib"` unless an explicit `renderer` is passed. |
 
-`render_template` composes exactly this: `_wrap_data(data)` → recipe layers +
-merged overrides → `FigureGenerator(...)` → `build_specs()` +
-`MatplotlibRenderer().render_all(specs)` (plus a legend figure and optional
-PNG persistence).
+For layer recipes, `render_template` composes exactly this: `_wrap_data(data)`
+→ recipe layers + merged overrides → `FigureGenerator(...)` → `build_specs()`
+→ `MatplotlibRenderer().render_all(specs)` (plus a legend figure and optional
+PNG persistence). `SpecRecipe` keys substitute the direct `build_specs(frame,
+...)` call for the generator but then share the same renderer, legend, and
+persistence path.
 
 ---
 
@@ -210,11 +256,11 @@ See [Providers](provider.md) for the protocol, the `DataFrameProvider` and
 
 ## Legacy entry & deprecations
 
-The former root-level names still resolve, but access to the six legacy
-symbols emits an **import-time** `DeprecationWarning` (once per symbol per
-process); `render_template_legacy` — the old tuple-form entry
-`(specs, figures, legend_fig)` — is importable without a warning and warns at
-**call time**. All are removed no earlier than geofig-engine >= 1.0.0.
+The former root-level names still resolve, but access to the legacy symbols
+emits an **import-time** `DeprecationWarning` (once per symbol per process);
+`render_template_legacy` and `legacy_adapter` are importable without a warning
+and warn at **call time**. All are removed no earlier than geofig-engine >=
+1.0.0.
 
 | Deprecated name | Recommended replacement | Warning |
 | --- | --- | --- |
@@ -224,6 +270,7 @@ process); `render_template_legacy` — the old tuple-form entry
 | `IteratorEngine` | `provider.expand(iterators)` | import-time |
 | `FigureEngine` | `FigureGenerator` + `render_template` | import-time |
 | `render_template_legacy` | `render_template` (returns `list[Figure]`) | call-time |
+| `legacy_adapter` | native `*_builder` keys via `get_template` / `render_template` | call-time |
 
 `geofig_engine.engine` still exports `EngineConfig` and `FigureEngine` for the
 legacy path; only the root-level names route through the warning shims, so

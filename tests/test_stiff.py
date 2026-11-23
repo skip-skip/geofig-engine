@@ -353,3 +353,17 @@ class TestStiffRegistryRecipe:
         recipe = stiff_builder()
         with pytest.raises(ValueError, match="exactly one row"):
             recipe.build_specs(frame, None, recipe.default_settings, None)
+
+    def test_spec_recipe_rejects_iterators(self):
+        from geofig_engine.core.iterator import DimensionIterator
+
+        iterator = DimensionIterator(channel="ca", dimensions=["ca"])
+        with pytest.raises(ValueError, match="Unsupported combination"):
+            render_template(data=self._frame(), template="stiff", iterators=[iterator])
+
+    def test_spec_recipe_rejects_facets(self):
+        from geofig_engine.core.facet import Facet
+
+        facet = Facet(name="ion", by=("ca",))
+        with pytest.raises(ValueError, match="Unsupported combination"):
+            render_template(data=self._frame(), template="stiff", facet=facet)

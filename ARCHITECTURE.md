@@ -624,8 +624,8 @@ geofig-engine is the downstream consumer (workflows W1/W2 in
       -> list[Figure]` with all-optional args; exported `TEMPLATES` registry +
       `register_template`/`get_template`; `render_template_legacy` (old tuple form,
       `DeprecationWarning`).
-- [ ] Registry templates: `bivariate`, `boxplot_with_points` (+ legacy-factory
-      adapters), `dendrogram`, `site_map`, `particle_overlay`.
+- [ ] Registry templates: `bivariate`, `boxplot_with_points` (+ native legacy-key
+      builders), `dendrogram`, `site_map`, `particle_overlay`.
 - [ ] Deprecation shims (`Dataset`, `Dimension`, `DimensionSelector`,
       `ColumnSelector`, `IteratorEngine`, `FigureEngine`) with import-time warnings;
       legacy test suite stays green.
@@ -708,7 +708,9 @@ without importing rendering internals. Support-branch templates
 
 Phase 15 (v0.2.0) seeds the registry at import with the concrete keys
 `bivariate`, `boxplot_with_points`, `dendrogram`, `site_map`,
-`particle_overlay` plus the legacy-factory adapters listed below.
+`particle_overlay` plus the legacy factory set listed below. Phase 18.4
+(v0.4.0 target) rewired that legacy set to native builders; all ten legacy keys
+now share the same canonical `render_template` pathway as the pipeline keys.
 
 Pipeline template keys (referenced by `VisualizationEncoding.template`):
 
@@ -720,10 +722,15 @@ Pipeline template keys (referenced by `VisualizationEncoding.template`):
 | `site_map` | `CoordGeo` site map: basemap + point layers + grouped legend |
 | `particle_overlay` | per-photo QA overlay: segmentation edges on the (downsampled) source image, classified particles, per-photo QA stats — the only figure for ParticleImageModel |
 
-The legacy template factories (`histogram`, `pie`, `radar`, `timeseries`,
-`isotope`, `npr_nnp`, `anp_agp`, `nagph_nag`, `piper`, `stiff`) are registered
-under their existing builder callables via thin adapters and remain fully
-usable through the same registry and `render_template`.
+The legacy keys (`histogram`, `pie`, `radar`, `timeseries`, `isotope`,
+`npr_nnp`, `anp_agp`, `nagph_nag`, `piper`, `stiff`) are seeded directly to
+native `*_builder` callables. The eight layer templates return duck-typed
+`TemplateRecipe`s consumed by `FigureGenerator`; `piper` and `stiff` return
+first-class `SpecRecipe`s that build linked/composite `FigureSpec`s and then
+reuse the normal renderer/legend/savedir path (without `iterators`/`facet`).
+`FigureTemplate` factories and scalar/spec-builder functions remain supported
+compatibility surfaces; the deprecated `legacy_adapter` shim is retained but
+is no longer used for registry seeding and is removed no earlier than 1.0.0.
 
 Optional extras (pyproject):
 

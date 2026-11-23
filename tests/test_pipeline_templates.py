@@ -1,5 +1,5 @@
 """
-Phase 15 wp6 / 18.4 wp1-wp2: registry-templated rendering through ``render_template``.
+Phase 15 wp6 / 18.4 wp1-wp3: registry-templated rendering through ``render_template``.
 
 Covers the pipeline builders plus the ten legacy keys. The eight
 ``FigureTemplate`` factories resolve to native ``*_builder`` functions;
@@ -20,15 +20,23 @@ import pandas as pd
 from geofig_engine import TEMPLATES, get_template, render_template
 from geofig_engine.engine.api import SpecRecipe, recipe_from
 from geofig_engine.templates import (
+    anp_agp,
     anp_agp_builder,
+    histogram,
     histogram_builder,
+    isotope,
     isotope_builder,
+    nagph_nag,
     nagph_nag_builder,
+    npr_nnp,
     npr_nnp_builder,
+    pie,
     pie_builder,
     piper_builder,
+    radar,
     radar_builder,
     stiff_builder,
+    timeseries,
     timeseries_builder,
 )
 
@@ -109,6 +117,26 @@ SPEC_RECIPE_BUILDERS = {
     "piper": piper_builder,
     "stiff": stiff_builder,
 }
+
+NATIVE_FACTORIES = {
+    "histogram": histogram,
+    "pie": pie,
+    "radar": radar,
+    "timeseries": timeseries,
+    "isotope": isotope,
+    "npr_nnp": npr_nnp,
+    "anp_agp": anp_agp,
+    "nagph_nag": nagph_nag,
+}
+
+ALL_SEEDED_BUILDERS = {**NATIVE_BUILDERS, **SPEC_RECIPE_BUILDERS}
+
+ALL_RENDER_CASES = [
+    (key, make_df, mapping) for key, mapping in LEGACY_RENDER_CASES
+] + [
+    ("piper", make_piper_df, None),
+    ("stiff", make_stiff_df, None),
+]
 
 
 class TestPipelineBuilders:
@@ -193,6 +221,12 @@ class TestLegacyRegistryKeys:
         assert keys <= set(TEMPLATES)
         for key in keys:
             assert callable(get_template(key))
+
+    @pytest.mark.parametrize("key,data_factory,mapping", ALL_RENDER_CASES)
+    def test_seeded_key_renders_through_canonical_path(self, key, data_factory, mapping):
+        assert get_template(key) is ALL_SEEDED_BUILDERS[key]
+        figures = render_template(data=data_factory(), template=key, mapping=mapping)
+        assert len(figures) == 1
 
     @pytest.mark.parametrize("key,builder", NATIVE_BUILDERS.items())
     def test_factory_keys_seed_native_builders(self, key, builder):
@@ -322,26 +356,24 @@ class TestLegacyVisualParity:
             hashes[path.name] = digest.hexdigest()
         return hashes
 
-    def test_histogram_output_unchanged_vs_legacy_path(self, tmp_path):
-        canonical_dir = tmp_path / "canon"
-        legacy_dir = tmp_path / "legacy"
+    @pytest.mark.parametrize("key,mapping", LEGACY_RENDER_CASES)
+    def test_factory_key_output_unchanged_vs_legacy_path(self, key, mapping, tmp_path):
+        from geofig_engine.core.dataset import Dataset
+        from geofig_engine.engine.entry import render_template_legacy
+
+        canonical_dir = tmp_path / f"{key}_canonical"
+        legacy_dir = tmp_path / f"{key}_legacy"
 
         render_template(
             data=make_df(),
-            template="histogram",
-            mapping={"x": "x"},
+            template=key,
+            mapping=mapping,
             savedir=str(canonical_dir),
         )
-
-        from geofig_engine.core.dataset import Dataset
-        from geofig_engine.engine.entry import render_template_legacy
-        from geofig_engine.templates import histogram
-
-        dataset = Dataset(dataframe=make_df(), key_column="id")
         with pytest.warns(DeprecationWarning, match="render_template_legacy"):
             render_template_legacy(
-                dataset=dataset,
-                template=histogram(mapping={"x": "x"}),
+                dataset=Dataset(dataframe=make_df(), key_column="id"),
+                template=NATIVE_FACTORIES[key](mapping=mapping),
                 savedir=str(legacy_dir),
             )
 

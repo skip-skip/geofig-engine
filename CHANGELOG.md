@@ -6,6 +6,42 @@ the policy in `ARCHITECTURE.md` `## Versioning`: version authority is
 commit. Deprecations are introduced in MINOR releases and removed **no earlier
 than the next MAJOR** (>= 1.0.0).
 
+## [v0.4.0] - TBD
+
+### Added
+
+- **Native template builders (Phase 18.4)** — `histogram_builder`,
+  `pie_builder`, `radar_builder`, `timeseries_builder`, `isotope_builder`,
+  `npr_nnp_builder`, `anp_agp_builder`, and `nagph_nag_builder` are the source
+  of truth for the eight legacy layer-template keys. Flat template-specific
+  settings (`bins`, `show_percent`, `npr_crit`, …) are read by the builders;
+  `render_template` passes `mapping`/`settings` directly.
+- **First-class `piper` / `stiff` registry templates (Phase 18.4)** — their
+  builders return `SpecRecipe`s that build linked/composite `FigureSpec`s and
+  reuse the standard renderer/legend/savedir path. `iterators` and `facet` are
+  not supported for these keys.
+- Contract/parity tests cover all ten seeded keys, native builder delegation,
+  renderer PNG parity for the eight factory keys, canonical Piper/Stiff
+  rendering, and the `SpecRecipe` error surface.
+
+### Changed
+
+- All ten legacy keys now render through the same canonical `render_template`
+  pathway as the pipeline templates; registry seeding no longer uses adapters.
+- API and architecture docs describe native builders, `TemplateRecipe` /
+  `SpecRecipe`, builder arguments, and flat settings keys instead of the old
+  adapter/“raises with guidance” model.
+
+### Deprecated
+
+- `legacy_adapter` now emits a call-time `DeprecationWarning`. It remains
+  importable and functional as a compatibility shim but is no longer used for
+  registry seeding.
+
+Nothing was removed in this release. All public keys, `FigureTemplate`
+factories, scalar/spec-builder functions, and the existing shims remain;
+deprecations are retained until at least 1.0.0 per the versioning policy.
+
 ## [v0.3.2] - 2026-11-22
 
 ### Added

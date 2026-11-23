@@ -447,9 +447,11 @@ baseline of 1039 (the 6 skips are pyproj-gated; none from the warning policy).
   all args after `data`/`template` optional; raw `DataFrame` accepted and
   wrapped. Provider-driven `FigureGenerator`; legacy `FigureEngine` untouched.
 - **Registry templates** — `bivariate`, `boxplot_with_points`, `dendrogram`,
-  `site_map`, `particle_overlay`, plus thin adapters re-registering the legacy
-  factory set (`histogram`, `pie`, `radar`, `timeseries`, `isotope`,
-  `npr_nnp`, `anp_agp`, `nagph_nag`, `piper`, `stiff`).
+  `site_map`, `particle_overlay`, plus the legacy key set
+  (`histogram`, `pie`, `radar`, `timeseries`, `isotope`, `npr_nnp`, `anp_agp`,
+  `nagph_nag`, `piper`, `stiff`). Phase 15 used thin adapters; Phase 18.4
+  replaced them with native builders and retained the factories/shims as
+  compatibility surfaces.
 - **Geo support** — `CoordGeo`, geo geoms (site point, boundary, label,
   annotation-inset, image), geometry/image renderer handlers, and the `[geo]`
   extra. Tile basemaps were pulled forward from M2 and shipped with `site_map`
@@ -562,6 +564,24 @@ coverage) is silent. WPs: IO (`18_3_wp1_io_streams`), stat/template wiring
 (`18_3_wp2_stat_template_wiring`), tests/docs/roadmap (`18_3_wp3_tests_docs_roadmap`)
 — `tasks/closed/18_3_*.md`. Full suite: **1501 passed / 8 skipped** (all 8
 skips gated on pyproj/upstream extras; none from the warning policy).
+
+---
+
+## ✅ Phase 18.4 — Legacy template pathway unification
+
+All ten legacy keys are first-class registry templates seeded to native
+`*_builder` functions. The eight factory keys return `TemplateRecipe`s and keep
+their legacy rendering byte-for-byte; `piper` / `stiff` return `SpecRecipe`s
+that build linked/composite specs directly and then share the normal
+renderer/legend/savedir path (`iterators` and `facet` remain unsupported for
+those two keys). No public key, factory, or shim was removed: `FigureTemplate`,
+the scalar/spec-builder functions, and `legacy_adapter` remain compatibility
+surfaces, with `legacy_adapter` deprecated and removed no earlier than 1.0.0.
+WPs: native recipe builders (`18_4_wp1_native_recipe_builders`),
+`piper`/`stiff` registry builders (`18_4_wp2_spec_builder_templates`),
+tests/docs/roadmap (`18_4_wp3_tests_docs_roadmap`). Full suite:
+**1576 passed / 8 skipped** (all 8 skips gated on pyproj/upstream extras; none
+from the warning policy).
 
 ---
 

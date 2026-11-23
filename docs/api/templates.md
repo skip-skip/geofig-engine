@@ -1,25 +1,33 @@
 # API Reference — Templates
 
 Templates bundle a configured set of [`Layer`](core.md#layers--specs)s, a
-default settings dict, and (optionally) a coordinate system + name into one
-reusable `FigureTemplate`. All builders return a fresh `FigureTemplate` and are
-safe to use directly with `render_template` — either by key (the factory set
-below is seeded into the [`TEMPLATES` registry](engine.md#templates-registry)
-under keys like `"bivariate"`, `"histogram"`, `"isotope"`, …) or by passing the
-constructed `FigureTemplate` object itself.
+default settings dict, and (optionally) a coordinate system + name. The
+**native `*_builder` functions are the source of truth**: all ten legacy keys
+are seeded directly into the [`TEMPLATES` registry](engine.md#templates-registry)
+and render through `render_template` without an adapter. `FigureTemplate` and
+the scalar/spec-builder functions below remain supported as **compatibility
+surfaces**; the factories delegate to the same native builders.
 
 ```python
 from geofig_engine.templates import (
     FigureTemplate,
-    bivariate, boxplot_with_points, histogram, timeseries, pie, radar,
-    isotope, npr_nnp, anp_agp, nagph_nag,
-    build_piper_specs, plot_stiff,
+    bivariate, boxplot_with_points,
+    histogram, histogram_builder,
+    timeseries, timeseries_builder,
+    pie, pie_builder, radar, radar_builder,
+    isotope, isotope_builder,
+    npr_nnp, npr_nnp_builder,
+    anp_agp, anp_agp_builder,
+    nagph_nag, nagph_nag_builder,
+    build_piper_specs, piper_builder,
+    plot_stiff, stiff_builder,
 )
 ```
 
 ## Contents
 
-- [FigureTemplate](#figuretemplate)
+- [FigureTemplate (compatibility surface)](#figuretemplate-compatibility-surface)
+- [Native builders](#native-builders)
 - [Generic templates](#generic-templates)
 - [Pie & radar](#pie--radar)
 - [Hydrogeochemical templates](#hydrogeochemical-templates)
@@ -27,7 +35,11 @@ from geofig_engine.templates import (
 
 ---
 
-## FigureTemplate
+## FigureTemplate (compatibility surface)
+
+`FigureTemplate` objects are still accepted directly by `render_template` and
+are adapted via `recipe_from`; prefer the native builders or registry keys for
+new code.
 
 ```python
 @dataclass(frozen=True)
@@ -72,7 +84,46 @@ bound to a string source are remapped).
 
 ---
 
+## Native builders
+
+The eight layer-recipe builders seeded for the legacy factory keys share this
+call shape:
+
+```python
+builder(mapping=None, settings=None, **kwargs) -> TemplateRecipe
+```
+
+`render_template(key, ...)` passes `mapping` and `settings` only. When calling
+a builder directly through `get_template(key)`, the listed template kwargs may
+be passed as `**kwargs` instead of flat `settings` entries. Renderer settings
+(`figsize`, `title`, `grid`, axis/label keys, …) always merge into
+`default_settings`.
+
+| Builder | Effective template parameters | Flat `settings` keys | Default settings |
+| --- | --- | --- | --- |
+| `histogram_builder` | `bins=10`, `density=False`, `cumulative=False`, `scales=None` | `bins`, `density`, `cumulative` | `{"figsize": (10, 6), "xscale": "linear", "yscale": "linear", "grid": True}` |
+| `pie_builder` | `show_percent=False`, `show_count=False`, `show_name=True` | `show_percent`, `show_count`, `show_name` | `{"figsize": (8, 8), "grid": False, "polar_tick_labels": True, ...}` |
+| `radar_builder` | `fill=True`, `fill_alpha=0.7`, `shared_axes=True` | `fill`, `fill_alpha`, `shared_axes` | `{"figsize": (8, 8), "grid": True, "polar_tick_labels": True, ...}` |
+| `timeseries_builder` | `scales=None` | — | `{"figsize": (10, 6), "time_format": "%Y-%m-%d", "grid": True, ...}` |
+| `isotope_builder` | `scales=None`, `functions=None`, `auto_filter=True` | `functions`, `auto_filter` | `{"figsize": (10, 6), "grid": True, ...}` |
+| `npr_nnp_builder` | `npr_crit=3`, `nnp_crit=20`, `scales=None` | `npr_crit`, `nnp_crit` | `{"figsize": (8, 8), "title": "NPR vs NNP — ARD Classification", ...}` |
+| `anp_agp_builder` | `scales=None` | — | `{"figsize": (8, 8), "title": "ANP vs AGP — Classification", ...}` |
+| `nagph_nag_builder` | `scales=None` | — | `{"figsize": (8, 6), "title": "NAG pH vs NAG — Classification", ...}` |
+
+Each builder fills a default `x`/`y` mapping stub so its registry key works
+without a user mapping; a supplied `mapping` overrides those stubs. The eight
+factory functions for these legacy keys call the builders with
+`_legacy_factory=True` and wrap the result in a `FigureTemplate`, preserving
+the original mapping validation (for example, `histogram()` still requires
+`mapping["x"]`).
+
+---
+
 ## Generic templates
+
+The factory functions in this section are compatibility wrappers. Their
+outputs are unchanged; see [Native builders](#native-builders) for the
+registry path.
 
 ### `bivariate(mapping=None, scales=None)`
 
@@ -216,10 +267,42 @@ Violations raise `ValueError`.
 
 ## Spec builders
 
-These two functions do **not** return a `FigureTemplate` — they build
-renderer-ready [`FigureSpec`](core.md#layers--specs) objects directly.
+`piper` and `stiff` are inherently composite linked-axes figures. Their native
+registry builders return a `SpecRecipe`, which `render_template` calls with the
+coerced provider frame; the resulting [`FigureSpec`](core.md#layers--specs)
+objects then follow the normal renderer/legend/savedir path. `iterators` and
+`facet` are not supported for these keys. The scalar/spec-builder functions at
+the end of this section remain direct compatibility entry points.
 
-### `build_piper_specs(data, left_tri=("Ca", "Mg", "Na+K"), right_tri=("HCO3", "SO4", "Cl"), mapping=None, title="Piper Diagram", labels=None, axis_label_policy="parallel", fontsize=None, point_size=None)`
+### `piper_builder(mapping=None, settings=None, **_) -> SpecRecipe`
+
+| Flat `settings` key | Default | Description |
+| --- | --- | --- |
+| `left_tri` | `("Ca", "Mg", "Na+K")` | Cation channels `(apex, bottom-left, bottom-right)`. |
+| `right_tri` | `("HCO3", "SO4", "Cl")` | Anion channels. |
+| `title` | `"Piper Diagram"` | Figure title. |
+| `labels` | `None` | Channel → display-label overrides (charge-bearing mathtext by default). |
+| `axis_label_policy` | `"parallel"` | `"parallel"` or `"upright"` ion/diamond label rotation. |
+| `fontsize` | `None` | Generic font fallback on the parent and three children. |
+| `point_size` | `None` | Constant marker size on the point layers. |
+
+The frame must contain the six ion columns (or the columns named by
+`left_tri` / `right_tri`). `mapping` may add visual channels such as `color`
+or `marker`.
+
+### `stiff_builder(mapping=None, settings=None, **_) -> SpecRecipe`
+
+| Flat `settings` key | Default | Description |
+| --- | --- | --- |
+| `title` | `""` | Figure title. |
+| `figsize` | `(6, 6)` | Figure size. |
+| `fontsize` | `None` | Generic font fallback; omitted by default. |
+
+The frame must be a **one-row** `pd.DataFrame` with columns `ca`, `mg`,
+`na_k`, `cl`, `hco3`, `so4` (values in meq/L). Missing columns or multiple rows
+raise `ValueError`.
+
+### `build_piper_specs(data, left_tri=("Ca", "Mg", "Na+K"), right_tri=("HCO3", "SO4", "Cl"), mapping=None, title="Piper Diagram", labels=None, axis_label_policy="parallel", fontsize=None, point_size=None)` (compatibility)
 
 Builds a Piper diagram using linked axes. Returns a single-element `list` of
 `FigureSpec`: a parent cartesian axis (the diamond, world space) with three
@@ -243,7 +326,7 @@ with two `SecondaryAxis` declarations for the cation/anion percentage scales.
 **Raises:** `ValueError` if `axis_label_policy` is invalid or if any ion column
 is missing from `data`.
 
-### `plot_stiff(ca, mg, na_k, cl, hco3, so4, title="", figsize=(6, 6), fontsize=None)`
+### `plot_stiff(ca, mg, na_k, cl, hco3, so4, title="", figsize=(6, 6), fontsize=None)` (compatibility)
 
 Builds a single stiff-diagram `FigureSpec` from one water analysis.
 

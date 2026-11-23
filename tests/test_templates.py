@@ -2,18 +2,30 @@
 Tests for FigEngine template classes.
 """
 
+import importlib
+
 import pytest
 import pandas as pd
 
 from geofig_engine.templates import (
     FigureTemplate,
+    anp_agp,
+    anp_agp_builder,
     bivariate,
     histogram,
     histogram_builder,
-    timeseries,
     isotope,
+    isotope_builder,
+    nagph_nag,
+    nagph_nag_builder,
+    npr_nnp,
+    npr_nnp_builder,
     pie,
+    pie_builder,
     radar,
+    radar_builder,
+    timeseries,
+    timeseries_builder,
 )
 from geofig_engine.templates.histogram import HISTOGRAM_DEFAULTS
 from geofig_engine.core.geom import GeomPoint, GeomLine, GeomFunctionLine, GeomBar, GeomArea, GeomText
@@ -22,6 +34,18 @@ from geofig_engine.core.coord import CoordPolar
 from geofig_engine.core.stat import StatIdentity, StatSum, StatRadar
 from geofig_engine.core.scale import ScaleContinuous, ScaleOrdinal
 from geofig_engine.core.stat import StatIdentity
+
+
+FACTORY_BUILDER_CASES = [
+    (histogram, histogram_builder),
+    (pie, pie_builder),
+    (radar, radar_builder),
+    (timeseries, timeseries_builder),
+    (isotope, isotope_builder),
+    (npr_nnp, npr_nnp_builder),
+    (anp_agp, anp_agp_builder),
+    (nagph_nag, nagph_nag_builder),
+]
 
 
 class TestFigureTemplate:
@@ -224,21 +248,32 @@ class TestLegacyAdapter:
 
 
 class TestNativeBuilders:
-    def test_histogram_factory_delegates_to_builder(self):
-        recipe = histogram_builder(
-            mapping={"x": "x"},
-            bins=5,
-            density=True,
-            cumulative=True,
-            _legacy_factory=True,
-        )
-        template = histogram(
-            mapping={"x": "x"}, bins=5, density=True, cumulative=True
-        )
+    @pytest.mark.parametrize("factory,builder", FACTORY_BUILDER_CASES)
+    def test_factory_delegates_to_native_builder(self, monkeypatch, factory, builder):
+        mapping = {"x": "x", "y": "y"}
+        module = importlib.import_module(builder.__module__)
+        real_builder = getattr(module, builder.__name__)
+        calls = []
+
+        def recording_builder(**kwargs):
+            calls.append(kwargs)
+            return real_builder(**kwargs)
+
+        monkeypatch.setattr(module, builder.__name__, recording_builder)
+        template = factory(mapping=mapping)
+        expected = real_builder(mapping=mapping, _legacy_factory=True)
+
+        assert len(calls) == 1
+        assert calls[0]["_legacy_factory"] is True
         assert isinstance(template, FigureTemplate)
-        assert template.layers == recipe.layers
-        assert template.default_settings == recipe.default_settings
-        assert template.default_settings == HISTOGRAM_DEFAULTS
+        assert template.name == expected.name
+        assert template.coord == expected.coord
+        assert template.layers == expected.layers
+        assert template.default_settings == expected.default_settings
+
+    def test_histogram_builder_uses_declared_defaults(self):
+        recipe = histogram_builder(mapping={"x": "x"})
+        assert recipe.default_settings == HISTOGRAM_DEFAULTS
 
     def test_factory_keeps_required_mapping_validation(self):
         with pytest.raises(ValueError, match="requires 'x'"):
