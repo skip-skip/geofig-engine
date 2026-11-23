@@ -4,7 +4,8 @@ geofig_engine
 A modular plotting engine for structured, multi-dimensional data visualization.
 
 Phase 15 interop M1 exposes the provider-driven declarative surface from the
-package root: ``render_template`` (returns ``list[Figure]``), the ``TEMPLATES``
+package root: ``build_template_specs`` (returns ``list[FigureSpec]`` without
+rendering), ``render_template`` (returns ``list[Figure]``), the ``TEMPLATES``
 registry (``register_template`` / ``get_template``), the provider protocol
 (``DataProvider`` / ``DataFrameProvider`` / ``DatasetProvider``), and
 ``FigureGenerator`` / ``FigureSpec``.
@@ -20,6 +21,7 @@ warning; it warns at call time.
 # Public API (Phase 15): provider-driven, no upstream imports
 from .engine.api import (
     TEMPLATES,
+    build_template_specs,
     get_template,
     register_template,
     render_template,
@@ -35,6 +37,7 @@ from . import deprecated as _deprecated
 
 __all__ = [
     # Public
+    "build_template_specs",
     "render_template",
     "register_template",
     "get_template",

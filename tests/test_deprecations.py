@@ -43,6 +43,7 @@ DEPRECATED_SHIMS = [
 ]
 
 PUBLIC_NAMES = [
+    "build_template_specs",
     "render_template",
     "register_template",
     "get_template",

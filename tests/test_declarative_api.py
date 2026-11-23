@@ -20,9 +20,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from geofig_engine import build_template_specs as root_build_template_specs
+from geofig_engine.engine import api as api_module
 from geofig_engine.engine.api import (
     TEMPLATES,
     TemplateRecipe,
+    build_template_specs,
     get_template,
     recipe_from,
     register_template,
@@ -433,6 +436,46 @@ class TestFacet:
             facet=FacetWrap(by="group"),
         )
         assert len(figures) == 1
+
+
+class TestBuildTemplateSpecsExport:
+    def test_root_export_matches_api_function(self):
+        assert root_build_template_specs is build_template_specs
+
+    def test_render_template_has_no_duplicated_spec_building_wiring(self):
+        import inspect
+
+        source = inspect.getsource(api_module.render_template)
+        assert "specs = build_template_specs(" in source
+        assert "provider = _wrap_data(" not in source
+        assert "generator = FigureGenerator(" not in source
+
+    def test_render_template_delegates_and_returns_figures_only(self, monkeypatch):
+        import matplotlib.figure
+
+        from geofig_engine.core.spec import FigureSpec
+
+        frame = make_df()
+        template = bivariate(mapping={"x": "x", "y": "y"})
+        specs = build_template_specs(frame, template)
+        captured = {}
+
+        def fake_build(**kwargs):
+            captured.update(kwargs)
+            return specs
+
+        monkeypatch.setattr(api_module, "build_template_specs", fake_build)
+
+        figures = render_template(
+            data=frame, template=template, settings={"title": "T"}
+        )
+
+        assert captured["data"] is frame
+        assert captured["template"] is template
+        assert captured["settings"] == {"title": "T"}
+        assert len(figures) == len(specs)
+        assert all(isinstance(fig, matplotlib.figure.Figure) for fig in figures)
+        assert not any(isinstance(fig, FigureSpec) for fig in figures)
 
 
 class TestNoUpstreamImports:

@@ -17,7 +17,13 @@ matplotlib.use("Agg")
 import pytest
 import pandas as pd
 
-from geofig_engine import TEMPLATES, get_template, render_template
+from geofig_engine import (
+    TEMPLATES,
+    build_template_specs,
+    get_template,
+    render_template,
+)
+from geofig_engine.core.spec import FigureSpec
 from geofig_engine.engine.api import SpecRecipe, recipe_from
 from geofig_engine.templates import (
     anp_agp,
@@ -227,6 +233,25 @@ class TestLegacyRegistryKeys:
         assert get_template(key) is ALL_SEEDED_BUILDERS[key]
         figures = render_template(data=data_factory(), template=key, mapping=mapping)
         assert len(figures) == 1
+
+    @pytest.mark.parametrize("key,data_factory,mapping", ALL_RENDER_CASES)
+    def test_seeded_key_builds_specs_without_rendering(
+        self, key, data_factory, mapping, monkeypatch
+    ):
+        import geofig_engine.renderers as renderers
+
+        monkeypatch.setattr(
+            renderers,
+            "MatplotlibRenderer",
+            lambda *args, **kwargs: pytest.fail("renderer must not be instantiated"),
+        )
+
+        specs = build_template_specs(
+            data=data_factory(), template=key, mapping=mapping
+        )
+
+        assert specs
+        assert all(isinstance(spec, FigureSpec) for spec in specs)
 
     @pytest.mark.parametrize("key,builder", NATIVE_BUILDERS.items())
     def test_factory_keys_seed_native_builders(self, key, builder):

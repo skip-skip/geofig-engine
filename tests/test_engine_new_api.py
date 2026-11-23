@@ -4,6 +4,7 @@ Tests for the new Grammer of Graphics API path in FigureEngine.
 
 import sys
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -13,10 +14,13 @@ from geofig_engine.core.dimension import Dimension
 from geofig_engine.core.dimension_selector import DimensionSelector
 from geofig_engine.core.facet import FacetNull, FacetWrap
 from geofig_engine.core.geom import GeomPoint, GeomLine, GeomFunctionLine
+from geofig_engine.core.iterator import DimensionIterator
 from geofig_engine.core.layer import Layer, LayerSpec
 from geofig_engine.core.scale import ScaleContinuous, ScaleOrdinal, ScaleConstant
+from geofig_engine.core.spec import FigureSpec
 from geofig_engine.core.stat import StatIdentity, StatFn
 from geofig_engine.engine import FigureEngine
+from geofig_engine.engine.api import TemplateRecipe, build_template_specs
 from geofig_engine.engine.generator import FigureGenerator
 from geofig_engine.provider import DataFrameProvider
 from geofig_engine.templates import bivariate, timeseries, isotope
@@ -473,3 +477,180 @@ class TestGeneratorNoUpstreamImports:
         assert "from geodata" not in source
         assert "import geochemmodel" not in source
         assert "from geochemmodel" not in source
+
+
+# ---------------------------------------------------------------------------
+# Phase 19: build_template_specs (spec-only template entry)
+# ---------------------------------------------------------------------------
+
+
+class TestBuildTemplateSpecs:
+    @staticmethod
+    def _assert_matches_generator(specs, expected):
+        assert len(specs) == len(expected)
+        for spec, generated in zip(specs, expected):
+            assert isinstance(spec, FigureSpec)
+            assert spec.context == generated.context
+            assert spec.iterator_key == generated.iterator_key
+            assert spec.template_name == generated.template_name
+            assert list(spec.data.columns) == list(generated.data.columns)
+            assert len(spec.layers) == len(generated.layers)
+            assert spec.settings == generated.settings
+            assert spec.coord.name == generated.coord.name
+            assert spec.facet.name == generated.facet.name
+            for channel in ("x", "y"):
+                if channel in spec.layers[0].visual_mapping:
+                    assert list(spec.layers[0].visual_mapping[channel]) == list(
+                        generated.layers[0].visual_mapping[channel]
+                    )
+
+    def test_dataframe_input_matches_generator(self):
+        frame = make_dataset().dataframe
+        template = bivariate(mapping={"x": "x", "y": "y"})
+
+        specs = build_template_specs(frame, template)
+        expected = FigureGenerator(
+            provider=DataFrameProvider(frame),
+            layers=template.layers,
+            coord=template.coord,
+            facet=FacetNull(),
+            settings=template.default_settings,
+        ).build_specs()
+
+        self._assert_matches_generator(specs, expected)
+
+    def test_provider_input_is_passed_through(self):
+        frame = make_dataset().dataframe
+
+        class RecordingProvider(DataFrameProvider):
+            def __init__(self, data):
+                super().__init__(data)
+                self.expand_calls = 0
+
+            def expand(self, iterators=None):
+                self.expand_calls += 1
+                return super().expand(iterators)
+
+        provider = RecordingProvider(frame)
+        template = bivariate(mapping={"x": "x", "y": "y"})
+
+        specs = build_template_specs(provider, template)
+        assert provider.expand_calls == 1
+
+        expected = FigureGenerator(
+            provider=provider,
+            layers=template.layers,
+            coord=template.coord,
+            settings=template.default_settings,
+        ).build_specs()
+
+        assert specs[0].data.equals(frame)
+        self._assert_matches_generator(specs, expected)
+
+    def test_ndarray_input_uses_positional_columns(self):
+        array = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+
+        specs = build_template_specs(
+            array, bivariate(mapping={"x": "0", "y": "1"})
+        )
+
+        assert len(specs) == 1
+        assert list(specs[0].data.columns) == ["0", "1"]
+        assert list(specs[0].layers[0].visual_mapping["x"]) == [1.0, 3.0, 5.0]
+        assert list(specs[0].layers[0].visual_mapping["y"]) == [2.0, 4.0, 6.0]
+
+    def test_registry_key_builds_specs_without_renderer(self, monkeypatch):
+        import geofig_engine.renderers as renderers
+
+        monkeypatch.setattr(
+            renderers,
+            "MatplotlibRenderer",
+            lambda *args, **kwargs: pytest.fail("renderer must not be instantiated"),
+        )
+
+        specs = build_template_specs(make_dataset().dataframe, "bivariate")
+
+        assert len(specs) == 1
+        assert isinstance(specs[0], FigureSpec)
+
+    def test_direct_recipe_template_builds_specs(self):
+        frame = make_dataset().dataframe
+        recipe = TemplateRecipe(
+            name="direct",
+            layers=[Layer(geom=GeomPoint(), mapping={"x": "x", "y": "y"})],
+            default_settings={"title": "from recipe"},
+        )
+
+        specs = build_template_specs(
+            frame, recipe, settings={"figsize": (8, 4)}
+        )
+
+        assert len(specs) == 1
+        assert specs[0].settings["title"] == "from recipe"
+        assert specs[0].settings["figsize"] == (8, 4)
+
+    def test_mapping_settings_and_coord_overrides(self):
+        frame = make_dataset().dataframe
+        template = bivariate(mapping={"x": "x", "y": "y"})
+
+        specs = build_template_specs(
+            frame,
+            template,
+            mapping={"x": "y", "y": "x"},
+            settings={"title": "overridden"},
+            coord=CoordPolar(),
+        )
+
+        assert len(specs) == 1
+        assert list(specs[0].layers[0].visual_mapping["x"]) == frame["y"].tolist()
+        assert specs[0].settings["title"] == "overridden"
+        assert specs[0].coord.name == "polar"
+
+    def test_iterators_match_generator_order_and_context(self):
+        frame = make_dataset().dataframe
+        template = bivariate(mapping={"x": "x", "y": "y"})
+        iterator = DimensionIterator(
+            channel="group",
+            dimensions=["group"],
+            mode=DimensionIterator.Mode.VALUE,
+        )
+
+        specs = build_template_specs(frame, template, iterators=[iterator])
+        expected = FigureGenerator(
+            provider=DataFrameProvider(frame),
+            layers=template.layers,
+            coord=template.coord,
+            settings=template.default_settings,
+            iterators=[iterator],
+        ).build_specs()
+
+        assert [spec.context["group"] for spec in specs] == ["A", "B"]
+        self._assert_matches_generator(specs, expected)
+
+    def test_facet_is_stamped_on_spec_without_splitting(self):
+        frame = make_dataset().dataframe
+        template = bivariate(mapping={"x": "x", "y": "y"})
+        facet = FacetWrap(by="group")
+
+        specs = build_template_specs(frame, template, facet=facet)
+        expected = FigureGenerator(
+            provider=DataFrameProvider(frame),
+            layers=template.layers,
+            coord=template.coord,
+            facet=facet,
+            settings=template.default_settings,
+        ).build_specs()
+
+        assert len(specs) == 1
+        assert specs[0].facet.name == "wrap"
+        self._assert_matches_generator(specs, expected)
+
+    @pytest.mark.parametrize("key", ["piper", "stiff"])
+    def test_spec_recipe_restrictions_and_messages_unchanged(self, key):
+        frame = make_dataset().dataframe
+        iterator = DimensionIterator(channel="group", dimensions=["group"])
+
+        with pytest.raises(ValueError, match=r"Unsupported combination.*v0\.4\.0"):
+            build_template_specs(frame, key, iterators=[iterator])
+        with pytest.raises(ValueError, match=r"Unsupported combination.*v0\.4\.0"):
+            build_template_specs(frame, key, facet=FacetWrap(by="group"))

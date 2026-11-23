@@ -9,14 +9,15 @@ templates. Native builders own the legacy factory set; the ``FigureTemplate``
 factories remain compatibility wrappers and are still adapted via
 ``recipe_from`` when passed directly.
 
-``render_template`` is the **one canonical entry point**: it coerces raw
-``pandas.DataFrame``/ndarray input into a ``DataProvider``, resolves the
-template key or object to a recipe, merges ``mapping``/``coord``/``settings``
-overrides on top of the recipe defaults, and hands layer recipes to a
-``FigureGenerator`` (``15_wp3``) or spec recipes directly to the renderer
-(``18.4``). It returns ``list[Figure]`` — the old ``(specs, figures,
-legend_fig)`` tuple form lives in the legacy path (``render_template_legacy``,
-``15_wp5``).
+``build_template_specs`` exposes the spec-construction half of that pipeline
+without instantiating a renderer. ``render_template`` is the **one canonical
+rendering entry point**: it coerces raw ``pandas.DataFrame``/ndarray input into
+a ``DataProvider``, resolves the template key or object to a recipe, merges
+``mapping``/``coord``/``settings`` overrides on top of the recipe defaults, and
+hands layer recipes to a ``FigureGenerator`` (``15_wp3``) or spec recipes
+directly to the renderer (``18.4``). It returns ``list[Figure]`` — the old
+``(specs, figures, legend_fig)`` tuple form lives in the legacy path
+(``render_template_legacy``, ``15_wp5``).
 
 This module never imports ``geodata`` or ``geochemmodel``.
 """
@@ -265,18 +266,16 @@ def _mapping_consumed(recipe: Any) -> bool:
     return bool(getattr(recipe, "mapping_consumed", False))
 
 
-def render_template(
-    data: pd.DataFrame | DataProvider,
+def build_template_specs(
+    data: pd.DataFrame | DataProvider | np.ndarray,
     template: str | FigureTemplate,
     mapping: dict[str, Any] | None = None,
     settings: dict[str, Any] | None = None,
     iterators: list[DimensionIterator] | None = None,
     facet: Facet | None = None,
     coord: Coord | None = None,
-    savedir: str | Path | None = None,
-    renderer_name: str = "matplotlib",
-) -> list[Any]:
-    """Render a template to a list of figures (canonical Phase 15 entry).
+) -> list[FigureSpec]:
+    """Build the resolved ``FigureSpec`` list for a template without rendering.
 
     Args:
         data: ``DataProvider`` (passed through), ``pd.DataFrame`` (wrapped in
@@ -291,28 +290,19 @@ def render_template(
             passed to key builders as flat template-specific knobs).
         iterators: Optional dimension iterators for multi-figure expansion.
             Not supported by ``SpecRecipe`` templates (``piper`` / ``stiff``).
-        facet: Optional facet spec; splits the data into panels within a
-            single figure (renderer-side). One figure per iterator
-            combination, each containing the full facet panel grid. Not
-            supported by ``SpecRecipe`` templates.
+        facet: Optional facet spec; stamped on each spec for renderer-side
+            panel expansion. Not supported by ``SpecRecipe`` templates.
         coord: Overrides the recipe coord when given.
-        savedir: If provided, each figure is persisted as a PNG using the
-            legacy naming convention (zero-padded index + iterator key parts),
-            plus a ``legend.png``.
-        renderer_name: Backend name; only ``"matplotlib"`` is supported.
 
     Returns:
-        ``list[Figure]`` — the rendered backend figures. ``specs`` and the
-        legend figure are **not** returned here; they live in the legacy path
-        (``render_template_legacy``, ``15_wp5``).
+        ``list[FigureSpec]`` — one validated spec per iterator combination.
 
     Raises:
         KeyError: Unknown template key (message lists the available keys).
         TypeError: Unsupported ``data`` or ``template`` type.
-        ValueError: Unsupported ``renderer_name``, unsupported ``iterators`` /
-            ``facet`` with a ``SpecRecipe``, or missing required channels at
-            spec-build time (informative message, not a traceback into
-            generator internals).
+        ValueError: Unsupported ``iterators`` / ``facet`` with a ``SpecRecipe``,
+            or missing required channels at spec-build time (informative
+            message, not a traceback into generator internals).
     """
     # 1. Coerce data → provider
     provider = _wrap_data(data)
@@ -359,7 +349,77 @@ def render_template(
             iterators=iterators,
         )
 
-    # 5. Renderer gating
+    # 5. Build specs — missing required channels raise the informative
+    #    spec-build error here (lazy default resolution, no eager validation)
+    if generator is not None:
+        specs = generator.build_specs()
+    return specs
+
+
+def render_template(
+    data: pd.DataFrame | DataProvider,
+    template: str | FigureTemplate,
+    mapping: dict[str, Any] | None = None,
+    settings: dict[str, Any] | None = None,
+    iterators: list[DimensionIterator] | None = None,
+    facet: Facet | None = None,
+    coord: Coord | None = None,
+    savedir: str | Path | None = None,
+    renderer_name: str = "matplotlib",
+) -> list[Any]:
+    """Render a template to a list of figures (canonical Phase 15 entry).
+
+    Spec construction is delegated to :func:`build_template_specs`; this entry
+    point adds renderer gating, rendering, the legend figure, and optional PNG
+    persistence.
+
+    Args:
+        data: ``DataProvider`` (passed through), ``pd.DataFrame`` (wrapped in
+            ``DataFrameProvider``), or an ndarray (wrapped in a frame with
+            positional columns — e.g. dendrogram linkage matrices).
+        template: Registry key (``str``) resolved via ``get_template`` and
+            called with ``mapping``/``settings``, or a ``FigureTemplate`` /
+            duck-typed recipe adapted via ``recipe_from``.
+        mapping: Per-layer mapping override, merged over the recipe layers for
+            templates that do not consume it themselves.
+        settings: User settings merged on top of the recipe defaults (and
+            passed to key builders as flat template-specific knobs).
+        iterators: Optional dimension iterators for multi-figure expansion.
+            Not supported by ``SpecRecipe`` templates (``piper`` / ``stiff``).
+        facet: Optional facet spec; splits the data into panels within a
+            single figure (renderer-side). One figure per iterator
+            combination, each containing the full facet panel grid. Not
+            supported by ``SpecRecipe`` templates.
+        coord: Overrides the recipe coord when given.
+        savedir: If provided, each figure is persisted as a PNG using the
+            legacy naming convention (zero-padded index + iterator key parts),
+            plus a ``legend.png``.
+        renderer_name: Backend name; only ``"matplotlib"`` is supported.
+
+    Returns:
+        ``list[Figure]`` — the rendered backend figures. ``specs`` and the
+        legend figure are **not** returned here; they live in the legacy path
+        (``render_template_legacy``, ``15_wp5``).
+
+    Raises:
+        KeyError: Unknown template key (message lists the available keys).
+        TypeError: Unsupported ``data`` or ``template`` type.
+        ValueError: Unsupported ``renderer_name``, unsupported ``iterators`` /
+            ``facet`` with a ``SpecRecipe``, or missing required channels at
+            spec-build time (informative message, not a traceback into
+            generator internals).
+    """
+    specs = build_template_specs(
+        data=data,
+        template=template,
+        mapping=mapping,
+        settings=settings,
+        iterators=iterators,
+        facet=facet,
+        coord=coord,
+    )
+
+    # Renderer gating
     from geofig_engine.renderers import MatplotlibRenderer
 
     if renderer_name != "matplotlib":
@@ -368,19 +428,16 @@ def render_template(
         )
     renderer = MatplotlibRenderer()
 
-    # 6. Build + render — missing required channels raise the informative
-    #    spec-build error here (lazy default resolution, no eager validation)
-    if generator is not None:
-        specs = generator.build_specs()
+    # Render
     figures = list(renderer.render_all(specs))
 
-    # 7. Legend figure (replicates the legacy entry path)
+    # Legend figure (replicates the legacy entry path)
     accumulator = LegendAccumulator()
     for spec in specs:
         accumulator.add_from_spec(spec)
     legend_fig = renderer.render_legend(accumulator)
 
-    # 8. Optional persistence — legacy naming + legend.png
+    # Optional persistence — legacy naming + legend.png
     if savedir is not None:
         save_dir = Path(savedir)
         save_dir.mkdir(parents=True, exist_ok=True)
