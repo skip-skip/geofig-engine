@@ -11,9 +11,11 @@ from collections import Counter
 import matplotlib
 matplotlib.use("Agg")
 
+from geofig_engine import get_template, render_template
 from geofig_engine.core.coord import CoordCartesian, TernaryCoord
 from geofig_engine.core.geom import GeomPoint
-from geofig_engine.templates import build_piper_specs
+from geofig_engine.engine.api import SpecRecipe
+from geofig_engine.templates import build_piper_specs, piper_builder
 from geofig_engine.serialize import coord_to_dict, coord_from_dict
 
 
@@ -514,3 +516,43 @@ class TestPiperParity:
         y = dia.layers[0].visual_mapping["y"].to_numpy()
         np.testing.assert_allclose(x, 0.0, atol=1e-12)
         np.testing.assert_allclose(y, 0.0, atol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# Registry spec recipe (18.4 wp2)
+# ---------------------------------------------------------------------------
+
+
+class TestPiperRegistryRecipe:
+    def test_builder_returns_spec_recipe(self):
+        recipe = piper_builder()
+        assert isinstance(recipe, SpecRecipe)
+        assert recipe.name == "piper"
+
+    def test_build_specs_matches_build_piper_specs(self):
+        recipe = piper_builder()
+        specs = recipe.build_specs(_DATA, None, recipe.default_settings, None)
+        expected = build_piper_specs(_DATA)
+
+        assert len(specs) == len(expected) == 1
+        assert specs[0].settings == expected[0].settings
+        assert len(specs[0].children) == len(expected[0].children) == 3
+        for child, want in zip(specs[0].children, expected[0].children):
+            assert child.coord == want.coord
+            assert child.transform.ops == want.transform.ops
+
+    def test_settings_override_title_and_point_size(self):
+        recipe = get_template("piper")(
+            settings={"title": "Registry Piper", "point_size": 11}
+        )
+        specs = recipe.build_specs(_DATA, None, recipe.default_settings, None)
+        assert specs[0].settings["title"] == "Registry Piper"
+        for child in specs[0].children:
+            assert child.layers[0].visual_mapping["size"] == 11
+
+    def test_render_template_honors_settings(self):
+        figures = render_template(
+            data=_DATA, template="piper", settings={"title": "Registry Piper"}
+        )
+        assert len(figures) == 1
+        assert figures[0]._suptitle.get_text() == "Registry Piper"

@@ -13,13 +13,16 @@ import matplotlib
 matplotlib.use("Agg")
 from matplotlib.patches import Polygon as MplPolygon
 
+from geofig_engine import render_template
 from geofig_engine.core.axis import parse_axis_settings
 from geofig_engine.core.coord import CoordCartesian
 from geofig_engine.core.geom import GeomLine, GeomPolygon
 from geofig_engine.core.spec import FigureSpec
+from geofig_engine.engine.api import SpecRecipe
+from geofig_engine.renderers import MatplotlibRenderer
 from geofig_engine.renderers.matplotlib.renderer import _nice_tick_max
 from geofig_engine.serialize import spec_from_json, spec_to_json
-from geofig_engine.templates import plot_stiff
+from geofig_engine.templates import plot_stiff, stiff_builder
 
 CATIONS = {0: "Mg\u00b2\u207a", 1: "Ca\u00b2\u207a", 2: "Na\u207a+K\u207a"}
 ANIONS = {0: "SO\u2084\u00b2\u207b", 1: "HCO\u2083\u207b", 2: "Cl\u207b"}
@@ -276,3 +279,77 @@ class TestStiffRenderSmoke:
         y0, y1 = ax.get_ylim()
         assert y1 - y0 < 8  # aspect-equal would expand this to ~50+
         assert ax.get_aspect() != 1
+
+
+# ---------------------------------------------------------------------------
+# Registry spec recipe (18.4 wp2)
+# ---------------------------------------------------------------------------
+
+
+class TestStiffRegistryRecipe:
+    _SAMPLE = dict(ca=50, mg=20, na_k=30, cl=40, hco3=10, so4=30)
+
+    @staticmethod
+    def _frame(**overrides):
+        values = {**TestStiffRegistryRecipe._SAMPLE, **overrides}
+        return pd.DataFrame({key: [value] for key, value in values.items()})
+
+    def test_builder_returns_spec_recipe(self):
+        recipe = stiff_builder()
+        assert isinstance(recipe, SpecRecipe)
+        assert recipe.name == "stiff"
+
+    def test_build_specs_matches_plot_stiff(self):
+        recipe = stiff_builder()
+        specs = recipe.build_specs(self._frame(), None, recipe.default_settings, None)
+        assert len(specs) == 1
+
+        spec = specs[0]
+        expected = plot_stiff(**self._SAMPLE)
+        pd.testing.assert_frame_equal(spec.data, expected.data)
+        assert spec.settings == expected.settings
+        assert [layer.geom.name for layer in spec.layers] == [
+            layer.geom.name for layer in expected.layers
+        ]
+
+    def test_render_template_matches_plot_stiff_png(self):
+        from io import BytesIO
+
+        canonical = render_template(data=self._frame(), template="stiff")[0]
+        legacy = MatplotlibRenderer().render(plot_stiff(**self._SAMPLE))
+
+        payloads = []
+        for fig in (canonical, legacy):
+            buffer = BytesIO()
+            fig.savefig(buffer, format="png")
+            payloads.append(buffer.getvalue())
+        assert payloads[0] == payloads[1]
+
+    def test_settings_override_reaches_render(self):
+        recipe = stiff_builder(
+            settings={"title": "Registry Stiff", "figsize": (7, 5), "fontsize": 12}
+        )
+        spec = recipe.build_specs(self._frame(), None, recipe.default_settings, None)[0]
+        assert spec.settings["title"] == "Registry Stiff"
+        assert spec.settings["figsize"] == (7, 5)
+        assert spec.settings["fontsize"] == 12
+
+        figure = render_template(
+            data=self._frame(),
+            template="stiff",
+            settings={"title": "Registry Stiff", "figsize": (7, 5)},
+        )[0]
+        assert figure._suptitle.get_text() == "Registry Stiff"
+        assert figure.get_size_inches().tolist() == [7.0, 5.0]
+
+    def test_missing_ion_column_raises(self):
+        frame = self._frame().drop(columns=["ca"])
+        recipe = stiff_builder()
+        with pytest.raises(ValueError, match="requires ion columns"):
+            recipe.build_specs(frame, None, recipe.default_settings, None)
+
+    def test_multiple_rows_raise(self):
+        frame = pd.concat([self._frame(), self._frame()], ignore_index=True)
+        recipe = stiff_builder()
+        with pytest.raises(ValueError, match="exactly one row"):
+            recipe.build_specs(frame, None, recipe.default_settings, None)

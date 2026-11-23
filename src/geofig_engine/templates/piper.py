@@ -12,17 +12,21 @@ Inputs must arrive as meq/L — no unit conversion in FigEngine.
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
 
-from geofig_engine.core.coord import CoordCartesian, TernaryCoord
+from geofig_engine.core.coord import Coord, CoordCartesian, TernaryCoord
 from geofig_engine.core.geom import GeomPoint
 from geofig_engine.core.layer import LayerSpec
 from geofig_engine.core.link import LinkTransform
 from geofig_engine.core.spec import FigureSpec, build_spec
 from geofig_engine.core.stat import StatIdentity
 from geofig_engine.utils.typing import SourceType
+
+if TYPE_CHECKING:
+    from geofig_engine.engine.api import SpecRecipe
 
 _SQRT3_2 = math.sqrt(3) / 2.0
 _SQRT2 = math.sqrt(2)
@@ -45,6 +49,59 @@ def _resolve_ion_label(channel: str, overrides: dict[str, str] | None) -> str:
     if overrides and channel in overrides:
         return overrides[channel]
     return _PIPER_ION_LABELS.get(channel, channel)
+
+
+PIPER_DEFAULTS: dict[str, Any] = {
+    "left_tri": ("Ca", "Mg", "Na+K"),
+    "right_tri": ("HCO3", "SO4", "Cl"),
+    "title": "Piper Diagram",
+    "labels": None,
+    "axis_label_policy": "parallel",
+    "fontsize": None,
+    "point_size": None,
+}
+
+
+def piper_builder(
+    mapping: dict[str, SourceType] | None = None,
+    settings: dict[str, Any] | None = None,
+    **_: Any,
+) -> "SpecRecipe":
+    """Native registry builder for ``piper`` (18.4 wp2).
+
+    The linked-axes math stays in :func:`build_piper_specs`; this builder only
+    resolves registry settings/mapping into the returned :class:`SpecRecipe`.
+    """
+    from geofig_engine.engine.api import SpecRecipe
+
+    default_settings = {**PIPER_DEFAULTS, **(settings or {})}
+    builder_mapping = dict(mapping or {})
+
+    def build_specs(
+        frame: pd.DataFrame,
+        runtime_mapping: dict[str, SourceType] | None = None,
+        runtime_settings: dict[str, Any] | None = None,
+        coord: Coord | None = None,
+    ) -> list[FigureSpec]:
+        options = {**default_settings, **(runtime_settings or {})}
+        effective_mapping = {**builder_mapping, **(runtime_mapping or {})}
+        return build_piper_specs(
+            frame,
+            left_tri=options["left_tri"],
+            right_tri=options["right_tri"],
+            mapping=effective_mapping or None,
+            title=options["title"],
+            labels=options["labels"],
+            axis_label_policy=options["axis_label_policy"],
+            fontsize=options["fontsize"],
+            point_size=options["point_size"],
+        )
+
+    return SpecRecipe(
+        name="piper",
+        default_settings=default_settings,
+        build_specs=build_specs,
+    )
 
 
 def build_piper_specs(

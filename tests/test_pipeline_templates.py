@@ -1,10 +1,9 @@
 """
-Phase 15 wp6 / 18.4 wp1: registry-templated rendering through ``render_template``.
+Phase 15 wp6 / 18.4 wp1-wp2: registry-templated rendering through ``render_template``.
 
 Covers the pipeline builders plus the ten legacy keys. The eight
-``FigureTemplate`` factories now resolve to native ``*_builder`` functions;
-``piper``/``stiff`` keep resolvable placeholders until 18.4 wp2 replaces them
-with first-class spec recipes.
+``FigureTemplate`` factories resolve to native ``*_builder`` functions;
+``piper``/``stiff`` resolve to first-class ``SpecRecipe`` builders.
 """
 
 import hashlib
@@ -19,6 +18,7 @@ import pytest
 import pandas as pd
 
 from geofig_engine import TEMPLATES, get_template, render_template
+from geofig_engine.engine.api import SpecRecipe, recipe_from
 from geofig_engine.templates import (
     anp_agp_builder,
     histogram_builder,
@@ -26,7 +26,9 @@ from geofig_engine.templates import (
     nagph_nag_builder,
     npr_nnp_builder,
     pie_builder,
+    piper_builder,
     radar_builder,
+    stiff_builder,
     timeseries_builder,
 )
 
@@ -47,6 +49,33 @@ def make_df():
     )
 
 
+def make_piper_df():
+    return pd.DataFrame(
+        {
+            "Ca": [1.0, 2.0],
+            "Mg": [0.5, 1.0],
+            "Na+K": [0.3, 0.5],
+            "HCO3": [2.0, 3.0],
+            "SO4": [0.2, 0.4],
+            "Cl": [0.1, 0.2],
+            "group": ["A", "B"],
+        }
+    )
+
+
+def make_stiff_df():
+    return pd.DataFrame(
+        {
+            "ca": [50.0],
+            "mg": [20.0],
+            "na_k": [30.0],
+            "cl": [40.0],
+            "hco3": [10.0],
+            "so4": [30.0],
+        }
+    )
+
+
 def scatter_offsets(fig):
     """The x/y scatter offsets of a rendered bivariate figure."""
     return fig.axes[0].collections[0].get_offsets()
@@ -63,7 +92,7 @@ LEGACY_RENDER_CASES = [
     ("nagph_nag", {"x": "x", "y": "y"}),
 ]
 
-SPEC_BUILDER_KEYS = ["piper", "stiff"]
+SPEC_RECIPE_KEYS = ["piper", "stiff"]
 
 NATIVE_BUILDERS = {
     "histogram": histogram_builder,
@@ -74,6 +103,11 @@ NATIVE_BUILDERS = {
     "npr_nnp": npr_nnp_builder,
     "anp_agp": anp_agp_builder,
     "nagph_nag": nagph_nag_builder,
+}
+
+SPEC_RECIPE_BUILDERS = {
+    "piper": piper_builder,
+    "stiff": stiff_builder,
 }
 
 
@@ -169,7 +203,23 @@ class TestLegacyRegistryKeys:
 
         from geofig_engine.engine import api
 
-        assert "legacy_adapter" not in inspect.getsource(api)
+        source = inspect.getsource(api)
+        assert "legacy_adapter" not in source
+        assert "not registry-adaptable" not in source
+
+    @pytest.mark.parametrize("key,builder", SPEC_RECIPE_BUILDERS.items())
+    def test_spec_recipe_keys_seed_native_builders(self, key, builder):
+        assert get_template(key) is builder
+
+    @pytest.mark.parametrize("key", SPEC_RECIPE_KEYS)
+    def test_spec_recipe_key_returns_spec_recipe(self, key):
+        recipe = get_template(key)()
+        assert isinstance(recipe, SpecRecipe)
+        assert recipe_from(recipe) is recipe
+
+    def test_recipe_from_error_mentions_spec_recipe(self):
+        with pytest.raises(TypeError, match="SpecRecipe"):
+            recipe_from(object())
 
     @pytest.mark.parametrize("key,mapping", LEGACY_RENDER_CASES)
     def test_legacy_factory_renders_via_pipeline(self, key, mapping):
@@ -205,10 +255,58 @@ class TestLegacyRegistryKeys:
         assert min(centers) > 5.0
         assert max(centers) < 45.0
 
-    @pytest.mark.parametrize("key", SPEC_BUILDER_KEYS)
-    def test_spec_builder_keys_raise_with_guidance(self, key):
-        with pytest.raises(TypeError, match="not registry-adaptable"):
-            render_template(data=make_df(), template=key)
+    def test_piper_key_renders_linked_spec(self):
+        recipe = get_template("piper")()
+        specs = recipe.build_specs(
+            make_piper_df(), None, recipe.default_settings, None
+        )
+        assert len(specs) == 1
+        assert len(specs[0].children) == 3
+
+        figures = render_template(data=make_piper_df(), template="piper")
+        assert len(figures) == 1
+        assert len(figures[0].axes) == 1
+
+    def test_stiff_key_renders_one_figure(self):
+        figures = render_template(data=make_stiff_df(), template="stiff")
+        assert len(figures) == 1
+        assert len(figures[0].axes) == 1
+
+    def test_spec_recipe_uses_savedir_persistence(self, tmp_path):
+        render_template(data=make_stiff_df(), template="stiff", savedir=tmp_path)
+        assert (tmp_path / "001.png").is_file()
+        assert (tmp_path / "legend.png").is_file()
+
+    def test_piper_settings_override_reaches_render(self):
+        figures = render_template(
+            data=make_piper_df(), template="piper", settings={"title": "Piper T"}
+        )
+        assert figures[0]._suptitle.get_text() == "Piper T"
+
+    def test_stiff_settings_override_reaches_render(self):
+        figures = render_template(
+            data=make_stiff_df(),
+            template="stiff",
+            settings={"title": "Stiff T", "figsize": (7, 5)},
+        )
+        assert figures[0]._suptitle.get_text() == "Stiff T"
+        assert figures[0].get_size_inches().tolist() == [7.0, 5.0]
+
+    @pytest.mark.parametrize("key", SPEC_RECIPE_KEYS)
+    def test_spec_recipes_reject_iterators(self, key):
+        from geofig_engine.core.iterator import DimensionIterator
+
+        iterator = DimensionIterator(channel="group", dimensions=["group"])
+        with pytest.raises(ValueError, match="Unsupported combination"):
+            render_template(data=make_df(), template=key, iterators=[iterator])
+
+    @pytest.mark.parametrize("key", SPEC_RECIPE_KEYS)
+    def test_spec_recipes_reject_facets(self, key):
+        from geofig_engine.core.facet import Facet
+
+        facet = Facet(name="group", by=("group",))
+        with pytest.raises(ValueError, match="Unsupported combination"):
+            render_template(data=make_df(), template=key, facet=facet)
 
 
 class TestLegacyVisualParity:
@@ -250,9 +348,8 @@ class TestLegacyVisualParity:
         assert self._png_hashes(canonical_dir) == self._png_hashes(legacy_dir)
 
     def test_stiff_specs_render_deterministically(self, tmp_path):
-        # stiff/piper are spec builders the recipe pipeline cannot express;
-        # their spec-based output is untouched by this ticket, so parity holds
-        # by construction. Pin determinism so renderer changes are caught.
+        # The registry recipe reuses this same spec path; pin determinism so
+        # renderer changes are caught.
         from io import BytesIO
 
         from geofig_engine.renderers import MatplotlibRenderer

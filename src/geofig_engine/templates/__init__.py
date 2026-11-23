@@ -13,9 +13,9 @@ from .isotope import isotope, isotope_builder
 from .nagph_nag import nagph_nag, nagph_nag_builder
 from .npr_nnp import npr_nnp, npr_nnp_builder
 from .pie import pie, pie_builder
-from .piper import build_piper_specs
+from .piper import build_piper_specs, piper_builder
 from .radar import radar, radar_builder
-from .stiff import plot_stiff
+from .stiff import plot_stiff, stiff_builder
 from .timeseries import timeseries, timeseries_builder
 
 __all__ = [
@@ -39,5 +39,7 @@ __all__ = [
     "nagph_nag",
     "nagph_nag_builder",
     "build_piper_specs",
+    "piper_builder",
     "plot_stiff",
+    "stiff_builder",
 ]
