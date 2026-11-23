@@ -9,8 +9,10 @@ rendering), ``render_template`` (returns ``list[Figure]``), the ``TEMPLATES``
 registry (``register_template`` / ``get_template``), the provider protocol
 (``DataProvider`` / ``DataFrameProvider`` / ``DatasetProvider``), and
 ``FigureGenerator`` / ``FigureSpec``. The dashboard snapshot helpers
-(``specs_to_dashboard_dict`` / ``specs_to_dashboard_json``) are also importable
-from the root for browser-safe display payloads.
+(``specs_to_dashboard_dict`` / ``specs_to_dashboard_json``) and patch helpers
+(``diff_dashboard_payload`` / ``apply_dashboard_patch`` /
+``validate_dashboard_patch``) are also importable from the root for
+browser-safe display payloads.
 
 Legacy names (``Dataset``, ``Dimension``, ``DimensionSelector``,
 ``ColumnSelector``, ``IteratorEngine``, ``FigureEngine``) resolve lazily
@@ -34,6 +36,11 @@ from .provider import DataProvider, DataFrameProvider, DatasetProvider
 from .core.spec import FigureSpec
 from .renderers import MatplotlibRenderer
 from .serialize.dashboard import specs_to_dashboard_dict, specs_to_dashboard_json
+from .serialize.dashboard_patch import (
+    apply_dashboard_patch,
+    diff_dashboard_payload,
+    validate_dashboard_patch,
+)
 
 # Deprecated legacy re-exports (import-time DeprecationWarning via __getattr__)
 from . import deprecated as _deprecated

@@ -31,8 +31,11 @@ from geofig_engine.renderers.matplotlib.legend import LegendAccumulator
 from geofig_engine.serialize import (
     DASHBOARD_SCHEMA,
     DASHBOARD_SCHEMA_VERSION,
+    apply_dashboard_patch,
+    diff_dashboard_payload,
     specs_to_dashboard_dict,
     specs_to_dashboard_json,
+    validate_dashboard_patch,
     validate_dashboard_payload,
 )
 from geofig_engine.serialize import _legend as legend_module
@@ -336,3 +339,28 @@ class TestRendererFreeLegend:
         ]
         assert not any("pyplot" in line for line in imports)
         assert not any("geofig_engine.renderers" in line for line in imports)
+
+
+class TestPatchEndToEnd:
+    def test_build_snapshot_mutate_diff_apply_compare(self):
+        template = bivariate(mapping={"x": "x", "y": "y"})
+        old_specs = build_template_specs(make_df(), template)
+        old_payload = specs_to_dashboard_dict(old_specs)
+
+        frame = make_df()
+        frame["y"] = frame["y"] * 4
+        new_specs = build_template_specs(frame, template)
+        new_payload = specs_to_dashboard_dict(new_specs)
+
+        patch = diff_dashboard_payload(old_payload, new_payload)
+        validate_dashboard_patch(patch)
+        result = apply_dashboard_patch(old_payload, patch)
+
+        assert result == new_payload
+        assert all(
+            op["op"] in {"replace_data", "append_data"}
+            for op in patch["operations"]
+        )
+        assert result["figures"][0]["template_hash"] == (
+            new_payload["figures"][0]["template_hash"]
+        )

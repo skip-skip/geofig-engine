@@ -7,9 +7,17 @@ Scale, Stat, LayerSpec) are handled recursively.
 
 A separate versioned dashboard projection (``specs_to_dashboard_dict`` /
 ``specs_to_dashboard_json``) is available for browser display without changing
-the round-trip format.
+the round-trip format. Transport-agnostic patches between snapshots are built
+and applied with ``diff_dashboard_payload`` / ``apply_dashboard_patch``.
 """
 
+from geofig_engine.serialize.dashboard_patch import (
+    DASHBOARD_PATCH_SCHEMA,
+    DASHBOARD_PATCH_SCHEMA_VERSION,
+    apply_dashboard_patch,
+    diff_dashboard_payload,
+    validate_dashboard_patch,
+)
 from geofig_engine.serialize.dashboard import (
     DASHBOARD_SCHEMA,
     DASHBOARD_SCHEMA_VERSION,
@@ -58,4 +66,9 @@ __all__ = [
     "specs_to_dashboard_dict",
     "specs_to_dashboard_json",
     "validate_dashboard_payload",
+    "DASHBOARD_PATCH_SCHEMA",
+    "DASHBOARD_PATCH_SCHEMA_VERSION",
+    "diff_dashboard_payload",
+    "apply_dashboard_patch",
+    "validate_dashboard_patch",
 ]
