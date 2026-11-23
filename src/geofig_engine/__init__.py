@@ -8,7 +8,9 @@ package root: ``build_template_specs`` (returns ``list[FigureSpec]`` without
 rendering), ``render_template`` (returns ``list[Figure]``), the ``TEMPLATES``
 registry (``register_template`` / ``get_template``), the provider protocol
 (``DataProvider`` / ``DataFrameProvider`` / ``DatasetProvider``), and
-``FigureGenerator`` / ``FigureSpec``.
+``FigureGenerator`` / ``FigureSpec``. The dashboard snapshot helpers
+(``specs_to_dashboard_dict`` / ``specs_to_dashboard_json``) are also importable
+from the root for browser-safe display payloads.
 
 Legacy names (``Dataset``, ``Dimension``, ``DimensionSelector``,
 ``ColumnSelector``, ``IteratorEngine``, ``FigureEngine``) resolve lazily
@@ -31,6 +33,7 @@ from .engine.generator import FigureGenerator
 from .provider import DataProvider, DataFrameProvider, DatasetProvider
 from .core.spec import FigureSpec
 from .renderers import MatplotlibRenderer
+from .serialize.dashboard import specs_to_dashboard_dict, specs_to_dashboard_json
 
 # Deprecated legacy re-exports (import-time DeprecationWarning via __getattr__)
 from . import deprecated as _deprecated

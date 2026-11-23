@@ -511,3 +511,34 @@ class TestMappingsWithSeries:
         assert isinstance(restored.mappings["x"], pd.Series)
         assert restored.mappings["x"].name == "a"
         assert restored.mappings["color"] == "red"
+
+
+# ---------------------------------------------------------------------------
+# Dashboard projection parallelism guard (Phase 19 wp2)
+# ---------------------------------------------------------------------------
+
+class TestRoundTripUnchangedByDashboardProjection:
+    def test_existing_round_trip_functions_still_pass(self):
+        spec = FigureSpec(
+            data=pd.DataFrame({"a": [1, 2, 3]}),
+            mappings={"x": pd.Series([1, 2, 3], name="a")},
+            settings={"title": "round trip", "figsize": (6, 4)},
+            context={},
+            template_name="test",
+            layers=[
+                LayerSpec(
+                    geom=GeomPoint(),
+                    stat=StatIdentity(),
+                    visual_mapping={"x": pd.Series([1, 2, 3], name="a")},
+                )
+            ],
+        )
+
+        converted = figure_spec_to_dict(spec)
+        assert converted["mappings"]["x"]["__series__"] is True
+        assert converted["data"]["columns"] == ["a"]
+
+        restored = spec_from_json(spec_to_json(spec))
+        assert isinstance(restored.mappings["x"], pd.Series)
+        assert list(restored.mappings["x"]) == [1, 2, 3]
+        assert restored.settings["figsize"] == (6, 4)
