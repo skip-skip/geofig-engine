@@ -501,6 +501,30 @@ This is the final, renderer-agnostic spec. Backends consume this to produce figu
 
 ---
 
+### 10a. Dashboard serialization boundary (Phase 19, v0.5.0)
+
+`build_template_specs(...)` is the shared template → `FigureSpec` step used by
+both `render_template(...)` and the dashboard projection.
+`serialize/dashboard.py` projects resolved specs into a versioned,
+browser-safe snapshot (definition + columnar data + stable IDs/hash/revision +
+legend), and `serialize/dashboard_patch.py` derives/applies transport-agnostic
+patches between snapshots.
+
+The wire format is **downstream of `FigureSpec` and parallel to**, not
+replacing, the renderer path:
+
+```
+template key → build_template_specs → FigureSpec ─┬→ MatplotlibRenderer → Figures
+                                                  └→ dashboard snapshot → patches
+```
+
+`spec_to_json` / `spec_from_json` remain the Python round-trip format.
+Upstream imports (`geodata` / `geochemmodel`) are still forbidden, no new
+required dependency was added, `MatplotlibRenderer` is unchanged, and there is
+no dashboard → `FigureSpec` decoder in v0.5.0.
+
+---
+
 ### 11. IteratorEngine (deprecated shim)
 
 Multi-figure expansion **moved to the producer** (`provider.expand(iterators)`).

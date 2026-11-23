@@ -4,7 +4,8 @@
 [`FigureSpec`](core.md#layers--specs) objects and their component types
 (geoms, coords, facets, scales, stats, layer specs). Conversion is recursive —
 a `FigureSpec`'s `children`, layers, coord, facet, and `LinkTransform` are all
-covered.
+covered. Phase 19 adds a separate [dashboard wire format](#dashboard-wire-format)
+for browser snapshots and patches; it does not replace the round-trip API.
 
 ```python
 from geofig_engine.serialize import (
@@ -24,6 +25,7 @@ from geofig_engine.serialize import (
 - [Component converters](#component-converters)
 - [Spec converters](#spec-converters)
 - [JSON convenience](#json-convenience)
+- [Dashboard wire format](#dashboard-wire-format)
 - [Round-trip notes](#round-trip-notes)
 
 ---
@@ -77,6 +79,118 @@ specs = FigureGenerator(
 roundtrip = spec_from_json(spec_to_json(specs[0], indent=2))
 assert roundtrip == specs[0]
 ```
+
+---
+
+## Dashboard wire format
+
+Phase 19 adds a versioned, browser-safe projection for dashboards fed by
+`build_template_specs(...)`. It is **parallel to** the Python round-trip
+format above, not a replacement for it.
+
+```python
+from geofig_engine import (
+    specs_to_dashboard_dict,
+    specs_to_dashboard_json,
+    diff_dashboard_payload,
+    apply_dashboard_patch,
+    validate_dashboard_patch,
+)
+from geofig_engine.serialize import DASHBOARD_SCHEMA, DASHBOARD_SCHEMA_VERSION
+```
+
+### Snapshot envelope
+
+`specs_to_dashboard_dict(specs, *, legend=True, strict=True) -> dict` and
+`specs_to_dashboard_json(specs, *, legend=True, strict=True) -> str` accept the
+`list[FigureSpec]` returned by `build_template_specs` and emit a deterministic
+envelope:
+
+| Key | Meaning |
+| --- | --- |
+| `schema` | `DASHBOARD_SCHEMA` — currently `"geofig-engine/dashboard"`. |
+| `schema_version` | `DASHBOARD_SCHEMA_VERSION` — currently `1`. |
+| `engine_version` | Phase 19 target `"0.5.0"` (the release commit updates `pyproject.toml`). |
+| `revision` | Integer derived from the figure payloads; changes when the snapshot content changes. |
+| `figures` | One record per spec, in spec order. |
+
+`legend=False` omits the per-figure legend payload. `strict=True` (default)
+validates the finished envelope; `json.loads(specs_to_dashboard_json(...))`
+equals `specs_to_dashboard_dict(...)`.
+
+### Definition vs columnar data
+
+Each figure record contains `figure_id`, `template_hash`, `definition`, `data`,
+`children`, and optional `legend`. The `definition` holds low-frequency
+structure — template name, context, layers, coord, facet, settings, layout,
+transform, and child definitions — and references values by `{"$column":
+name}`. All values live once in the figure's `data` payload:
+
+```json
+{"columns": {"x": [1, 2, 3]}, "index": [0, 1, 2]}
+```
+
+Named resolved series are added to the column store; only unnamed series fall
+back to `{"$inline": [...]}`. Nested `piper` / `stiff` children reuse the
+parent column store via `"data_ref": "$parent"`. Definitions never duplicate
+data values.
+
+### Stable identities
+
+- `figure_id` deterministically combines template name, position, context, and
+  iterator key.
+- Each `layer_id` deterministically combines the figure identity, layer index,
+  and structural layer definition.
+- `template_hash` hashes the structural definition with instance/data identity
+  fields stripped, so a data-only edit keeps the same hash while a coord,
+  layer, or settings change produces a new one.
+- `revision` is derived from the full figure payloads; patches carry both the
+  new `revision` and the `base_revision` they were built against.
+
+### Patches
+
+`diff_dashboard_payload(old_payload, new_payload)` returns a patch envelope:
+`schema` (`"geofig-engine/dashboard-patch"`), `schema_version` (`1`),
+`revision`, `base_revision`, and `operations`. `apply_dashboard_patch(payload,
+patch)` returns a **new** payload and never mutates its input;
+`validate_dashboard_patch(patch)` validates schema/version, operation names,
+required fields, figure IDs, and revision types with `ValueError`s.
+
+| Operation | Effect |
+| --- | --- |
+| `replace_data` | Replace a figure's complete `columns` / `index`. |
+| `append_data` | Append `columns` and their `index` rows to existing data. |
+| `replace_definition` | Replace a definition, carrying the new `template_hash` (and children when changed). |
+| `update_settings` | Replace settings/layout without touching data or other structure. |
+| `remove_figure` | Remove a figure by ID. |
+
+Data-only diffs emit only data operations and leave `template_hash` unchanged;
+structural diffs emit `replace_definition`; settings-only diffs emit
+`update_settings`. Changes the five operations cannot express (for example an
+added figure) use a self-contained `payload` fallback so applying the patch
+still reproduces the fresh snapshot exactly. If `base_revision` is present and
+differs from the target payload's `revision`, apply rejects the patch as stale
+or out-of-order. No transport (WebSocket/SSE/HTTP) is included.
+
+### Strict JSON normalization
+
+- `NaN`, `NaT`, and positive/negative infinity normalize to `null` in both
+  strict and non-strict modes.
+- datetimes and pandas `Timestamp`s become ISO-8601 strings.
+- NumPy scalars become Python scalars; tuples become arrays.
+- Callables are rejected with a `TypeError` naming the payload seam and the
+  callable source.
+
+`strict=True` additionally validates the envelope and uses `allow_nan=False`,
+so emitted snapshots contain no non-finite tokens.
+
+### Boundary with the existing serializer
+
+`spec_to_json` / `spec_from_json` (and `figure_spec_to_dict` /
+`figure_spec_from_dict`) remain the **Python round-trip format** with the
+semantics described below. The dashboard schema is a display/update projection
+only. `MatplotlibRenderer` still consumes `FigureSpec` objects directly; there
+is no dashboard-JSON ingestion in v0.5.0.
 
 ---
 

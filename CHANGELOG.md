@@ -6,6 +6,43 @@ the policy in `ARCHITECTURE.md` `## Versioning`: version authority is
 commit. Deprecations are introduced in MINOR releases and removed **no earlier
 than the next MAJOR** (>= 1.0.0).
 
+## [v0.5.0] — draft (date at release)
+
+### Added
+
+- **Spec-only template API (Phase 19)** — `build_template_specs(data, template,
+  mapping=…, settings=…, iterators=…, facet=…, coord=…) -> list[FigureSpec]`
+  builds validated specs for all seeded keys without rendering. It is exported
+  from the package root and from `geofig_engine.engine.api`.
+- **Dashboard wire format** — `specs_to_dashboard_dict` /
+  `specs_to_dashboard_json` emit a versioned, browser-safe snapshot with a
+  template definition / columnar data split, stable figure and layer IDs,
+  `template_hash`, `revision`, serialized legend data, and nested child
+  definitions. Strict JSON normalization maps non-finite numbers/`NaT` to
+  `null`, datetimes to ISO strings, numpy scalars to Python scalars, and tuples
+  to arrays; callables are rejected with a clear error.
+- **Incremental dashboard patches** — `diff_dashboard_payload`,
+  `apply_dashboard_patch`, and `validate_dashboard_patch` support data
+  replace/append, definition replace, settings update, and figure removal
+  with `base_revision` stale-patch rejection and no transport implementation.
+
+### Changed
+
+- `render_template(...)` now delegates spec construction to
+  `build_template_specs(...)` before renderer gating, rendering, legend
+  assembly, and optional PNG persistence. Rendered figures and saved PNG names
+  are unchanged.
+- API, serialization, architecture, roadmap, and epic documentation describe
+  the spec-only build path, the dashboard boundary, and the unchanged Python
+  round-trip / Matplotlib paths.
+
+### Draft note
+
+`pyproject.toml` intentionally remains at the previous version in this ticket.
+The release step separately bumps it to `0.5.0`, finalizes this date, commits
+`release: geofig-engine v0.5.0`, and tags `geofig-engine-v0.5.0`. Nothing was
+removed or deprecated in this phase.
+
 ## [v0.4.0] - 2026-11-22
 
 ### Added

@@ -40,6 +40,7 @@ from geofig_engine.serialize import (
 )
 from geofig_engine.serialize import _legend as legend_module
 from geofig_engine.serialize import dashboard as dashboard_module
+from geofig_engine.serialize import dashboard_patch as dashboard_patch_module
 from geofig_engine.templates import bivariate
 from test_pipeline_templates import ALL_RENDER_CASES, make_df
 
@@ -364,3 +365,19 @@ class TestPatchEndToEnd:
         assert result["figures"][0]["template_hash"] == (
             new_payload["figures"][0]["template_hash"]
         )
+
+
+class TestDashboardNoUpstreamImports:
+    def test_dashboard_modules_have_no_upstream_imports(self):
+        sources = (
+            Path(dashboard_module.__file__).read_text(encoding="utf-8")
+            + Path(dashboard_patch_module.__file__).read_text(encoding="utf-8")
+        )
+
+        for banned in (
+            "import geodata",
+            "from geodata",
+            "import geochemmodel",
+            "from geochemmodel",
+        ):
+            assert banned not in sources

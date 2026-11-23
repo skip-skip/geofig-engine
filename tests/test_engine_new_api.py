@@ -20,6 +20,7 @@ from geofig_engine.core.scale import ScaleContinuous, ScaleOrdinal, ScaleConstan
 from geofig_engine.core.spec import FigureSpec
 from geofig_engine.core.stat import StatIdentity, StatFn
 from geofig_engine.engine import FigureEngine
+from geofig_engine.engine import api as engine_api
 from geofig_engine.engine.api import TemplateRecipe, build_template_specs
 from geofig_engine.engine.generator import FigureGenerator
 from geofig_engine.provider import DataFrameProvider
@@ -644,6 +645,40 @@ class TestBuildTemplateSpecs:
         assert len(specs) == 1
         assert specs[0].facet.name == "wrap"
         self._assert_matches_generator(specs, expected)
+
+    def test_render_template_uses_build_template_specs_output(self, monkeypatch):
+        import geofig_engine.renderers as renderers
+
+        frame = make_dataset().dataframe
+        template = bivariate(mapping={"x": "x", "y": "y"})
+        expected = build_template_specs(frame, template)
+        captured = {}
+
+        def fake_build(**kwargs):
+            captured.update(kwargs)
+            return expected
+
+        class FakeRenderer:
+            def render_all(self, specs):
+                captured["specs"] = list(specs)
+                return ["figure"]
+
+            def render_legend(self, accumulator):
+                captured["legend"] = accumulator
+                return "legend"
+
+        monkeypatch.setattr(engine_api, "build_template_specs", fake_build)
+        monkeypatch.setattr(renderers, "MatplotlibRenderer", FakeRenderer)
+
+        figures = engine_api.render_template(frame, template)
+
+        assert figures == ["figure"]
+        assert len(captured["specs"]) == len(expected)
+        assert all(actual is spec for actual, spec in zip(captured["specs"], expected))
+        assert captured["data"] is frame
+        assert captured["template"] is template
+        for key in ("mapping", "settings", "iterators", "facet", "coord"):
+            assert captured[key] is None
 
     @pytest.mark.parametrize("key", ["piper", "stiff"])
     def test_spec_recipe_restrictions_and_messages_unchanged(self, key):

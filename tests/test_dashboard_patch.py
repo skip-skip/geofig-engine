@@ -212,6 +212,33 @@ class TestPatchValidation:
         with pytest.raises(ValueError, match="schema_version"):
             validate_dashboard_patch(patch)
 
+    def test_unknown_schema_is_rejected(self):
+        patch = _valid_envelope([])
+        patch["schema"] = "other/patch"
+
+        with pytest.raises(ValueError, match="unsupported dashboard patch schema"):
+            validate_dashboard_patch(patch)
+
+    def test_revision_fields_must_be_integers(self):
+        patch = _valid_envelope([])
+        patch["revision"] = "99"
+        with pytest.raises(ValueError, match="revision must be an integer"):
+            validate_dashboard_patch(patch)
+
+        patch = _valid_envelope([], base_revision=0)
+        patch["base_revision"] = "0"
+        with pytest.raises(ValueError, match="base_revision must be an integer"):
+            validate_dashboard_patch(patch)
+
+    def test_matching_base_revision_is_accepted(self):
+        old = _snapshot(_bivariate())
+        new = _snapshot(_bivariate(make_df().assign(y=lambda frame: frame["y"] * 2)))
+        patch = diff_dashboard_payload(old, new)
+        assert patch["base_revision"] == old["revision"]
+        assert patch["revision"] == new["revision"]
+
+        assert apply_dashboard_patch(old, patch) == new
+
     def test_missing_required_field_is_rejected(self):
         patch = _valid_envelope([{"op": "replace_data", "figure_id": "f"}])
 

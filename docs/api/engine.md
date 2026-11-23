@@ -3,9 +3,11 @@
 `geofig_engine.engine` provides the **declarative entry surface** (Phase 15,
 unified in 18.4): a template-key registry (`TEMPLATES`), the canonical
 `render_template` entry point, and the provider-driven `FigureGenerator`
-orchestrator. The engine consumes **only** [`DataProvider`](provider.md)
-objects — raw frames are wrapped for you — resolves registry keys to native
-layer (`TemplateRecipe`) or composite (`SpecRecipe`) builders, builds validated
+orchestrator. Phase 19 adds `build_template_specs(...)`, the shared spec-only
+step that `render_template` calls before rendering. The engine consumes
+**only** [`DataProvider`](provider.md) objects — raw frames are wrapped for you
+— resolves registry keys to native layer (`TemplateRecipe`) or composite
+(`SpecRecipe`) builders, builds validated
 [`FigureSpec`](core.md#layers--specs) objects, and dispatches them to a
 renderer.
 
@@ -15,6 +17,7 @@ The legacy `Dataset`-based surface is deprecated (see
 ## Contents
 
 - [render_template](#render_template)
+- [build_template_specs](#build_template_specs)
 - [TEMPLATES registry](#templates-registry)
 - [FigureGenerator](#figuregenerator)
 - [Providers](#providers)
@@ -99,6 +102,55 @@ figures = render_template(
 )
 figures[0].show()
 ```
+
+---
+
+## build_template_specs
+
+The **spec-only** half of the declarative path. It performs the same input
+coercion, template resolution, override merging, iterator expansion, and spec
+validation as `render_template`, then returns the resolved specs without
+instantiating a renderer, drawing a legend figure, or writing PNGs. Import it
+from the package root (or from `geofig_engine.engine.api`):
+
+```python
+from geofig_engine import build_template_specs
+```
+
+```python
+def build_template_specs(
+    data: pd.DataFrame | DataProvider | np.ndarray,
+    template: str | FigureTemplate,
+    mapping: dict[str, Any] | None = None,
+    settings: dict[str, Any] | None = None,
+    iterators: list[DimensionIterator] | None = None,
+    facet: Facet | None = None,
+    coord: Coord | None = None,
+) -> list[FigureSpec]:
+```
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `data` | `pd.DataFrame \| DataProvider \| np.ndarray` | Same coercion as `render_template`: a `DataProvider` passes through, a `pd.DataFrame` is wrapped in `DataFrameProvider`, and an ndarray becomes a frame with string positional columns (`"0"`, `"1"`, …). |
+| `template` | `str \| FigureTemplate` | A registry key resolved via `get_template`, or a `FigureTemplate` / duck-typed recipe adapted via `recipe_from`. |
+| `mapping` | `dict[str, Any] \| None` | Per-layer mapping override. Native builders that consume their own mapping skip the generic override pass. |
+| `settings` | `dict[str, Any] \| None` | User settings merged over the recipe defaults; also passed to key builders as flat template-specific knobs. |
+| `iterators` | `list[DimensionIterator] \| None` | Optional multi-figure expansion. A single iterator is accepted. |
+| `facet` | `Facet \| None` | Stamped on each spec for renderer-side panel expansion. |
+| `coord` | `Coord \| None` | Overrides the recipe coord when given. |
+
+**Returns:** `list[FigureSpec]` — one validated spec per iterator combination.
+The result is the same spec list `render_template` hands to
+`MatplotlibRenderer`, and is also the input to the
+[dashboard wire format](serialize.md#dashboard-wire-format).
+
+`render_template(...)` calls `build_template_specs(...)` with `data`,
+`template`, `mapping`, `settings`, `iterators`, `facet`, and `coord`, then adds
+renderer gating, rendering, the grouped legend figure, and optional `savedir`
+persistence. There is no `savedir` or `renderer_name` argument here. The
+`SpecRecipe` restrictions for `piper` / `stiff` (`iterators` and `facet` are
+unsupported) are unchanged. Raises `KeyError`, `TypeError`, and `ValueError`
+with the same meanings as `render_template`.
 
 ---
 

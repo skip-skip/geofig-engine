@@ -585,6 +585,27 @@ from the warning policy).
 
 ---
 
+## ✅ Phase 19 — Dashboard serialization and incremental updates
+
+Target **v0.5.0**; shipped additively, with no removals before 1.0.0. Added a
+Matplotlib-free spec build path and a versioned dashboard wire format so a web
+frontend can receive full snapshots and apply higher-frequency data/template
+patches. The existing `spec_to_json` / `spec_from_json` round-trip format stays
+intact; the dashboard schema is a parallel projection, not a replacement.
+`MatplotlibRenderer` continues to consume `FigureSpec` objects and does not
+ingest dashboard JSON. Frontend rendering and WebSocket/SSE transport remain
+out of scope.
+
+WPs (all complete): spec-only template API
+(`19_wp1_spec_only_template_api`), dashboard wire schema
+(`19_wp2_dashboard_wire_schema`), incremental update protocol
+(`19_wp3_incremental_update_protocol`), tests/docs/roadmap
+(`19_wp4_tests_docs_roadmap`). Full suite: **1643 passed / 8 skipped** (all 8
+skips pyproj/upstream-gated; none from the warning policy). The version bump and
+tag remain a separate release commit.
+
+---
+
 ## ✅ v0.3.2 closeout — style and geo viewport patches
 
 Bundled with the 18.3 release: generic `point_size` and native tick-font
@@ -596,11 +617,11 @@ fetch extent. Full suite: **1501 passed / 8 skipped**.
 
 ---
 
-## 📋 Phase 18 — Infrastructure
+## ✅ Phase 18 — Infrastructure
 
-- **Multithread / parallel iteration processing** — parse iterators in parallel thread pool *(open)*
+- **Multithread / parallel iteration processing** — parse iterators in parallel thread pool *(deferred — archived from active planning; revisit only when profiling justifies parallel spec construction)*
 - **Data preprocessing pipeline** — assign new columns / groups / aggregates before spec building *(shipped — Phase 17, `io/preprocess.py`)*
-- **Multi-page figure output** — render multiple specs onto pages (e.g., PDF with one plot per page) *(open)*
+- **Multi-page figure output** — render multiple specs onto pages (e.g., PDF with one plot per page) *(archived — out of scope; geofig-engine emits raw figures and page/layout assembly is handled externally)*
 - **Axis limit overrides per layer** — expose xlim/ylim per layer, not just globally *(shipped — Phase 14, `de36ea1`)*
 
 ---
