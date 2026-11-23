@@ -6,7 +6,7 @@ the policy in `ARCHITECTURE.md` `## Versioning`: version authority is
 commit. Deprecations are introduced in MINOR releases and removed **no earlier
 than the next MAJOR** (>= 1.0.0).
 
-## [v0.5.0] — draft (date at release)
+## [v0.5.0] - 2026-11-23
 
 ### Added
 
@@ -36,12 +36,9 @@ than the next MAJOR** (>= 1.0.0).
   the spec-only build path, the dashboard boundary, and the unchanged Python
   round-trip / Matplotlib paths.
 
-### Draft note
-
-`pyproject.toml` intentionally remains at the previous version in this ticket.
-The release step separately bumps it to `0.5.0`, finalizes this date, commits
-`release: geofig-engine v0.5.0`, and tags `geofig-engine-v0.5.0`. Nothing was
-removed or deprecated in this phase.
+Nothing was removed or deprecated in this release. The existing
+`spec_to_json` / `spec_from_json` round-trip format and Matplotlib
+`FigureSpec` rendering path are unchanged.
 
 ## [v0.4.0] - 2026-11-22
 
