@@ -625,3 +625,18 @@ fetch extent. Full suite: **1501 passed / 8 skipped**.
 - **Axis limit overrides per layer** — expose xlim/ylim per layer, not just globally *(shipped — Phase 14, `de36ea1`)*
 
 ---
+
+## Phase 20 — Distribution and shareability (implemented, pending review)
+
+Prepares the v0.5.0 tree for handoff to another machine without changing the
+public API or bumping the version. Setuptools discovers all `geofig_engine*`
+subpackages; `numpy` and `openpyxl` join `pandas`/`matplotlib` as runtime
+dependencies; `dev` / `geo` / `network` / `full` extras separate optional
+capabilities; preset JSON and `py.typed` are declared as package data and
+`MANIFEST.in` carries the install/versioning docs into sdists. `INSTALL.md`
+documents source, wheel, offline, headless, geo/network, and verification flows,
+with `constraints.txt` pinning the validated core versions.
+
+WP: `20_1_packaging_distribution`. No version bump or tag is part of this work.
+
+---

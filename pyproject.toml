@@ -10,21 +10,45 @@ requires-python = ">=3.11"
 dependencies = [
     "pandas",
     "matplotlib",
+    "numpy",
+    "openpyxl",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
     "pytest-cov",
+    "build",
 ]
 geo = [
     "pyproj>=3.4",
     "pyshp>=2.0",
 ]
+network = [
+    "requests",
+    "pillow",
+    "xyzservices",
+]
+full = [
+    "pytest",
+    "pytest-cov",
+    "build",
+    "pyproj>=3.4",
+    "pyshp>=2.0",
+    "requests",
+    "pillow",
+    "xyzservices",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["geofig_engine"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["geofig_engine*"]
 
 [tool.setuptools.package-data]
-geofig_engine = ["py.typed"]
+geofig_engine = [
+    "py.typed",
+    "data/geom_presets/*.json",
+]

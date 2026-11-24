@@ -6,6 +6,27 @@ the policy in `ARCHITECTURE.md` `## Versioning`: version authority is
 commit. Deprecations are introduced in MINOR releases and removed **no earlier
 than the next MAJOR** (>= 1.0.0).
 
+## [Unreleased]
+
+### Added
+
+- Shareable packaging deliverables (Phase 20): `INSTALL.md`, `constraints.txt`,
+  `MANIFEST.in`, a PEP 561 `py.typed` marker, and regression tests for the
+  packaging metadata.
+- Optional dependency groups: `dev`, `geo`, `network`, and `full`, separating
+  test/build tooling and geospatial/network capabilities from the core runtime.
+
+### Changed
+
+- Setuptools now discovers every `geofig_engine*` subpackage, so built wheels
+  and sdists contain `core/`, `engine/`, `templates/`, `renderers/`, and the
+  other modules rather than only the top-level package.
+- `numpy` and `openpyxl` are declared as runtime dependencies; they are imported
+  by core modules on a clean install.
+- Preset JSON and the typing marker are explicitly declared as package data.
+- `README.md` now summarizes install modes and links to the full install guide.
+  No version bump is included in this change.
+
 ## [v0.5.0] - 2026-11-23
 
 ### Added

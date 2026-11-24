@@ -7,11 +7,29 @@ and a matplotlib renderer that turns those descriptions into figures.
 
 ## Installation
 
-Requires Python 3.11+. Runtime dependencies are `pandas` and `matplotlib`.
+Requires Python 3.11+. Core runtime dependencies are `pandas`, `matplotlib`,
+`numpy`, and `openpyxl`.
 
 ```bash
-pip install -e .
+python -m pip install -e .
 ```
+
+Optional extras:
+
+| Extra | Adds |
+| --- | --- |
+| `dev` | `pytest`, `pytest-cov`, `build` |
+| `geo` | `pyproj`, `pyshp` for projected CRSs and shapefile boundaries |
+| `network` | `requests`, `pillow`, `xyzservices` for basemap tiles, DEM contours, and streams |
+| `full` | all of the above |
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pip install -e ".[full]"
+```
+
+See [INSTALL.md](INSTALL.md) for wheel, offline, headless, and verification
+instructions.
 
 ## Quickstart (standalone)
 
