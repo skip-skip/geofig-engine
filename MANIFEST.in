@@ -1,8 +1,11 @@
 include README.md
 include INSTALL.md
+include RELEASING.md
 include CHANGELOG.md
 include ROADMAP.md
 include constraints.txt
+global-exclude .env
+exclude .env.example
 include src/geofig_engine/py.typed
 recursive-include src/geofig_engine/data/geom_presets *.json
 recursive-include docs *.md

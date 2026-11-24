@@ -149,3 +149,6 @@ Get-FileHash dist\* | Select-Object Path, Hash
 
 Publish the source archive, `dist/geofig_engine-0.5.1-py3-none-any.whl`,
 `dist/geofig_engine-0.5.1.tar.gz`, and the checksums together.
+
+For publishing to TestPyPI and PyPI with tokens stored in a local `.env` file,
+see [RELEASING.md](RELEASING.md).
