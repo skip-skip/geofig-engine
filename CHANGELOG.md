@@ -6,7 +6,7 @@ the policy in `ARCHITECTURE.md` `## Versioning`: version authority is
 commit. Deprecations are introduced in MINOR releases and removed **no earlier
 than the next MAJOR** (>= 1.0.0).
 
-## [Unreleased]
+## [v0.5.1] - 2026-11-24
 
 ### Added
 
@@ -25,7 +25,6 @@ than the next MAJOR** (>= 1.0.0).
   by core modules on a clean install.
 - Preset JSON and the typing marker are explicitly declared as package data.
 - `README.md` now summarizes install modes and links to the full install guide.
-  No version bump is included in this change.
 
 ## [v0.5.0] - 2026-11-23
 

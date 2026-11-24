@@ -41,7 +41,7 @@ Recommended when the receiving machine will develop or run tests.
 ```powershell
 git clone https://github.com/skip-skip/geofig-engine.git
 cd geofig-engine
-git checkout geofig-engine-v0.5.0
+git checkout geofig-engine-v0.5.1
 
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -62,7 +62,7 @@ For runtime-only use, omit the extra:
 python -m pip install -e .
 ```
 
-The constraints file pins the versions validated with v0.5.0. Omit `-c
+The constraints file pins the versions validated with v0.5.1. Omit `-c
 constraints.txt` if the receiving platform needs different wheels.
 
 ## Install from a wheel
@@ -75,7 +75,7 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 python -m pip install --upgrade pip
-python -m pip install geofig_engine-0.5.0-py3-none-any.whl
+python -m pip install geofig_engine-0.5.1-py3-none-any.whl
 ```
 
 Add optional capabilities explicitly:
@@ -90,13 +90,13 @@ On a machine with internet access, download the wheel and all dependencies:
 
 ```powershell
 python -m pip download -r constraints.txt -d wheels
-python -m pip download geofig_engine==0.5.0 -d wheels
+python -m pip download geofig_engine==0.5.1 -d wheels
 ```
 
 Transfer `wheels/` to the target machine, then:
 
 ```powershell
-python -m pip install --no-index --find-links wheels geofig-engine==0.5.0
+python -m pip install --no-index --find-links wheels geofig-engine==0.5.1
 ```
 
 Include the optional packages in the download set if `geo` or `network`
@@ -122,7 +122,7 @@ From a source checkout with the `dev` extra:
 PYTHONPATH=src pytest
 ```
 
-Expected baseline for v0.5.0: **1643 passed, 8 skipped**. The skips are
+Expected baseline for v0.5.1: **1648 passed, 8 skipped**. The skips are
 optional-dependency gates, not warning-policy skips.
 
 Smoke test in any environment:
@@ -142,10 +142,10 @@ python -c "import geofig_engine as g; print(g.__file__)"
 From a clean checkout at the release tag:
 
 ```powershell
-git archive --format=zip --prefix=geofig-engine-v0.5.0/ geofig-engine-v0.5.0 -o geofig-engine-v0.5.0-source.zip
+git archive --format=zip --prefix=geofig-engine-v0.5.1/ geofig-engine-v0.5.1 -o geofig-engine-v0.5.1-source.zip
 python -m build --outdir dist
 Get-FileHash dist\* | Select-Object Path, Hash
 ```
 
-Publish the source archive, `dist/geofig_engine-0.5.0-py3-none-any.whl`,
-`dist/geofig_engine-0.5.0.tar.gz`, and the checksums together.
+Publish the source archive, `dist/geofig_engine-0.5.1-py3-none-any.whl`,
+`dist/geofig_engine-0.5.1.tar.gz`, and the checksums together.

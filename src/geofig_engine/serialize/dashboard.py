@@ -37,7 +37,7 @@ from geofig_engine.serialize.converters import (
 DASHBOARD_SCHEMA = "geofig-engine/dashboard"
 DASHBOARD_SCHEMA_VERSION = 1
 # Target version for Phase 19; pyproject.toml is bumped in the separate release.
-ENGINE_VERSION = "0.5.0"
+ENGINE_VERSION = "0.5.1"
 
 _LAYOUT_KEYS = (
     "figsize",

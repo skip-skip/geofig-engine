@@ -1,4 +1,4 @@
-"""Packaging metadata regressions for shareable v0.5.0 distributions."""
+"""Packaging metadata regressions for shareable v0.5.1 distributions."""
 
 from __future__ import annotations
 

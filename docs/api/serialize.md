@@ -110,7 +110,7 @@ envelope:
 | --- | --- |
 | `schema` | `DASHBOARD_SCHEMA` — currently `"geofig-engine/dashboard"`. |
 | `schema_version` | `DASHBOARD_SCHEMA_VERSION` — currently `1`. |
-| `engine_version` | Phase 19 target `"0.5.0"` (the release commit updates `pyproject.toml`). |
+| `engine_version` | Current release target `"0.5.1"` (the release commit updates `pyproject.toml`). |
 | `revision` | Integer derived from the figure payloads; changes when the snapshot content changes. |
 | `figures` | One record per spec, in spec order. |
 

@@ -106,7 +106,7 @@ class TestDashboardEnvelope:
 
         assert payload["schema"] == DASHBOARD_SCHEMA
         assert payload["schema_version"] == DASHBOARD_SCHEMA_VERSION
-        assert payload["engine_version"] == "0.5.0"
+        assert payload["engine_version"] == "0.5.1"
         assert isinstance(payload["revision"], int)
         assert payload["revision"] >= 0
         assert len(payload["figures"]) == len(specs)

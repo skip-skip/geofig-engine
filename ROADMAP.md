@@ -626,10 +626,10 @@ fetch extent. Full suite: **1501 passed / 8 skipped**.
 
 ---
 
-## Phase 20 — Distribution and shareability (implemented, pending review)
+## ✅ Phase 20 — Distribution and shareability (v0.5.1)
 
 Prepares the v0.5.0 tree for handoff to another machine without changing the
-public API or bumping the version. Setuptools discovers all `geofig_engine*`
+public API. Setuptools discovers all `geofig_engine*`
 subpackages; `numpy` and `openpyxl` join `pandas`/`matplotlib` as runtime
 dependencies; `dev` / `geo` / `network` / `full` extras separate optional
 capabilities; preset JSON and `py.typed` are declared as package data and
@@ -637,6 +637,7 @@ capabilities; preset JSON and `py.typed` are declared as package data and
 documents source, wheel, offline, headless, geo/network, and verification flows,
 with `constraints.txt` pinning the validated core versions.
 
-WP: `20_1_packaging_distribution`. No version bump or tag is part of this work.
+WP: `20_1_packaging_distribution` (complete). Shipped in v0.5.1; the version
+bump and tag are a separate release commit.
 
 ---
